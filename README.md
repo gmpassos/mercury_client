@@ -16,9 +16,10 @@ main() async {
 
   // Calling with POST method:
   // URL: http://gateway.your.domain/api-1/call-foo?var=123
+  // Content-Type: application/json
   // Body:
   // { 'content': 'any' }}
-  var response = await client.post("call-foo", parameters: {'var': '123'}, body: "{ 'content': 'any' }}") ;
+  var response = await client.post("call-foo", parameters: {'var': '123'}, body: "{ 'content': 'any' }}", contentType: 'application/json') ;
   
   if ( response.isOK ) {
     print( response.body ) ;

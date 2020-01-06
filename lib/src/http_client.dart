@@ -763,3 +763,29 @@ class HttpClientRequesterSimulation extends HttpClientRequester {
 
 }
 
+Converter<List<int>, String> contentTypeToDecoder(String mimeType, [String charset]) {
+  if ( charset != null ) {
+    charset = charset.trim().toLowerCase() ;
+
+    if (charset == 'utf8' || charset == 'utf-8') {
+      return utf8.decoder ;
+    }
+    else if (charset == 'latin1' || charset == 'latin-1' || charset == 'iso-8859-1') {
+      return latin1.decoder ;
+    }
+  }
+
+  if (mimeType != null) {
+    mimeType = mimeType.trim().toLowerCase() ;
+
+    if ( mimeType == 'application/json' ) {
+      return utf8.decoder ;
+    }
+    else if ( mimeType == 'application/x-www-form-urlencoded' ) {
+      return latin1.decoder ;
+    }
+  }
+
+  return latin1.decoder ;
+}
+

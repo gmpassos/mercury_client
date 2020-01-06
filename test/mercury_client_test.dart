@@ -35,7 +35,13 @@ class TestServer {
     await for (io.HttpRequest request in server) {
       var response = 'Hello, world! Method: ${  request.method } ; Path: ${ request.uri }';
 
-      var body = await _decodeBody(request.headers.contentType , request) ;
+      var contentType = request.headers.contentType;
+
+      if (contentType != null) {
+        response += ' ; Content-Type: $contentType' ;
+      }
+
+      var body = await _decodeBody(contentType , request) ;
 
       if (body != null && body.isNotEmpty) {
         response += ' <$body>' ;
@@ -109,11 +115,11 @@ void main() {
       var client = HttpClient('http://localhost:${testServer.port}/tests') ;
       expect( client.baseURL , matches(RegExp(r'http://localhost:\d+/tests')));
 
-      var response = await client.post("foo", parameters: {'á': '12 3', 'b': '456'}, body: "Boooodyyy!") ;
+      var response = await client.post("foo", parameters: {'á': '12 3', 'b': '456'}, body: "Boooodyyy!", contentType: 'application/json') ;
 
       expect( response.isOK , equals(true) );
 
-      expect( response.body , equals('Hello, world! Method: POST ; Path: /tests/foo?%C3%A1=12%203&b=456 <Boooodyyy!>') );
+      expect( response.body , equals('Hello, world! Method: POST ; Path: /tests/foo?%C3%A1=12%203&b=456 ; Content-Type: application/json <Boooodyyy!>') );
 
     });
 

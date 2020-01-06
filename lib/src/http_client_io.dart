@@ -51,24 +51,9 @@ class HttpClientRequesterIO extends HttpClientRequester {
   ////////////////////////////////
 
   Future<String> _decodeBody(io.ContentType contentType, io.HttpClientResponse r) async {
-    if (contentType != null) {
-      var charset = contentType.charset;
-
-      if ( charset != null ) {
-        charset = charset.trim().toLowerCase() ;
-
-        if (charset == 'utf8' || charset == 'utf-8') {
-          return utf8.decoder.bind(r).join() ;
-        }
-        else if (charset == 'latin1' || charset == 'latin-1' || charset == 'iso-8859-1') {
-          return latin1.decoder.bind(r).join() ;
-        }
-      }
-    }
-
-    return latin1.decoder.bind(r).join() ;
+    var decoder = contentType != null ? contentTypeToDecoder( contentType.mimeType , contentType.charset ) : latin1.decoder ;
+    return decoder.bind(r).join() ;
   }
-
 
   Future<Map<String,String>> _decodeHeaders(io.HttpClientResponse r) async {
     Map<String,String> headers = {} ;
