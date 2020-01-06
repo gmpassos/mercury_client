@@ -46,11 +46,11 @@ class HttpStatus {
   }
 
   bool isStatusInRange( int statusInit , int statusEnd ) {
-    return this.status != null && this.status >= statusInit && this.status <= statusEnd ;
+    return status != null && status >= statusInit && status <= statusEnd ;
   }
 
   bool isStatusInList( List<int> statusList ) {
-    return this.status != null && ( statusList.firstWhere( (id) => id == this.status , orElse: () => null ) != null ) ;
+    return status != null && ( statusList.firstWhere( (id) => id == status , orElse: () => null ) != null ) ;
   }
 
 }
@@ -106,14 +106,14 @@ class Authorization {
   Credential get credential => _credential ?? _resolvedCredential ;
 
   Authorization(this._credential, [this.authorizationProvider]) {
-    if (this._credential != null) {
-      _resolvedCredential = this._credential ;
+    if (_credential != null) {
+      _resolvedCredential = _credential ;
     }
   }
 
   Authorization copy() {
-    var authorization = Authorization(this._credential, this.authorizationProvider);
-    authorization._resolvedCredential = this._resolvedCredential ;
+    var authorization = Authorization(_credential, authorizationProvider);
+    authorization._resolvedCredential = _resolvedCredential ;
     return authorization ;
   }
 
@@ -124,13 +124,13 @@ class Authorization {
   Future<Credential> resolveCredential(HttpClient client , HttpError lastError) async {
     if (_resolvedCredential != null) return _resolvedCredential ;
 
-    if (this._credential != null) {
-      _resolvedCredential = this._credential ;
+    if (_credential != null) {
+      _resolvedCredential = _credential ;
       return _resolvedCredential ;
     }
 
-    if (this.authorizationProvider != null) {
-      var future = this.authorizationProvider(client, lastError);
+    if (authorizationProvider != null) {
+      var future = authorizationProvider(client, lastError);
       return future.then( (credential) {
         _resolvedCredential = credential ;
         return _resolvedCredential ;
@@ -167,28 +167,31 @@ class BasicCredential extends Credential {
   BasicCredential(this.username, this.password);
 
   factory BasicCredential.base64(String base64) {
-    Uint8List decodedBytes = Base64Codec.urlSafe().decode(base64) ;
-    String decoded = new String.fromCharCodes(decodedBytes) ;
-    int idx = decoded.indexOf(':') ;
+    var decodedBytes = Base64Codec.urlSafe().decode(base64) ;
+    var decoded = String.fromCharCodes(decodedBytes) ;
+    var idx = decoded.indexOf(':') ;
 
     if (idx < 0) {
       return BasicCredential(decoded, '') ;
     }
 
-    String user = decoded.substring(0,idx) ;
-    String pass = decoded.substring(idx+1) ;
+    var user = decoded.substring(0,idx) ;
+    var pass = decoded.substring(idx+1) ;
 
     return BasicCredential(user, pass) ;
   }
 
+  @override
   String get type => "Basic" ;
 
+  @override
   bool get usesAuthorizationHeader => true ;
 
+  @override
   String buildHeaderLine() {
-    String payload = "$username:$password" ;
+    var payload = '$username:$password' ;
     var encode = Base64Codec.urlSafe().encode(payload.codeUnits) ;
-    return "Basic $encode" ;
+    return 'Basic $encode' ;
   }
 }
 

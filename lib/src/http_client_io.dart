@@ -56,6 +56,7 @@ class HttpClientRequesterIO extends HttpClientRequester {
   }
 
   Future<Map<String,String>> _decodeHeaders(io.HttpClientResponse r) async {
+    // ignore: omit_local_variable_types
     Map<String,String> headers = {} ;
 
     r.headers.forEach( (key,vals) {
@@ -216,6 +217,6 @@ class HttpClientRequesterIO extends HttpClientRequester {
 }
 
 HttpClientRequester createHttpClientRequester() {
-  return new HttpClientRequesterIO() ;
+  return HttpClientRequesterIO() ;
 }
 

@@ -5,17 +5,15 @@ import 'http_client.dart';
 
 class HttpClientRequesterBrowser extends HttpClientRequester {
 
+  @override
   Future<HttpResponse> doHttpRequest( HttpClient client, HttpRequest request ) {
-    var completer = new Completer<HttpResponse>();
+    var completer = Completer<HttpResponse>();
 
-    var xhr = new browser.HttpRequest();
+    var xhr = browser.HttpRequest();
 
-    String method = request.method ;
-    if (method == null) {
-      method = 'GET';
-    }
+    var method = request.method ?? 'GET' ;
 
-    String url = request.requestURL ;
+    var url = request.requestURL ;
 
     xhr.open(method, url, async: true);
 
@@ -71,19 +69,19 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
   }
 
   void _completeOnError(Completer<HttpResponse> completer, HttpClient client, HttpRequest request, int status, dynamic error) {
-    var restError = new HttpError(request.requestURL, status, "$error", error);
+    var restError = HttpError(request.requestURL, status, '$error', error);
 
     if ( ( status == 0 || status == 401 ) && request.authorization != null && request.authorization.authorizationProvider != null ) {
       var authorizationProvider = request.authorization.authorizationProvider ;
-      Future<Credential> futureCredential = authorizationProvider( client , restError ) ;
+      var futureCredential = authorizationProvider( client , restError ) ;
 
       if (futureCredential != null) {
         futureCredential.then( (c) {
           if (c != null) {
-            Authorization authorization2 = Authorization(c);
+            var authorization2 = Authorization(c);
             var request2 = request.copy(client, authorization2) ;
 
-            Future<HttpResponse> futureResponse2 = doHttpRequest(client, request2) ;
+            var futureResponse2 = doHttpRequest(client, request2) ;
 
             futureResponse2.then( (response2) {
               completer.complete(response2) ;
@@ -106,14 +104,14 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
   }
 
   HttpResponse _processResponse(HttpClient client, String method, browser.HttpRequest xhr) {
-    HttpResponse resp = new HttpResponse(method, xhr.responseUrl, xhr.status, xhr.responseText, (key) => xhr.getResponseHeader(key), xhr) ;
+    var resp = HttpResponse(method, xhr.responseUrl, xhr.status, xhr.responseText, (key) => xhr.getResponseHeader(key), xhr) ;
 
     var responseHeaderWithToken = client.responseHeaderWithToken ;
 
     if (responseHeaderWithToken != null) {
       var accessToken = resp.getResponseHeader(responseHeaderWithToken) ;
       if (accessToken != null) {
-        client.authorization = new BearerCredential(accessToken) ;
+        client.authorization = BearerCredential(accessToken) ;
       }
     }
 
@@ -136,7 +134,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
 
 
 HttpClientRequester createHttpClientRequester() {
-  return new HttpClientRequesterBrowser() ;
+  return HttpClientRequesterBrowser() ;
 }
 
 
