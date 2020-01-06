@@ -14,6 +14,10 @@ main() async {
   
   var client = HttpClient('http://gateway.your.domain/api-1') ;
 
+  // Calling with POST method:
+  // URL: http://gateway.your.domain/api-1/call-foo?var=123
+  // Body:
+  // { 'content': 'any' }}
   var response = await client.post("call-foo", parameters: {'var': '123'}, body: "{ 'content': 'any' }}") ;
   
   if ( response.isOK ) {
