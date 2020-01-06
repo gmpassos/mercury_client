@@ -1,6 +1,6 @@
 # Mercury Client
 
-A Simple Dart HTTP client (Web and Native support).
+A Simple Dart HTTP client with Web and Native support.
 
 ## Usage
 
@@ -8,9 +8,18 @@ A simple usage example:
 
 ```dart
 import 'package:mercury_client/mercury_client.dart';
+import 'dart:async';
 
-main() {
-  var awesome = new Awesome();
+main() async {
+  
+  var client = HttpClient('http://gateway.your.domain/api-1') ;
+
+  var response = await client.post("call-foo", parameters: {'var': '123'}, body: "{ 'content': 'any' }}") ;
+  
+  if ( response.isOK ) {
+    print( response.body ) ;
+  }
+
 }
 ```
 
