@@ -30,7 +30,7 @@ class HttpStatus {
 
   bool get isStatusUnauthenticated => isStatus(401) ;
 
-  bool get isStatusNetworkError => this.status == null || this.status <= 0 ;
+  bool get isStatusNetworkError => status == null || status <= 0 ;
 
   bool get isStatusServerError => isStatusInRange(500, 599) ;
 
