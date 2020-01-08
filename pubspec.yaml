@@ -1,13 +1,13 @@
 name: mercury_client
 description: A Simple HTTP client (Web and Native support).
-version: 1.0.3
+version: 1.0.4
 homepage: https://github.com/gmpassos/mercury_client
 
 environment:
   sdk: '>=2.7.0 <3.0.0'
 
 dependencies:
-  enum_to_string: ^1.0.7
+  enum_to_string: any
 
 dev_dependencies:
   pedantic: ^1.8.0

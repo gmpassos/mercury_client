@@ -181,7 +181,7 @@ class BasicCredential extends Credential {
   }
 
   @override
-  String get type => "Basic" ;
+  String get type => 'Basic' ;
 
   @override
   bool get usesAuthorizationHeader => true ;
@@ -200,12 +200,15 @@ class BearerCredential extends Credential {
 
   BearerCredential(this.token);
 
-  String get type => "Bearer" ;
+  @override
+  String get type => 'Bearer' ;
 
+  @override
   bool get usesAuthorizationHeader => true ;
 
+  @override
   String buildHeaderLine() {
-    return "Bearer $token" ;
+    return 'Bearer $token' ;
   }
 }
 
@@ -215,8 +218,9 @@ class QueryStringCredential extends Credential {
   QueryStringCredential(this.fields);
 
   @override
-  String get type => "queryString" ;
+  String get type => 'queryString' ;
 
+  @override
   bool get usesAuthorizationHeader => false ;
 
   @override
@@ -226,7 +230,7 @@ class QueryStringCredential extends Credential {
 
   @override
   String buildURL(String url) {
-    return buildURLWithQueryParameters(url, this.fields) ;
+    return buildURLWithQueryParameters(url, fields) ;
   }
 
 }
@@ -234,7 +238,7 @@ class QueryStringCredential extends Credential {
 String buildURLWithQueryParameters(String url, Map<String, String> fields) {
   if ( fields == null || fields.isEmpty ) return url ;
 
-  Uri uri = Uri.parse(url) ;
+  var uri = Uri.parse(url) ;
 
   Map<String, String> queryParameters ;
 
@@ -277,12 +281,13 @@ class HttpRequest {
   HttpRequest copy( [HttpClient client , Authorization authorization] ) {
     if ( authorization == null || authorization == this.authorization ) return this ;
 
-    Map<String, String> requestHeaders = client.clientRequester.buildRequestHeaders(client, url, authorization, this.sendData, this.headerContentType, this.headerAccept) ;
+    var requestHeaders = client.clientRequester.buildRequestHeaders(client, url, authorization, sendData, headerContentType, headerAccept) ;
 
+    // ignore: omit_local_variable_types
     Map<String,String> queryParameters = this.queryParameters != null ? Map.from( this.queryParameters ) : null ;
-    String requestURL = client.clientRequester.buildRequestURL(client, this.url, authorization, queryParameters) ;
+    var requestURL = client.clientRequester.buildRequestURL(client, url, authorization, queryParameters) ;
 
-    return HttpRequest(this.method, this.url, requestURL, queryParameters: queryParameters, authorization: authorization, withCredentials: this.withCredentials, responseType: this.responseType, mimeType: this.mimeType, requestHeaders: requestHeaders, sendData: this.sendData) ;
+    return HttpRequest(method, url, requestURL, queryParameters: queryParameters, authorization: authorization, withCredentials: withCredentials, responseType: responseType, mimeType: mimeType, requestHeaders: requestHeaders, sendData: sendData) ;
   }
 
   String get headerAccept => requestHeaders != null ? requestHeaders['Accept'] : null ;
@@ -299,7 +304,7 @@ abstract class HttpClientRequester {
       case HttpMethod.POST: return requestPOST(client, url, authorization: authorization, queryParameters: queryParameters, body: body, contentType: contentType, accept: accept) ;
       case HttpMethod.PUT: return requestPUT(client, url, authorization: authorization, body: body, contentType: contentType, accept: accept) ;
 
-      default: throw new StateError("Can't handle method: ${ EnumToString.parse(method) }") ;
+      default: throw StateError("Can't handle method: ${ EnumToString.parse(method) }") ;
     }
   }
 
@@ -381,7 +386,7 @@ abstract class HttpClientRequester {
   Future<HttpResponse> doHttpRequest( HttpClient client, HttpRequest request ) ;
 
   String buildPOSTFormData(Map<String, String> data, [Map<String, String> requestHeaders]) {
-    String formData = buildQueryString(data) ;
+    var formData = buildQueryString(data) ;
 
     if (requestHeaders != null) {
       requestHeaders.putIfAbsent('Content-Type', () => 'application/x-www-form-urlencoded; charset=UTF-8') ;
@@ -393,11 +398,11 @@ abstract class HttpClientRequester {
   String buildQueryString(Map<String, String> data) {
     var parts = [];
     data.forEach((key, value) {
-      var keyValue = "${Uri.encodeQueryComponent(key)}=${Uri.encodeQueryComponent(value)}" ;
+      var keyValue = '${Uri.encodeQueryComponent(key)}=${Uri.encodeQueryComponent(value)}' ;
       parts.add( keyValue);
     });
 
-    String queryString = parts.join('&');
+    var queryString = parts.join('&');
     return queryString ;
   }
 
@@ -405,21 +410,21 @@ abstract class HttpClientRequester {
     var header = client.buildRequestHeaders(url) ;
 
     if (contentType != null) {
-      if (header == null) header = {} ;
-      header["Content-Type"] = contentType ;
+      header ??= {};
+      header['Content-Type'] = contentType ;
     }
 
     if (accept != null) {
-      if (header == null) header = {} ;
-      header["Accept"] = accept ;
+      header ??= {};
+      header['Accept'] = accept ;
     }
 
     if ( authorization != null && authorization.credential != null && authorization.credential.usesAuthorizationHeader) {
-      if (header == null) header = {} ;
+      header ??= {};
 
-      String buildHeaderLine = authorization.credential.buildHeaderLine();
+      var buildHeaderLine = authorization.credential.buildHeaderLine();
       if (buildHeaderLine != null) {
-        header["Authorization"] = buildHeaderLine;
+        header['Authorization'] = buildHeaderLine;
       }
     }
 
@@ -450,14 +455,14 @@ class HttpClient {
   HttpClientRequester get clientRequester => _clientRequester;
 
   HttpClient(String baseURL, [HttpClientRequester clientRequester]) {
-    if (baseURL.endsWith("/")) baseURL = baseURL.substring(0,baseURL.length-1) ;
+    if (baseURL.endsWith('/')) baseURL = baseURL.substring(0,baseURL.length-1) ;
     this.baseURL = baseURL ;
 
-    this._clientRequester = clientRequester ?? createHttpClientRequester() ;
+    _clientRequester = clientRequester ?? createHttpClientRequester() ;
   }
   
   bool isLocalhost() {
-    return baseURL.startsWith(new RegExp('https?://localhost')) ;
+    return baseURL.startsWith(RegExp('https?://localhost')) ;
   }
 
   Future<dynamic> requestJSON(HttpMethod method, String path, { Credential authorization, Map<String,String> queryParameters, String body, String contentType, String accept } ) async {
@@ -516,9 +521,9 @@ class HttpClient {
 
   Future<Authorization> _requestAuthorization(Credential credential) async {
     if ( credential != null ) {
-      return Authorization( credential , this.authorizationProvider ) ;
+      return Authorization( credential , authorizationProvider ) ;
     }
-    else if (this.authorization == null && this.authorizationProvider == null) {
+    else if (authorization == null && authorizationProvider == null) {
       return Future.value(null);
     }
     else {
@@ -528,12 +533,12 @@ class HttpClient {
 
       var requestAuthorizationResolvingFuture = _requestAuthorizationResolvingFuture ;
       if ( requestAuthorizationResolvingFuture != null ) {
-        requestAuthorizationResolvingFuture.then( (c) {
+        return requestAuthorizationResolvingFuture.then( (c) {
           return _requestAuthorizationResolved ?? _requestAuthorizationResolving ;
         } ) ;
       }
 
-      var authorization = Authorization( this.authorization , this.authorizationProvider ) ;
+      var authorization = Authorization( this.authorization , authorizationProvider ) ;
 
       var resolveCredential = authorization.resolveCredential(this, null);
       _requestAuthorizationResolving = authorization ;
@@ -550,25 +555,25 @@ class HttpClient {
 
   Future<HttpResponse> request(HttpMethod method, String path, { Credential authorization, Map<String,String> queryParameters, String body, String contentType, String accept } ) async {
     var urlParameters = method == HttpMethod.GET || method == HttpMethod.OPTIONS ;
-    String url = urlParameters ? _buildURL(path, queryParameters) :  _buildURL(path) ;
+    var url = urlParameters ? _buildURL(path, queryParameters) :  _buildURL(path) ;
     var requestAuthorization = await _requestAuthorization(authorization);
     return _clientRequester.request(this, method, url, authorization: requestAuthorization, queryParameters: queryParameters, body: body, contentType: contentType, accept: accept);
   }
 
   Future<HttpResponse> get(String path, { Credential authorization, Map<String,String> parameters } ) async {
-    String url = _buildURL(path, parameters);
+    var url = _buildURL(path, parameters);
     var requestAuthorization = await _requestAuthorization(authorization);
     return _clientRequester.requestGET( this, url, authorization: requestAuthorization );
   }
 
   Future<HttpResponse> options(String path, { Credential authorization, Map<String,String> parameters } ) async {
-    String url = _buildURL(path, parameters);
+    var url = _buildURL(path, parameters);
     var requestAuthorization = await _requestAuthorization(authorization);
     return _clientRequester.requestOPTIONS(this, url, authorization: requestAuthorization);
   }
 
   Future<HttpResponse> post(String path, { Credential authorization, Map<String,String> parameters , String body , String contentType , String accept}) async {
-    String url = _buildURL(path);
+    var url = _buildURL(path);
 
     var uri = Uri.parse(url);
 
@@ -588,25 +593,25 @@ class HttpClient {
   }
 
   Future<HttpResponse> put(String path, { Credential authorization, String body , String contentType , String accept}) async {
-    String url = _buildURL(path);
+    var url = _buildURL(path);
     var requestAuthorization = await _requestAuthorization(authorization);
     return _clientRequester.requestPUT(this, url, authorization: requestAuthorization, body: body, contentType: contentType, accept: accept);
   }
 
   Uri _removeURIQueryParameters(var uri) {
-    if ( uri.schema.toLowerCase() == "https" ) {
-      return new Uri.https(uri.authority, uri.path) ;
+    if ( uri.schema.toLowerCase() == 'https' ) {
+      return Uri.https(uri.authority, uri.path) ;
     }
     else {
-      return new Uri.http(uri.authority, uri.path) ;
+      return Uri.http(uri.authority, uri.path) ;
     }
   }
 
   String _buildURL(String path, [Map<String,String> queryParameters]) {
-    if ( !path.startsWith("/") ) path = "/$path" ;
-    String url = "$baseURL$path" ;
+    if ( !path.startsWith('/') ) path = '/$path' ;
+    var url = '$baseURL$path' ;
 
-    Uri uri = Uri.parse(url);
+    var uri = Uri.parse(url);
 
     var uriParameters = uri.queryParameters ;
 
@@ -621,16 +626,16 @@ class HttpClient {
 
     var uri2 ;
 
-    if ( uri.scheme.toLowerCase() == "https" ) {
-      uri2 = new Uri.https(uri.authority, uri.path, queryParameters) ;
+    if ( uri.scheme.toLowerCase() == 'https' ) {
+      uri2 = Uri.https(uri.authority, uri.path, queryParameters) ;
     }
     else {
-      uri2 = new Uri.http(uri.authority, uri.path, queryParameters) ;
+      uri2 = Uri.http(uri.authority, uri.path, queryParameters) ;
     }
 
-    String url2 = uri2.toString() ;
+    var url2 = uri2.toString() ;
 
-    print("Request URL: $url2") ;
+    print('Request URL: $url2') ;
 
     return url2 ;
   }
@@ -654,7 +659,7 @@ class HttpClientRequesterSimulation extends HttpClientRequester {
 
   /// GET
 
-  Map<RegExp, SimulateResponse> _getPatterns = {} ;
+  final Map<RegExp, SimulateResponse> _getPatterns = {} ;
 
   void replyGET(RegExp urlPattern, String response) {
     simulateGET(urlPattern , (u,p) => response) ;
@@ -666,7 +671,7 @@ class HttpClientRequesterSimulation extends HttpClientRequester {
 
   /// OPTIONS
 
-  Map<RegExp, SimulateResponse> _optionsPatterns = {} ;
+  final Map<RegExp, SimulateResponse> _optionsPatterns = {} ;
 
   void replyOPTIONS(RegExp urlPattern, String response) {
     simulateOPTIONS(urlPattern , (u,p) => response) ;
@@ -678,7 +683,7 @@ class HttpClientRequesterSimulation extends HttpClientRequester {
 
   /// POST
 
-  Map<RegExp, SimulateResponse> _postPatterns = {} ;
+  final Map<RegExp, SimulateResponse> _postPatterns = {} ;
 
   void replyPOST(RegExp urlPattern, String response) {
     simulatePOST(urlPattern , (u,p) => response) ;
@@ -690,7 +695,7 @@ class HttpClientRequesterSimulation extends HttpClientRequester {
 
   /// PUT
 
-  Map<RegExp, SimulateResponse> _putPatterns = {} ;
+  final Map<RegExp, SimulateResponse> _putPatterns = {} ;
 
   void replyPUT(RegExp urlPattern, String response) {
     simulatePUT(urlPattern , (u,p) => response) ;
@@ -702,7 +707,7 @@ class HttpClientRequesterSimulation extends HttpClientRequester {
 
   /// ANY
 
-  Map<RegExp, SimulateResponse> _anyPatterns = {} ;
+  final Map<RegExp, SimulateResponse> _anyPatterns = {} ;
 
   void replyANY(RegExp urlPattern, String response) {
     simulateANY(urlPattern , (u,p) => response) ;
@@ -746,21 +751,17 @@ class HttpClientRequesterSimulation extends HttpClientRequester {
   }
 
   Future<HttpResponse> _requestSimulated(HttpClient client, String method, String url, Map<RegExp, SimulateResponse> methodPatterns, Map<String, String> queryParameters) {
-    var resp = _findResponse(url, methodPatterns) ;
+    var resp = _findResponse(url, methodPatterns) ?? _findResponse(url, _anyPatterns) ;
 
     if (resp == null) {
-      resp = _findResponse(url, _anyPatterns) ;
-    }
-
-    if (resp == null) {
-      return new Future.error("No simulated response[$method]") ;
+      return Future.error('No simulated response[$method]') ;
     }
 
     var respVal = resp(url, queryParameters) ;
 
-    HttpResponse restResponse = new HttpResponse(method, url, 200, respVal) ;
+    var restResponse = HttpResponse(method, url, 200, respVal) ;
 
-    return new Future.value(restResponse) ;
+    return Future.value(restResponse) ;
   }
 
 }
