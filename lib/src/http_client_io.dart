@@ -172,7 +172,8 @@ class HttpClientRequesterIO extends HttpClientRequester {
       String query ;
 
       if ( uri.hasQuery ) {
-        var allParams = Map.from(queryParameters) ;
+        // ignore: omit_local_variable_types
+        Map<String,String> allParams = Map.from(queryParameters) ;
         allParams.addAll( uri.queryParameters ) ;
         query = _buildQueryString(allParams) ;
       }
