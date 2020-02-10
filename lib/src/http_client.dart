@@ -9,15 +9,16 @@ if (dart.library.io) "http_client_io.dart" ;
 
 ///////////////////////////////////////////////////////
 
-typedef String ResponseHeaderGetter(String headerKey) ;
+typedef ResponseHeaderGetter = String Function(String headerKey) ;
 
 
 class HttpStatus {
 
+  final String url ;
   final String requestedURL ;
   final int status ;
 
-  HttpStatus(this.requestedURL, this.status);
+  HttpStatus(this.url, this.requestedURL, this.status);
 
   /////
 
@@ -60,7 +61,7 @@ class HttpError extends HttpStatus {
   final String message ;
   final dynamic error ;
 
-  HttpError(String requestedURL, int status, this.message, this.error) : super(requestedURL, status) ;
+  HttpError(String url, String requestedURL, int status, this.message, this.error) : super(url, requestedURL, status) ;
 
   @override
   String toString() {
@@ -69,13 +70,29 @@ class HttpError extends HttpStatus {
 
 }
 
-class HttpResponse extends HttpStatus {
+class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
   final String method ;
   final String body ;
   final ResponseHeaderGetter _responseHeaderGetter ;
   final dynamic request ;
 
-  HttpResponse(this.method, String requestedURL, int status, this.body, [this._responseHeaderGetter, this.request]) : super(requestedURL, status) ;
+  final int instanceTime = DateTime.now().millisecondsSinceEpoch ;
+  int _accessTime ;
+
+  HttpResponse(this.method, String url, String requestedURL, int status, this.body, [this._responseHeaderGetter, this.request]) : super(url, requestedURL, status) {
+    _accessTime = instanceTime ;
+  }
+
+  int get accessTime => _accessTime;
+
+  void updateAccessTime() {
+    _accessTime = DateTime.now().millisecondsSinceEpoch ;
+  }
+
+  int memorySize() {
+    var memory = 1 + 8 + 8 + (method != null ? method.length : 0) + (body != null ? body.length : 0) + (url == requestedURL ? url.length : url.length + requestedURL.length ) ;
+    return memory ;
+  }
 
   dynamic get json => hasBody ? jsonDecode(body) : null ;
 
@@ -87,16 +104,25 @@ class HttpResponse extends HttpStatus {
   }
 
   @override
-  String toString() {
-    return 'RESTResponse{method: $method, requestedURL: $requestedURL, status: $status, body: $body}';
+  String toString([bool withBody]) {
+    withBody ??= false ;
+    var infos = 'method: $method, requestedURL: $requestedURL, status: $status' ;
+    if (withBody) infos += ', body: $body' ;
+    return 'RESTResponse{$infos}';
   }
+
+  @override
+  int compareTo(HttpResponse other) {
+    return instanceTime < other.instanceTime ? -1 : ( instanceTime == other.instanceTime ? 0 : 1 ) ;
+  }
+
 }
 
-typedef Map<String,String> RequestHeadersBuilder(HttpClient client, String url) ;
+typedef RequestHeadersBuilder = Map<String,String> Function(HttpClient client, String url) ;
 
-typedef void ResponseProcessor(HttpClient client, dynamic request, HttpResponse response) ;
+typedef ResponseProcessor = void Function(HttpClient client, dynamic request, HttpResponse response) ;
 
-typedef Future<Credential> AuthorizationProvider( HttpClient client , HttpError lastError ) ;
+typedef AuthorizationProvider = Future<Credential> Function( HttpClient client , HttpError lastError ) ;
 
 class Authorization {
   final Credential _credential ;
@@ -554,8 +580,17 @@ class HttpClient {
   }
 
   Future<HttpResponse> request(HttpMethod method, String path, { Credential authorization, Map<String,String> queryParameters, String body, String contentType, String accept } ) async {
+    var url = buildMethodRequestURL(method, path, queryParameters);
+    return requestURL(method, url, authorization: authorization, queryParameters: queryParameters, body: body, contentType: contentType, accept: accept);
+  }
+
+  String buildMethodRequestURL(HttpMethod method, String path, Map<String, String> queryParameters) {
     var urlParameters = method == HttpMethod.GET || method == HttpMethod.OPTIONS ;
     var url = urlParameters ? _buildURL(path, queryParameters) :  _buildURL(path) ;
+    return url;
+  }
+
+  Future<HttpResponse> requestURL(HttpMethod method, String url, { Credential authorization, Map<String,String> queryParameters, String body, String contentType, String accept } ) async {
     var requestAuthorization = await _requestAuthorization(authorization);
     return _clientRequester.request(this, method, url, authorization: requestAuthorization, queryParameters: queryParameters, body: body, contentType: contentType, accept: accept);
   }
@@ -607,10 +642,28 @@ class HttpClient {
     }
   }
 
+  String buildRequestURL(String path, [Map<String,String> queryParameters]) {
+    return _buildURL(path, queryParameters) ;
+  }
+
   String _buildURL(String path, [Map<String,String> queryParameters]) {
+    if (path == null) {
+      if (queryParameters == null || queryParameters.isEmpty) {
+        return baseURL ;
+      }
+      else {
+        return _buildURLWithParameters(baseURL, queryParameters) ;
+      }
+    }
+
     if ( !path.startsWith('/') ) path = '/$path' ;
     var url = '$baseURL$path' ;
 
+    return _buildURLWithParameters(url, queryParameters) ;
+  }
+
+
+  String _buildURLWithParameters(String url, Map<String,String> queryParameters) {
     var uri = Uri.parse(url);
 
     var uriParameters = uri.queryParameters ;
@@ -640,6 +693,7 @@ class HttpClient {
     return url2 ;
   }
 
+
   ResponseProcessor responseProcessor ;
 
   RequestHeadersBuilder requestHeadersBuilder ;
@@ -653,7 +707,7 @@ class HttpClient {
 
 ////////////////////////////////////////
 
-typedef String SimulateResponse(String url, Map<String, String> queryParameters);
+typedef SimulateResponse = String Function(String url, Map<String, String> queryParameters);
 
 class HttpClientRequesterSimulation extends HttpClientRequester {
 
@@ -759,7 +813,7 @@ class HttpClientRequesterSimulation extends HttpClientRequester {
 
     var respVal = resp(url, queryParameters) ;
 
-    var restResponse = HttpResponse(method, url, 200, respVal) ;
+    var restResponse = HttpResponse(method, url, url, 200, respVal) ;
 
     return Future.value(restResponse) ;
   }

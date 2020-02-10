@@ -8,22 +8,22 @@ class HttpClientRequesterIO extends HttpClientRequester {
 
   @override
   Future<HttpResponse> doHttpRequest(HttpClient client, HttpRequest request) async {
-    var uri = Uri.parse(request.url) ;
+    var uri = Uri.parse(request.requestURL) ;
 
     var req = await _request(client, request, uri);
 
     var r = await req.close();
 
-    return _processResponse(client, request.method, uri, r) ;
+    return _processResponse(client, request.method, request.url, uri, r) ;
   }
 
-  Future<HttpResponse> _processResponse(HttpClient client, String method, Uri uri, io.HttpClientResponse r) async {
+  Future<HttpResponse> _processResponse(HttpClient client, String method, String url, Uri requestURI, io.HttpClientResponse r) async {
     var contentType = r.headers.contentType ;
     var body = await _decodeBody(contentType, r);
 
     var responseHeaders = await _decodeHeaders(r) ;
 
-    var resp = HttpResponse(method, uri.toString(), r.statusCode, body, (key) => responseHeaders[key.toLowerCase()], r) ;
+    var resp = HttpResponse(method, url, requestURI.toString(), r.statusCode, body, (key) => responseHeaders[key.toLowerCase()], r) ;
 
     var responseHeaderWithToken = client.responseHeaderWithToken ;
 

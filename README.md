@@ -28,11 +28,34 @@ main() async {
 }
 ```
 
+HttpCache usage:
+
+
+```dart
+import 'package:mercury_client/mercury_client.dart';
+import 'dart:async';
+
+main() async {
+  
+  var client = HttpClient('http://gateway.your.domain/api-1') ;
+  
+  // HTTP Cache with max memory of 16M and timeout of 5min:
+  var cache = HttpCache(1024*1024*16, 1000*60*5) ;
+
+  var response = cache.getURL( 'http://host/path/to/base64/image.jpeg') ;
+
+  if ( response.isOK ) {
+    img.src = 'data:image/jpeg;base64,'+ response.body ;
+  }
+
+}
+```
+
 ## Mercury (mythology)
 
 Mercury is known to the Romans as Mercurius.
 
-He is the god of financial gain, commerce, eloquence, messages, communication (including divination), travelers, boundaries, luck, trickery and thieves.
+He is the god of financial gain, commerce, eloquence, **messages, communication** (including divination), travelers, boundaries, luck, trickery and thieves.
 
 - See: [Mercury@Wikipedia](https://en.wikipedia.org/wiki/Mercury_(mythology)
 

@@ -47,7 +47,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       var unknownRedirect = xhr.status > 307 && xhr.status < 400;
 
       if (accepted || fileUri || notModified || unknownRedirect) {
-        var response = _processResponse(client, request.method, xhr) ;
+        var response = _processResponse(client, request.method, request.url, xhr) ;
         completer.complete(response);
       }
       else {
@@ -69,7 +69,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
   }
 
   void _completeOnError(Completer<HttpResponse> completer, HttpClient client, HttpRequest request, int status, dynamic error) {
-    var restError = HttpError(request.requestURL, status, '$error', error);
+    var restError = HttpError(request.url, request.requestURL, status, '$error', error);
 
     if ( ( status == 0 || status == 401 ) && request.authorization != null && request.authorization.authorizationProvider != null ) {
       var authorizationProvider = request.authorization.authorizationProvider ;
@@ -103,8 +103,8 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     completer.completeError( restError );
   }
 
-  HttpResponse _processResponse(HttpClient client, String method, browser.HttpRequest xhr) {
-    var resp = HttpResponse(method, xhr.responseUrl, xhr.status, xhr.responseText, (key) => xhr.getResponseHeader(key), xhr) ;
+  HttpResponse _processResponse(HttpClient client, String method, String url, browser.HttpRequest xhr) {
+    var resp = HttpResponse(method, url, xhr.responseUrl, xhr.status, xhr.responseText, (key) => xhr.getResponseHeader(key), xhr) ;
 
     var responseHeaderWithToken = client.responseHeaderWithToken ;
 
