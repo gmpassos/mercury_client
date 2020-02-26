@@ -1,3 +1,8 @@
+## 1.0.7
+
+- JSONBodyCredential: creates a JSON body with authentication for each request.
+- HttpBody: now a request body is dynamic, it can be Map and List (automatically converted to JSON) or a normal String.
+
 ## 1.0.6
 
 - Public method buildRequestURL.

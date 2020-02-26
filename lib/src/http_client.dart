@@ -100,7 +100,13 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
 
   String getResponseHeader(String headerKey) {
     if (_responseHeaderGetter == null) return null ;
-    return _responseHeaderGetter(headerKey) ;
+    try {
+      return _responseHeaderGetter(headerKey);
+    }
+    finally {
+      print("[HttpResponse] Can't access response header: $headerKey") ;
+      return null ;
+    }
   }
 
   @override
@@ -115,6 +121,61 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
   int compareTo(HttpResponse other) {
     return instanceTime < other.instanceTime ? -1 : ( instanceTime == other.instanceTime ? 0 : 1 ) ;
   }
+
+}
+
+class HttpBody {
+
+  static final HttpBody NULL = HttpBody(null,null) ;
+
+  static String normalizeType(String bodyType) {
+    if (bodyType == null) return null ;
+
+    bodyType = bodyType.trim() ;
+    if (bodyType.isEmpty) return null ;
+
+    var bodyTypeLC = bodyType.toLowerCase() ;
+
+    if ( bodyTypeLC == 'json' || bodyTypeLC.endsWith('/json') ) return 'application/json' ;
+    if ( bodyTypeLC == 'jpeg' || bodyTypeLC.endsWith('/jpeg') ) return 'image/jpeg' ;
+    if ( bodyTypeLC == 'png' || bodyTypeLC.endsWith('/png') ) return 'image/png' ;
+    if (bodyTypeLC == 'text') return 'text/plain' ;
+    if (bodyTypeLC == 'html') return 'text/html' ;
+
+    return bodyType ;
+  }
+
+  ////////
+
+  String _content ;
+  String _contentType ;
+
+  HttpBody(dynamic content, String type) {
+    _contentType = normalizeType(type) ;
+
+    if ( content is String ) {
+      _content = content ;
+    }
+    else if ( isJSONType || (type == null && (content is Map || content is List)) ) {
+      _content = json.encode(content) ;
+    }
+    else if ( content == null ) {
+      _content = null ;
+    }
+    else {
+      _content = '$content' ;
+    }
+
+  }
+
+  String get content => _content;
+  String get contentType => _contentType;
+
+  bool get noContent => _content == null ;
+  bool get noType => _contentType == null ;
+  bool get isJSONType => _contentType != null && _contentType.endsWith('/json') ;
+
+  bool get isNull => noContent && noType ;
 
 }
 
@@ -177,9 +238,15 @@ abstract class Credential {
 
   bool get usesAuthorizationHeader ;
 
-  String buildHeaderLine() ;
+  String buildAuthorizationHeaderLine() {
+    return null ;
+  }
 
   String buildURL(String url) {
+    return null ;
+  }
+
+  HttpBody buildBody(HttpBody body) {
     return null ;
   }
 
@@ -213,11 +280,12 @@ class BasicCredential extends Credential {
   bool get usesAuthorizationHeader => true ;
 
   @override
-  String buildHeaderLine() {
+  String buildAuthorizationHeaderLine() {
     var payload = '$username:$password' ;
     var encode = Base64Codec.urlSafe().encode(payload.codeUnits) ;
     return 'Basic $encode' ;
   }
+
 }
 
 
@@ -233,7 +301,7 @@ class BearerCredential extends Credential {
   bool get usesAuthorizationHeader => true ;
 
   @override
-  String buildHeaderLine() {
+  String buildAuthorizationHeaderLine() {
     return 'Bearer $token' ;
   }
 }
@@ -250,13 +318,96 @@ class QueryStringCredential extends Credential {
   bool get usesAuthorizationHeader => false ;
 
   @override
-  String buildHeaderLine() {
+  String buildURL(String url) {
+    return buildURLWithQueryParameters(url, fields) ;
+  }
+
+}
+
+class JSONBodyCredential extends Credential {
+  String _field ;
+  final dynamic authorization ;
+
+  JSONBodyCredential(String field, this.authorization) {
+    if (field != null) {
+      field = field.trim() ;
+      _field = field.isNotEmpty ? field : null ;
+    }
+  }
+
+  String get field => _field;
+
+  @override
+  String get type => 'jsonbody';
+
+  @override
+  bool get usesAuthorizationHeader => false;
+
+  @override
+  String buildAuthorizationHeaderLine() {
     return null;
   }
 
   @override
   String buildURL(String url) {
-    return buildURLWithQueryParameters(url, fields) ;
+    return url ;
+  }
+
+  @override
+  HttpBody buildBody(HttpBody body) {
+    if (body == null || body.isNull) {
+      return buildJSONAuthorizationBody(null);
+    }
+    else if ( body.isJSONType ) {
+      return buildJSONAuthorizationBody( body.content ) ;
+    }
+    else {
+      return body ;
+    }
+  }
+
+  HttpBody buildJSONAuthorizationBody(String body) {
+    return HttpBody( buildJSONAuthorizationBodyJSON(body) , 'application/json' ) ;
+  }
+
+  String buildJSONAuthorizationBodyJSON(String body) {
+    if ( body == null ) {
+      if (field == null || field.isEmpty) {
+        return json.encode( authorization ) ;
+      }
+      else {
+        return json.encode( { '$field': authorization } ) ;
+      }
+    }
+
+    var bodyJson = json.decode(body) ;
+
+    if (field == null || field.isEmpty) {
+      if ( authorization is Map ) {
+        if ( bodyJson is Map ) {
+          bodyJson.addAll(authorization) ;
+        }
+        else {
+          throw StateError("No specified field for authorization. Can't add authorization to current body! Current body is not a Map to receive a Map authorization.") ;
+        }
+      }
+      else if ( authorization is List ) {
+        if ( bodyJson is List ) {
+          bodyJson.addAll(authorization) ;
+        }
+        else {
+          throw StateError("No specified field for authorization. Can't add authorization to current body! Current body is not a List to receive a List authorization.") ;
+        }
+      }
+      else {
+        throw StateError("No specified field for authorization. Can't add authorization to current body! authorization is not a Map or List to add to any type of body.") ;
+      }
+    }
+    else {
+      bodyJson[ field ] = authorization ;
+    }
+
+    return json.encode(bodyJson) ;
   }
 
 }
@@ -323,7 +474,7 @@ class HttpRequest {
 
 abstract class HttpClientRequester {
 
-  Future<HttpResponse> request(HttpClient client, HttpMethod method, String url, {Authorization authorization, Map<String,String> queryParameters, String body, String contentType, String accept}) {
+  Future<HttpResponse> request(HttpClient client, HttpMethod method, String url, {Authorization authorization, Map<String,String> queryParameters, dynamic body, String contentType, String accept}) {
     switch (method) {
       case HttpMethod.GET: return requestGET(client, url, authorization: authorization) ;
       case HttpMethod.OPTIONS: return requestOPTIONS(client, url, authorization: authorization) ;
@@ -365,9 +516,12 @@ abstract class HttpClientRequester {
     ) ;
   }
 
-  Future<HttpResponse> requestPOST(HttpClient client, String url, { Authorization authorization, Map<String,String> queryParameters, String body, String contentType, String accept }) {
-    if (queryParameters != null && queryParameters.isNotEmpty && body == null) {
-      var requestHeaders = buildRequestHeaders(client, url, authorization, body, contentType, accept);
+  Future<HttpResponse> requestPOST(HttpClient client, String url, { Authorization authorization, Map<String,String> queryParameters, dynamic body, String contentType, String accept }) {
+    var httpBody = HttpBody(body, contentType);
+    var requestBody = buildRequestBody(client, httpBody, authorization) ;
+
+    if (queryParameters != null && queryParameters.isNotEmpty && requestBody.isNull) {
+      var requestHeaders = buildRequestHeaders(client, url, authorization, requestBody.content, requestBody.contentType, accept);
       var formData = buildPOSTFormData(queryParameters, requestHeaders);
 
       return doHttpRequest(
@@ -388,21 +542,24 @@ abstract class HttpClientRequester {
               authorization: authorization,
               queryParameters: queryParameters,
               withCredentials: _withCredentials(client, authorization) ,
-              requestHeaders: buildRequestHeaders(client, url, authorization, body, contentType, accept),
-              sendData: body
+              requestHeaders: buildRequestHeaders(client, url, authorization, requestBody.content, requestBody.contentType, accept),
+              sendData: requestBody.content
           )
       ) ;
     }
   }
 
-  Future<HttpResponse> requestPUT(HttpClient client, String url, { Authorization authorization, String body, String contentType, String accept }) {
+  Future<HttpResponse> requestPUT(HttpClient client, String url, { Authorization authorization, dynamic body, String contentType, String accept }) {
+    var httpBody = HttpBody(body, contentType);
+    var requestBody = buildRequestBody(client, httpBody, authorization) ;
+
     return doHttpRequest(
         client,
         HttpRequest('PUT' , url, buildRequestURL(client, url, authorization),
             authorization: authorization,
             withCredentials: _withCredentials(client, authorization) ,
-            requestHeaders: buildRequestHeaders(client, url, authorization, body, contentType, accept),
-            sendData: body
+            requestHeaders: buildRequestHeaders(client, url, authorization, requestBody.content, requestBody.contentType, accept),
+            sendData: requestBody.content
         )
     ) ;
   }
@@ -448,9 +605,9 @@ abstract class HttpClientRequester {
     if ( authorization != null && authorization.credential != null && authorization.credential.usesAuthorizationHeader) {
       header ??= {};
 
-      var buildHeaderLine = authorization.credential.buildHeaderLine();
-      if (buildHeaderLine != null) {
-        header['Authorization'] = buildHeaderLine;
+      var authorizationHeaderLine = authorization.credential.buildAuthorizationHeaderLine();
+      if (authorizationHeaderLine != null) {
+        header['Authorization'] = authorizationHeaderLine;
       }
     }
 
@@ -468,6 +625,15 @@ abstract class HttpClientRequester {
     }
 
     return url ;
+  }
+
+  HttpBody buildRequestBody(HttpClient client, HttpBody httpBody, Authorization authorization) {
+    if ( authorization != null && authorization.credential != null ) {
+      var jsonBody = authorization.credential.buildBody(httpBody) ;
+      if (jsonBody != null) return jsonBody ;
+    }
+
+    return httpBody ?? HttpBody.NULL ;
   }
 
 }
@@ -491,7 +657,7 @@ class HttpClient {
     return baseURL.startsWith(RegExp('https?://localhost')) ;
   }
 
-  Future<dynamic> requestJSON(HttpMethod method, String path, { Credential authorization, Map<String,String> queryParameters, String body, String contentType, String accept } ) async {
+  Future<dynamic> requestJSON(HttpMethod method, String path, { Credential authorization, Map<String,String> queryParameters, dynamic body, String contentType, String accept } ) async {
     return request(method, path, authorization: authorization, queryParameters: queryParameters, body: body, contentType: contentType, accept: accept).then((r) => _jsonDecode(r.body)) ;
   }
 
@@ -503,11 +669,11 @@ class HttpClient {
     return options(path, authorization: authorization, parameters: parameters).then((r) => _jsonDecode(r.body)) ;
   }
 
-  Future<dynamic> postJSON(String path,  { Credential authorization, Map<String,String> parameters , String body , String contentType }) async {
+  Future<dynamic> postJSON(String path,  { Credential authorization, Map<String,String> parameters , dynamic body , String contentType }) async {
     return post(path, authorization: authorization, parameters: parameters, body: body, contentType: contentType).then((r) => _jsonDecode(r.body)) ;
   }
 
-  Future<dynamic> putJSON(String path,  { Credential authorization, String body , String contentType }) async {
+  Future<dynamic> putJSON(String path,  { Credential authorization, dynamic body , String contentType }) async {
     return put(path, authorization: authorization, body: body, contentType: contentType).then((r) => _jsonDecode(r.body)) ;
   }
 
@@ -579,7 +745,7 @@ class HttpClient {
     }
   }
 
-  Future<HttpResponse> request(HttpMethod method, String path, { Credential authorization, Map<String,String> queryParameters, String body, String contentType, String accept } ) async {
+  Future<HttpResponse> request(HttpMethod method, String path, { Credential authorization, Map<String,String> queryParameters, dynamic body, String contentType, String accept } ) async {
     var url = buildMethodRequestURL(method, path, queryParameters);
     return requestURL(method, url, authorization: authorization, queryParameters: queryParameters, body: body, contentType: contentType, accept: accept);
   }
@@ -590,7 +756,7 @@ class HttpClient {
     return url;
   }
 
-  Future<HttpResponse> requestURL(HttpMethod method, String url, { Credential authorization, Map<String,String> queryParameters, String body, String contentType, String accept } ) async {
+  Future<HttpResponse> requestURL(HttpMethod method, String url, { Credential authorization, Map<String,String> queryParameters, dynamic body, String contentType, String accept } ) async {
     var requestAuthorization = await _requestAuthorization(authorization);
     return _clientRequester.request(this, method, url, authorization: requestAuthorization, queryParameters: queryParameters, body: body, contentType: contentType, accept: accept);
   }
@@ -607,7 +773,7 @@ class HttpClient {
     return _clientRequester.requestOPTIONS(this, url, authorization: requestAuthorization);
   }
 
-  Future<HttpResponse> post(String path, { Credential authorization, Map<String,String> parameters , String body , String contentType , String accept}) async {
+  Future<HttpResponse> post(String path, { Credential authorization, Map<String,String> parameters , dynamic body , String contentType , String accept}) async {
     var url = _buildURL(path);
 
     var uri = Uri.parse(url);
@@ -627,7 +793,7 @@ class HttpClient {
     return _clientRequester.requestPOST(this, url, authorization: requestAuthorization, queryParameters: parameters, body: body, contentType: contentType, accept: accept);
   }
 
-  Future<HttpResponse> put(String path, { Credential authorization, String body , String contentType , String accept}) async {
+  Future<HttpResponse> put(String path, { Credential authorization, dynamic body , String contentType , String accept}) async {
     var url = _buildURL(path);
     var requestAuthorization = await _requestAuthorization(authorization);
     return _clientRequester.requestPUT(this, url, authorization: requestAuthorization, body: body, contentType: contentType, accept: accept);
