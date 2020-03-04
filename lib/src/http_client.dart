@@ -470,6 +470,10 @@ class HttpRequest {
   String get headerAccept => requestHeaders != null ? requestHeaders['Accept'] : null ;
   String get headerContentType => requestHeaders != null ? requestHeaders['Content-Type'] : null ;
 
+  @override
+  String toString() {
+    return 'HttpRequest{method: $method, url: $url, requestURL: $requestURL, queryParameters: $queryParameters, authorization: $authorization, withCredentials: $withCredentials, responseType: $responseType, mimeType: $mimeType, requestHeaders: $requestHeaders, sendData: $sendData}';
+  }
 }
 
 abstract class HttpClientRequester {
@@ -486,10 +490,16 @@ abstract class HttpClientRequester {
   }
 
   bool _withCredentials(HttpClient client, Authorization authorization) {
-    if ( client.crossSiteWithCredentials != null ) return client.crossSiteWithCredentials ;
+    if ( client.crossSiteWithCredentials != null ) {
+      return client.crossSiteWithCredentials ;
+    }
 
-    if ( authorization != null && authorization.credential != null && authorization.credential.usesAuthorizationHeader ) return true ;
-    return false ;
+    if ( authorization != null && authorization.credential != null && authorization.credential.usesAuthorizationHeader ) {
+      return true ;
+    }
+    else {
+      return false;
+    }
   }
 
   Future<HttpResponse> requestGET(HttpClient client, String url, { Authorization authorization, Map<String,String> queryParameters }) {
@@ -501,6 +511,7 @@ abstract class HttpClientRequester {
             withCredentials: _withCredentials(client, authorization) ,
             requestHeaders: buildRequestHeaders(client, url, authorization)
         )
+        , client.logRequests
     ) ;
   }
 
@@ -513,6 +524,7 @@ abstract class HttpClientRequester {
             withCredentials: _withCredentials(client, authorization) ,
             requestHeaders: buildRequestHeaders(client, url, authorization)
         )
+        , client.logRequests
     ) ;
   }
 
@@ -533,6 +545,7 @@ abstract class HttpClientRequester {
               requestHeaders: requestHeaders ,
               sendData: formData
           )
+          , client.logRequests
       );
     }
     else {
@@ -545,6 +558,7 @@ abstract class HttpClientRequester {
               requestHeaders: buildRequestHeaders(client, url, authorization, requestBody.content, requestBody.contentType, accept),
               sendData: requestBody.content
           )
+          , client.logRequests
       ) ;
     }
   }
@@ -561,12 +575,13 @@ abstract class HttpClientRequester {
             requestHeaders: buildRequestHeaders(client, url, authorization, requestBody.content, requestBody.contentType, accept),
             sendData: requestBody.content
         )
+        , client.logRequests
     ) ;
   }
 
   /////////////////////////////////////////////////////////////////////////////////////////
 
-  Future<HttpResponse> doHttpRequest( HttpClient client, HttpRequest request ) ;
+  Future<HttpResponse> doHttpRequest( HttpClient client, HttpRequest request , bool log ) ;
 
   String buildPOSTFormData(Map<String, String> data, [Map<String, String> requestHeaders]) {
     var formData = buildQueryString(data) ;
@@ -646,13 +661,26 @@ class HttpClient {
 
   HttpClientRequester get clientRequester => _clientRequester;
 
+  static int _idCounter = 0 ;
+  int _id ;
+
   HttpClient(String baseURL, [HttpClientRequester clientRequester]) {
+    _id = ++_idCounter ;
+
     if (baseURL.endsWith('/')) baseURL = baseURL.substring(0,baseURL.length-1) ;
     this.baseURL = baseURL ;
 
     _clientRequester = clientRequester ?? createHttpClientRequester() ;
   }
-  
+
+
+  @override
+  String toString() {
+    return 'HttpClient{id: $_id, baseURL: $baseURL, authorization: $authorization, crossSiteWithCredentials: $crossSiteWithCredentials, logJSON: $logJSON, _clientRequester: $_clientRequester}';
+  }
+
+  int get id => _id;
+
   bool isLocalhost() {
     return baseURL.startsWith(RegExp('https?://localhost')) ;
   }
@@ -691,6 +719,8 @@ class HttpClient {
 
   AuthorizationProvider authorizationProvider ;
 
+  bool logRequests = false ;
+
   bool logJSON = false ;
 
   dynamic _jsonDecode(String s) {
@@ -707,11 +737,13 @@ class HttpClient {
   Future<Credential> _requestAuthorizationResolvingFuture ;
   Authorization _requestAuthorizationResolving ;
 
-  Authorization _requestAuthorizationResolved ;
+  dynamic get requestAuthorizationResolvingFuture => _requestAuthorizationResolvingFuture ;
+  dynamic get requestAuthorizationResolving => _requestAuthorizationResolving ;
 
+  Authorization _requestAuthorizationResolved ;
   Authorization get resolvedAuthorization => _requestAuthorizationResolved ;
 
-  Future<Authorization> _requestAuthorization(Credential credential) async {
+  Future<Authorization> _buildRequestAuthorization(Credential credential) async {
     if ( credential != null ) {
       return Authorization( credential , authorizationProvider ) ;
     }
@@ -730,51 +762,59 @@ class HttpClient {
         } ) ;
       }
 
-      var authorization = Authorization( this.authorization , authorizationProvider ) ;
+      var authorizationResolving = Authorization( authorization , authorizationProvider ) ;
 
-      var resolveCredential = authorization.resolveCredential(this, null);
-      _requestAuthorizationResolving = authorization ;
-      _requestAuthorizationResolvingFuture = resolveCredential ;
+      var resolvingCredentialFuture = authorizationResolving.resolveCredential(this, null);
+      _requestAuthorizationResolving = authorizationResolving ;
+      _requestAuthorizationResolvingFuture = resolvingCredentialFuture ;
 
-      return resolveCredential.then( (c) {
-        _requestAuthorizationResolved = authorization ;
-        _requestAuthorizationResolvingFuture = null ;
-        _requestAuthorizationResolving = null ;
-        return _requestAuthorizationResolved ;
+      return resolvingCredentialFuture.then( (c) {
+        if ( authorizationResolving.isCredentialResolved ) {
+          _requestAuthorizationResolved = authorizationResolving ;
+          _requestAuthorizationResolvingFuture = null ;
+          _requestAuthorizationResolving = null ;
+          return _requestAuthorizationResolved ;
+        }
+        else {
+          _requestAuthorizationResolved = null ;
+          _requestAuthorizationResolvingFuture = null ;
+          _requestAuthorizationResolving = null ;
+          return null ;
+        }
       } ) ;
     }
   }
 
-  Future<HttpResponse> request(HttpMethod method, String path, { Credential authorization, Map<String,String> queryParameters, dynamic body, String contentType, String accept } ) async {
-    var url = buildMethodRequestURL(method, path, queryParameters);
+  Future<HttpResponse> request(HttpMethod method, String path, { bool fullPath, Credential authorization, Map<String,String> queryParameters, dynamic body, String contentType, String accept } ) async {
+    var url = buildMethodRequestURL(method, path, fullPath, queryParameters);
     return requestURL(method, url, authorization: authorization, queryParameters: queryParameters, body: body, contentType: contentType, accept: accept);
   }
 
-  String buildMethodRequestURL(HttpMethod method, String path, Map<String, String> queryParameters) {
+  String buildMethodRequestURL(HttpMethod method, String path, bool fullPath, Map<String, String> queryParameters) {
     var urlParameters = method == HttpMethod.GET || method == HttpMethod.OPTIONS ;
-    var url = urlParameters ? _buildURL(path, queryParameters) :  _buildURL(path) ;
+    var url = urlParameters ? _buildURL(path, fullPath, queryParameters) :  _buildURL(path, fullPath) ;
     return url;
   }
 
   Future<HttpResponse> requestURL(HttpMethod method, String url, { Credential authorization, Map<String,String> queryParameters, dynamic body, String contentType, String accept } ) async {
-    var requestAuthorization = await _requestAuthorization(authorization);
+    var requestAuthorization = await _buildRequestAuthorization(authorization);
     return _clientRequester.request(this, method, url, authorization: requestAuthorization, queryParameters: queryParameters, body: body, contentType: contentType, accept: accept);
   }
 
-  Future<HttpResponse> get(String path, { Credential authorization, Map<String,String> parameters } ) async {
-    var url = _buildURL(path, parameters);
-    var requestAuthorization = await _requestAuthorization(authorization);
+  Future<HttpResponse> get(String path, { bool fullPath, Credential authorization, Map<String,String> parameters } ) async {
+    var url = _buildURL(path, fullPath, parameters);
+    var requestAuthorization = await _buildRequestAuthorization(authorization);
     return _clientRequester.requestGET( this, url, authorization: requestAuthorization );
   }
 
-  Future<HttpResponse> options(String path, { Credential authorization, Map<String,String> parameters } ) async {
-    var url = _buildURL(path, parameters);
-    var requestAuthorization = await _requestAuthorization(authorization);
+  Future<HttpResponse> options(String path, { bool fullPath, Credential authorization, Map<String,String> parameters } ) async {
+    var url = _buildURL(path, fullPath, parameters);
+    var requestAuthorization = await _buildRequestAuthorization(authorization);
     return _clientRequester.requestOPTIONS(this, url, authorization: requestAuthorization);
   }
 
-  Future<HttpResponse> post(String path, { Credential authorization, Map<String,String> parameters , dynamic body , String contentType , String accept}) async {
-    var url = _buildURL(path);
+  Future<HttpResponse> post(String path, { bool fullPath, Credential authorization, Map<String,String> parameters , dynamic body , String contentType , String accept}) async {
+    var url = _buildURL(path, fullPath);
 
     var uri = Uri.parse(url);
 
@@ -789,13 +829,13 @@ class HttpClient {
       url = _removeURIQueryParameters(uri).toString() ;
     }
 
-    var requestAuthorization = await _requestAuthorization(authorization);
+    var requestAuthorization = await _buildRequestAuthorization(authorization);
     return _clientRequester.requestPOST(this, url, authorization: requestAuthorization, queryParameters: parameters, body: body, contentType: contentType, accept: accept);
   }
 
-  Future<HttpResponse> put(String path, { Credential authorization, dynamic body , String contentType , String accept}) async {
-    var url = _buildURL(path);
-    var requestAuthorization = await _requestAuthorization(authorization);
+  Future<HttpResponse> put(String path, { bool fullPath, Credential authorization, dynamic body , String contentType , String accept}) async {
+    var url = _buildURL(path, fullPath);
+    var requestAuthorization = await _buildRequestAuthorization(authorization);
     return _clientRequester.requestPUT(this, url, authorization: requestAuthorization, body: body, contentType: contentType, accept: accept);
   }
 
@@ -808,11 +848,11 @@ class HttpClient {
     }
   }
 
-  String buildRequestURL(String path, [Map<String,String> queryParameters]) {
-    return _buildURL(path, queryParameters) ;
+  String buildRequestURL(String path, bool fullPath, [Map<String,String> queryParameters]) {
+    return _buildURL(path, fullPath, queryParameters) ;
   }
 
-  String _buildURL(String path, [Map<String,String> queryParameters]) {
+  String _buildURL(String path, bool fullPath, [Map<String,String> queryParameters]) {
     if (path == null) {
       if (queryParameters == null || queryParameters.isEmpty) {
         return baseURL ;
@@ -823,7 +863,25 @@ class HttpClient {
     }
 
     if ( !path.startsWith('/') ) path = '/$path' ;
-    var url = '$baseURL$path' ;
+
+    var url ;
+
+    if (fullPath != null && fullPath) {
+      var uri = Uri.parse(baseURL);
+
+      var uri2 ;
+      if ( uri.scheme.toLowerCase() == 'https' ) {
+        uri2 = Uri.https(uri.authority, path) ;
+      }
+      else {
+        uri2 = Uri.http(uri.authority, path) ;
+      }
+
+      url = uri2.toString() ;
+    }
+    else {
+      url = '$baseURL$path' ;
+    }
 
     return _buildURLWithParameters(url, queryParameters) ;
   }
@@ -965,7 +1023,7 @@ class HttpClientRequesterSimulation extends HttpClientRequester {
   //////////////////////
 
   @override
-  Future<HttpResponse> doHttpRequest(HttpClient client, HttpRequest request) {
+  Future<HttpResponse> doHttpRequest(HttpClient client, HttpRequest request, bool log ) {
     var methodPatterns = methodSimulationPatterns(request.method) ;
     return _requestSimulated(client, request.method, request.requestURL, methodPatterns, request.queryParameters) ;
   }

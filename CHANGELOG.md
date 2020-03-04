@@ -1,3 +1,8 @@
+## 1.0.8
+
+- HttpClient: fullPath parameter to indicate that the path is full (from root).
+- HttpClient._buildRequestAuthorization: fix case when result is a null credential.
+
 ## 1.0.7
 
 - JSONBodyCredential: creates a JSON body with authentication for each request.

@@ -1,6 +1,6 @@
 name: mercury_client
 description: A Simple HTTP client (Web and Native support).
-version: 1.0.7
+version: 1.0.8
 homepage: https://github.com/gmpassos/mercury_client
 
 environment:

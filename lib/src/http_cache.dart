@@ -224,8 +224,8 @@ class HttpCache {
     return removed ;
   }
 
-  Future<HttpResponse> request(HttpClient httpClient, HttpMethod method, String path, { Credential authorization, Map<String,String> queryParameters, String body, String contentType, String accept } ) async {
-    var requestURL = httpClient.buildMethodRequestURL(method, path, queryParameters) ;
+  Future<HttpResponse> request(HttpClient httpClient, HttpMethod method, String path, { bool fullPath, Credential authorization, Map<String,String> queryParameters, String body, String contentType, String accept } ) async {
+    var requestURL = httpClient.buildMethodRequestURL(method, path, fullPath, queryParameters) ;
     return this.requestURL(httpClient, method, requestURL, authorization: authorization, queryParameters: queryParameters, body: body, contentType: contentType, accept: accept) ;
   }
 
@@ -256,8 +256,8 @@ class HttpCache {
     return response;
   }
 
-  HttpResponse getCachedRequest(HttpClient httpClient, HttpMethod method, String path, { Credential authorization, Map<String,String> queryParameters, String body, String contentType, String accept } ) {
-    var requestURL = httpClient.buildMethodRequestURL(method, path, queryParameters) ;
+  HttpResponse getCachedRequest(HttpClient httpClient, HttpMethod method, String path, { bool fullPath, Credential authorization, Map<String,String> queryParameters, String body, String contentType, String accept } ) {
+    var requestURL = httpClient.buildMethodRequestURL(method, path, fullPath, queryParameters) ;
     return getCachedRequestURL(method, requestURL, authorization: authorization, queryParameters: queryParameters, body: body, contentType: contentType, accept: accept) ;
   }
 
@@ -273,47 +273,47 @@ class HttpCache {
     return null ;
   }
 
-  Future<HttpResponse> getURL( String url, { Credential authorization, Map<String,String> parameters } ) async {
-    return get( HttpClient(url) , null, parameters: parameters ) ;
+  Future<HttpResponse> getURL( String url, { bool fullPath, Credential authorization, Map<String,String> parameters } ) async {
+    return get( HttpClient(url) , null, fullPath: fullPath, parameters: parameters ) ;
   }
 
-  Future<HttpResponse> get(HttpClient httpClient, String path, { Credential authorization, Map<String,String> parameters } ) async {
-    return request(httpClient, HttpMethod.GET, path, authorization:  authorization, queryParameters: parameters) ;
+  Future<HttpResponse> get(HttpClient httpClient, String path, { bool fullPath, Credential authorization, Map<String,String> parameters } ) async {
+    return request(httpClient, HttpMethod.GET, path, fullPath: fullPath, authorization:  authorization, queryParameters: parameters) ;
   }
 
-  Future<HttpResponse> options(HttpClient httpClient, String path, { Credential authorization, Map<String,String> parameters } ) async {
-    return request(httpClient, HttpMethod.OPTIONS, path, authorization:  authorization, queryParameters: parameters) ;
+  Future<HttpResponse> options(HttpClient httpClient, String path, { bool fullPath, Credential authorization, Map<String,String> parameters } ) async {
+    return request(httpClient, HttpMethod.OPTIONS, path, fullPath: fullPath, authorization:  authorization, queryParameters: parameters) ;
   }
 
-  Future<HttpResponse> post(HttpClient httpClient, String path, { Credential authorization, Map<String,String> parameters , String body , String contentType , String accept}) async {
-    return request(httpClient, HttpMethod.POST, path, authorization:  authorization, queryParameters: parameters, body: body, contentType: contentType, accept: accept) ;
+  Future<HttpResponse> post(HttpClient httpClient, String path, { bool fullPath, Credential authorization, Map<String,String> parameters , String body , String contentType , String accept}) async {
+    return request(httpClient, HttpMethod.POST, path, fullPath: fullPath, authorization:  authorization, queryParameters: parameters, body: body, contentType: contentType, accept: accept) ;
   }
 
 
-  Future<HttpResponse> put(HttpClient httpClient, String path, { Credential authorization, String body , String contentType , String accept}) async {
-    return request(httpClient, HttpMethod.PUT, path, authorization: authorization, body: body, contentType: contentType, accept: accept);
+  Future<HttpResponse> put(HttpClient httpClient, String path, { bool fullPath, Credential authorization, String body , String contentType , String accept}) async {
+    return request(httpClient, HttpMethod.PUT, path, fullPath: fullPath, authorization: authorization, body: body, contentType: contentType, accept: accept);
   }
 
   ////
 
-  Future<dynamic> requestJSON(HttpClient httpClient, HttpMethod method, String path, { Credential authorization, Map<String,String> queryParameters, String body, String contentType, String accept } ) async {
-    return request(httpClient, method, path, authorization: authorization, queryParameters: queryParameters, body: body, contentType: contentType, accept: accept).then((r) => _jsonDecode(r.body)) ;
+  Future<dynamic> requestJSON(HttpClient httpClient, HttpMethod method, String path, { bool fullPath, Credential authorization, Map<String,String> queryParameters, String body, String contentType, String accept } ) async {
+    return request(httpClient, method, path, fullPath: fullPath, authorization: authorization, queryParameters: queryParameters, body: body, contentType: contentType, accept: accept).then((r) => _jsonDecode(r.body)) ;
   }
 
-  Future<dynamic> getJSON(HttpClient httpClient, String path, { Credential authorization, Map<String,String> parameters } ) async {
-    return get(httpClient, path, authorization: authorization, parameters: parameters).then((r) => _jsonDecode(r.body)) ;
+  Future<dynamic> getJSON(HttpClient httpClient, String path, { bool fullPath, Credential authorization, Map<String,String> parameters } ) async {
+    return get(httpClient, path, fullPath: fullPath, authorization: authorization, parameters: parameters).then((r) => _jsonDecode(r.body)) ;
   }
 
-  Future<dynamic> optionsJSON(HttpClient httpClient, String path, { Credential authorization, Map<String,String> parameters } ) async {
-    return options(httpClient, path, authorization: authorization, parameters: parameters).then((r) => _jsonDecode(r.body)) ;
+  Future<dynamic> optionsJSON(HttpClient httpClient, String path, { bool fullPath, Credential authorization, Map<String,String> parameters } ) async {
+    return options(httpClient, path, fullPath: fullPath, authorization: authorization, parameters: parameters).then((r) => _jsonDecode(r.body)) ;
   }
 
-  Future<dynamic> postJSON(HttpClient httpClient, String path,  { Credential authorization, Map<String,String> parameters , String body , String contentType }) async {
-    return post(httpClient, path, authorization: authorization, parameters: parameters, body: body, contentType: contentType).then((r) => _jsonDecode(r.body)) ;
+  Future<dynamic> postJSON(HttpClient httpClient, String path,  { bool fullPath, Credential authorization, Map<String,String> parameters , String body , String contentType }) async {
+    return post(httpClient, path, fullPath: fullPath, authorization: authorization, parameters: parameters, body: body, contentType: contentType).then((r) => _jsonDecode(r.body)) ;
   }
 
-  Future<dynamic> putJSON(HttpClient httpClient, String path,  { Credential authorization, String body , String contentType }) async {
-    return put(httpClient, path, authorization: authorization, body: body, contentType: contentType).then((r) => _jsonDecode(r.body)) ;
+  Future<dynamic> putJSON(HttpClient httpClient, String path,  { bool fullPath, Credential authorization, String body , String contentType }) async {
+    return put(httpClient, path, fullPath: fullPath, authorization: authorization, body: body, contentType: contentType).then((r) => _jsonDecode(r.body)) ;
   }
 
   dynamic _jsonDecode(String s) {

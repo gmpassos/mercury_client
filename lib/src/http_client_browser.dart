@@ -6,7 +6,15 @@ import 'http_client.dart';
 class HttpClientRequesterBrowser extends HttpClientRequester {
 
   @override
-  Future<HttpResponse> doHttpRequest( HttpClient client, HttpRequest request ) {
+  Future<HttpResponse> doHttpRequest( HttpClient client, HttpRequest request , bool log ) {
+
+    if (log) {
+      print('<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<');
+      print( client ) ;
+      print( request ) ;
+      print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
+    }
+
     var completer = Completer<HttpResponse>();
 
     var xhr = browser.HttpRequest();
@@ -51,12 +59,12 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
         completer.complete(response);
       }
       else {
-        _completeOnError(completer, client, request, xhr.status, e) ;
+        _completeOnError(completer, client, request, log, xhr.status, e) ;
       }
     });
 
     xhr.onError.listen( (e) {
-      _completeOnError(completer, client, request, xhr.status, e) ;
+      _completeOnError(completer, client, request, log, xhr.status, e) ;
     } );
 
     if (request.sendData != null) {
@@ -68,7 +76,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     return completer.future ;
   }
 
-  void _completeOnError(Completer<HttpResponse> completer, HttpClient client, HttpRequest request, int status, dynamic error) {
+  void _completeOnError(Completer<HttpResponse> completer, HttpClient client, HttpRequest request, bool log, int status, dynamic error) {
     var restError = HttpError(request.url, request.requestURL, status, '$error', error);
 
     if ( ( status == 0 || status == 401 ) && request.authorization != null && request.authorization.authorizationProvider != null ) {
@@ -81,7 +89,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
             var authorization2 = Authorization(c);
             var request2 = request.copy(client, authorization2) ;
 
-            var futureResponse2 = doHttpRequest(client, request2) ;
+            var futureResponse2 = doHttpRequest(client, request2, log) ;
 
             futureResponse2.then( (response2) {
               completer.complete(response2) ;

@@ -7,7 +7,7 @@ import 'http_client.dart';
 class HttpClientRequesterIO extends HttpClientRequester {
 
   @override
-  Future<HttpResponse> doHttpRequest(HttpClient client, HttpRequest request) async {
+  Future<HttpResponse> doHttpRequest(HttpClient client, HttpRequest request, bool log ) async {
     var uri = Uri.parse(request.requestURL) ;
 
     var req = await _request(client, request, uri);
