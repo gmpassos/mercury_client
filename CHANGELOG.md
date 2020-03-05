@@ -1,3 +1,7 @@
+## 1.0.9
+
+- BearerCredential.fromJSONToken
+
 ## 1.0.8
 
 - HttpClient: fullPath parameter to indicate that the path is full (from root).

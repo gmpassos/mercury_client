@@ -294,6 +294,17 @@ class BearerCredential extends Credential {
 
   BearerCredential(this.token);
 
+  factory BearerCredential.fromJSONToken( dynamic json , [String tokenKey = 'access_token']) {
+    if (json is Map) {
+      var token = json[tokenKey] ;
+      if (token is String || token is num) {
+        var tokenStr = token.toString().trim() ;
+        return tokenStr != null && tokenStr.isNotEmpty ? BearerCredential(tokenStr) : null ;
+      }
+    }
+    return null ;
+  }
+
   @override
   String get type => 'Bearer' ;
 
