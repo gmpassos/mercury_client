@@ -1,3 +1,7 @@
+## 1.1.1
+
+- swiss_knife: ^2.3.1
+
 ## 1.1.0
 
 - Fix parsing of Uri path with encoded char (ex.: %20).
