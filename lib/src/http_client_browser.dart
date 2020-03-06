@@ -76,40 +76,79 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     return completer.future ;
   }
 
-  void _completeOnError(Completer<HttpResponse> completer, HttpClient client, HttpRequest request, bool log, int status, dynamic error) {
-    var restError = HttpError(request.url, request.requestURL, status, '$error', error);
+  void _completeOnError(Completer<HttpResponse> originalRequestCompleter, HttpClient client, HttpRequest request, bool log, int status, dynamic error) async {
+    var httpError = HttpError(request.url, request.requestURL, status, '$error', error);
 
-    if ( ( status == 0 || status == 401 ) && request.authorization != null && request.authorization.authorizationProvider != null ) {
-      var authorizationProvider = request.authorization.authorizationProvider ;
-      var futureCredential = authorizationProvider( client , restError ) ;
+    var requestCompleted = await _checkForRetry(originalRequestCompleter, client, request, log, status, httpError) ;
 
-      if (futureCredential != null) {
-        futureCredential.then( (c) {
-          if (c != null) {
-            var authorization2 = Authorization(c);
-            var request2 = request.copy(client, authorization2) ;
+    if ( !requestCompleted ) {
+      originalRequestCompleter.completeError(httpError);
+    }
+  }
 
-            var futureResponse2 = doHttpRequest(client, request2, log) ;
-
-            futureResponse2.then( (response2) {
-              completer.complete(response2) ;
-            }).catchError( (error2) {
-              completer.completeError(error2) ;
-            } ) ;
-          }
-          else {
-            completer.completeError( restError );
-          }
-        }).catchError( (e) {
-          completer.completeError( restError );
-        } ) ;
-
-        return ;
-      }
+  Future<bool> _checkForRetry(Completer<HttpResponse> originalRequestCompleter, HttpClient client, HttpRequest request, bool log, int status, HttpError httpError) async {
+    if (request.retries >= 3) {
+      return false ;
     }
 
-    completer.completeError( restError );
+    if ( status == 0 || status == 401 ) {
+      return _checkForRetry_authorizationProvider(originalRequestCompleter, client, request, log, httpError) ;
+    }
+    else {
+      return _checkForRetry_networkIssue(originalRequestCompleter, client, request, log, status, httpError);
+    }
   }
+
+  Future<bool> _checkForRetry_networkIssue(Completer<HttpResponse> originalRequestCompleter, HttpClient client, HttpRequest request, bool log, int status, HttpError httpError) async {
+    if ( status == 0 || status == 504 ) {
+      request.incrementRetries();
+      return _retryRequest(originalRequestCompleter, client, request, log) ;
+    }
+
+    return false ;
+  }
+
+  Future<bool> _checkForRetry_authorizationProvider(Completer<HttpResponse> originalRequestCompleter, HttpClient client, HttpRequest request, bool log, HttpError httpError) async {
+      if (request.authorization != null && request.authorization.authorizationProvider != null ) {
+          var authorizationProvider = request.authorization.authorizationProvider ;
+          var credential = await authorizationProvider(client, httpError);
+
+          if (credential != null) {
+            request.incrementRetries();
+
+            var authorization2 = Authorization(credential) ;
+            var request2 = request.copy(client, authorization2) ;
+
+            return _retryRequest(originalRequestCompleter, client, request2, log);
+          }
+          else {
+            originalRequestCompleter.completeError(httpError);
+            return true ;
+          }
+      }
+
+      return false ;
+  }
+
+  Future<bool> _retryRequest(Completer<HttpResponse> originalRequestCompleter, HttpClient client, HttpRequest request, bool log) async {
+    try {
+      if (log) {
+        print('<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<');
+        print('RETRY: ${ request.retries }') ;
+        print(request) ;
+        print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
+      }
+
+      var response = await doHttpRequest(client, request, log);
+      originalRequestCompleter.complete(response);
+    }
+    catch (error) {
+      originalRequestCompleter.completeError(error);
+    }
+    return true ;
+  }
+
+  //////////////////////////////////
 
   HttpResponse _processResponse(HttpClient client, String method, String url, browser.HttpRequest xhr) {
     var resp = HttpResponse(method, url, xhr.responseUrl, xhr.status, xhr.responseText, (key) => xhr.getResponseHeader(key), xhr) ;

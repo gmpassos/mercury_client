@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:swiss_knife/swiss_knife.dart';
+
 import '../mercury_client.dart';
 
 
@@ -10,7 +12,7 @@ class _CacheRequest implements Comparable<_CacheRequest> {
   final HttpMethod _method ;
   final String _url ;
   final Map<String,String> _queryParameters ;
-  final String _body ;
+  final dynamic _body ;
   final String _contentType ;
   final String _accept ;
 
@@ -44,6 +46,7 @@ class _CacheRequest implements Comparable<_CacheRequest> {
     return memory ;
   }
 
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -52,7 +55,7 @@ class _CacheRequest implements Comparable<_CacheRequest> {
           _method == other._method &&
           _url == other._url &&
           _queryParameters == other._queryParameters &&
-          _body == other._body &&
+          _sameBody( _body , other._body ) &&
           _contentType == other._contentType &&
           _accept == other._accept;
 
@@ -71,6 +74,20 @@ class _CacheRequest implements Comparable<_CacheRequest> {
     return instanceTime < other.instanceTime ? -1 : ( instanceTime == other.instanceTime ? 0 : 1 ) ;
   }
 
+  bool _sameBody(dynamic body1, dynamic body2) {
+    if ( identical(body1, body2) ) return true ;
+    if (body1 == body2) return true ;
+
+    if (body1 == null || body2 == null) return false ;
+
+    if ( body1 is String && body2 is String ) return body1 == body2 ;
+
+    if ( body1 is Map && body2 is Map ) return isEquivalentMap(body1, body2) ;
+
+    if ( body1 is List && body2 is List ) return isEquivalentList(body1, body2) ;
+
+    return false ;
+  }
 
 }
 
@@ -224,12 +241,12 @@ class HttpCache {
     return removed ;
   }
 
-  Future<HttpResponse> request(HttpClient httpClient, HttpMethod method, String path, { bool fullPath, Credential authorization, Map<String,String> queryParameters, String body, String contentType, String accept } ) async {
+  Future<HttpResponse> request(HttpClient httpClient, HttpMethod method, String path, { bool fullPath, Credential authorization, Map<String,String> queryParameters, dynamic body, String contentType, String accept } ) async {
     var requestURL = httpClient.buildMethodRequestURL(method, path, fullPath, queryParameters) ;
     return this.requestURL(httpClient, method, requestURL, authorization: authorization, queryParameters: queryParameters, body: body, contentType: contentType, accept: accept) ;
   }
 
-  Future<HttpResponse> requestURL(HttpClient httpClient, HttpMethod method, String requestURL, { Credential authorization, Map<String,String> queryParameters, String body, String contentType, String accept } ) async {
+  Future<HttpResponse> requestURL(HttpClient httpClient, HttpMethod method, String requestURL, { Credential authorization, Map<String,String> queryParameters, dynamic body, String contentType, String accept } ) async {
     httpClient ??= HttpClient(requestURL);
 
     var cacheRequest = _CacheRequest(method, requestURL, queryParameters, body, contentType, accept) ;
@@ -256,12 +273,12 @@ class HttpCache {
     return response;
   }
 
-  HttpResponse getCachedRequest(HttpClient httpClient, HttpMethod method, String path, { bool fullPath, Credential authorization, Map<String,String> queryParameters, String body, String contentType, String accept } ) {
+  HttpResponse getCachedRequest(HttpClient httpClient, HttpMethod method, String path, { bool fullPath, Credential authorization, Map<String,String> queryParameters, dynamic body, String contentType, String accept } ) {
     var requestURL = httpClient.buildMethodRequestURL(method, path, fullPath, queryParameters) ;
     return getCachedRequestURL(method, requestURL, authorization: authorization, queryParameters: queryParameters, body: body, contentType: contentType, accept: accept) ;
   }
 
-  HttpResponse getCachedRequestURL(HttpMethod method, String requestURL, { Credential authorization, Map<String,String> queryParameters, String body, String contentType, String accept } ) {
+  HttpResponse getCachedRequestURL(HttpMethod method, String requestURL, { Credential authorization, Map<String,String> queryParameters, dynamic body, String contentType, String accept } ) {
     var cacheRequest = _CacheRequest(method, requestURL, queryParameters, body, contentType, accept) ;
     var cachedResponse = _cache[cacheRequest] ;
 
@@ -285,7 +302,7 @@ class HttpCache {
     return request(httpClient, HttpMethod.OPTIONS, path, fullPath: fullPath, authorization:  authorization, queryParameters: parameters) ;
   }
 
-  Future<HttpResponse> post(HttpClient httpClient, String path, { bool fullPath, Credential authorization, Map<String,String> parameters , String body , String contentType , String accept}) async {
+  Future<HttpResponse> post(HttpClient httpClient, String path, { bool fullPath, Credential authorization, Map<String,String> parameters , dynamic body , String contentType , String accept}) async {
     return request(httpClient, HttpMethod.POST, path, fullPath: fullPath, authorization:  authorization, queryParameters: parameters, body: body, contentType: contentType, accept: accept) ;
   }
 

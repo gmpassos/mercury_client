@@ -1,3 +1,11 @@
+## 1.1.0
+
+- Fix parsing of Uri path with encoded char (ex.: %20).
+- Fix automatic set of application/x-www-form-urlencoded when sending POST query parameters.
+- Retry request with network error.
+- Fix HttpCache requests with dynamic body.
+- swiss_knife: ^2.3.0
+
 ## 1.0.9
 
 - BearerCredential.fromJSONToken

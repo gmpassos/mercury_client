@@ -439,7 +439,7 @@ String buildURLWithQueryParameters(String url, Map<String, String> fields) {
     queryParameters.addAll( fields ) ;
   }
 
-  return Uri( scheme: uri.scheme, userInfo: uri.userInfo, host: uri.host, port: uri.port, path: uri.path, queryParameters: queryParameters , fragment: uri.fragment ).toString() ;
+  return Uri( scheme: uri.scheme, userInfo: uri.userInfo, host: uri.host, port: uri.port, path: Uri.decodeComponent( uri.path ) , queryParameters: queryParameters , fragment: uri.fragment ).toString() ;
 }
 
 enum HttpMethod {
@@ -464,6 +464,8 @@ class HttpRequest {
   final Map<String, String> requestHeaders ;
   final dynamic sendData ;
 
+  int _retries = 0 ;
+
   HttpRequest(this.method, this.url, this.requestURL, { this.queryParameters, this.authorization, this.withCredentials, this.responseType, this.mimeType, this.requestHeaders, this.sendData });
 
   HttpRequest copy( [HttpClient client , Authorization authorization] ) {
@@ -475,15 +477,24 @@ class HttpRequest {
     Map<String,String> queryParameters = this.queryParameters != null ? Map.from( this.queryParameters ) : null ;
     var requestURL = client.clientRequester.buildRequestURL(client, url, authorization, queryParameters) ;
 
-    return HttpRequest(method, url, requestURL, queryParameters: queryParameters, authorization: authorization, withCredentials: withCredentials, responseType: responseType, mimeType: mimeType, requestHeaders: requestHeaders, sendData: sendData) ;
+    var copy = HttpRequest(method, url, requestURL, queryParameters: queryParameters, authorization: authorization, withCredentials: withCredentials, responseType: responseType, mimeType: mimeType, requestHeaders: requestHeaders, sendData: sendData);
+    copy._retries = _retries ;
+
+    return copy ;
   }
 
   String get headerAccept => requestHeaders != null ? requestHeaders['Accept'] : null ;
   String get headerContentType => requestHeaders != null ? requestHeaders['Content-Type'] : null ;
 
+  int get retries => _retries;
+
+  void incrementRetries() {
+    _retries++ ;
+  }
+
   @override
   String toString() {
-    return 'HttpRequest{method: $method, url: $url, requestURL: $requestURL, queryParameters: $queryParameters, authorization: $authorization, withCredentials: $withCredentials, responseType: $responseType, mimeType: $mimeType, requestHeaders: $requestHeaders, sendData: $sendData}';
+    return 'HttpRequest{method: $method, url: $url, requestURL: $requestURL, retries: $_retries, queryParameters: $queryParameters, authorization: $authorization, withCredentials: $withCredentials, responseType: $responseType, mimeType: $mimeType, requestHeaders: $requestHeaders, sendData: $sendData}';
   }
 }
 
@@ -545,7 +556,10 @@ abstract class HttpClientRequester {
 
     if (queryParameters != null && queryParameters.isNotEmpty && requestBody.isNull) {
       var requestHeaders = buildRequestHeaders(client, url, authorization, requestBody.content, requestBody.contentType, accept);
+      requestHeaders ??= {} ;
+
       var formData = buildPOSTFormData(queryParameters, requestHeaders);
+      if (requestHeaders.isEmpty) requestHeaders = null ;
 
       return doHttpRequest(
           client,
@@ -852,10 +866,10 @@ class HttpClient {
 
   Uri _removeURIQueryParameters(var uri) {
     if ( uri.schema.toLowerCase() == 'https' ) {
-      return Uri.https(uri.authority, uri.path) ;
+      return Uri.https(uri.authority,  Uri.decodeComponent( uri.path ) ) ;
     }
     else {
-      return Uri.http(uri.authority, uri.path) ;
+      return Uri.http(uri.authority, Uri.decodeComponent( uri.path ) ) ;
     }
   }
 
@@ -915,10 +929,10 @@ class HttpClient {
     var uri2 ;
 
     if ( uri.scheme.toLowerCase() == 'https' ) {
-      uri2 = Uri.https(uri.authority, uri.path, queryParameters) ;
+      uri2 = Uri.https(uri.authority, Uri.decodeComponent( uri.path ) , queryParameters) ;
     }
     else {
-      uri2 = Uri.http(uri.authority, uri.path, queryParameters) ;
+      uri2 = Uri.http(uri.authority, Uri.decodeComponent( uri.path ) , queryParameters) ;
     }
 
     var url2 = uri2.toString() ;
