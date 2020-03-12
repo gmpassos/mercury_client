@@ -63,6 +63,35 @@ class HttpError extends HttpStatus {
 
   HttpError(String url, String requestedURL, int status, this.message, this.error) : super(url, requestedURL, status) ;
 
+  bool get hasMessage => message != null && message.isNotEmpty ;
+
+  bool get isOAuthAuthorizationError {
+    if ( !hasMessage ) return false ;
+
+    var authorizationCode = status == 0 || status == 400 || status == 401 ;
+    if ( !authorizationCode ) return false ;
+
+    return matchesAnyJSONEntry( 'error' , ['invalid_grant','invalid_client','unauthorized_client'] , true ) ;
+  }
+
+  bool matchesAnyJSONEntry(String key, List<String> values, bool text) {
+    if ( key == null || values == null || key.isEmpty || values.isEmpty || !hasMessage ) return false ;
+
+    for (var value in values) {
+      if ( matchesJSONEntry(key, value, text) ) return true ;
+    }
+
+    return false ;
+  }
+
+  bool matchesJSONEntry(String key, String value, bool text) {
+    if ( hasMessage && message.contains(key) && message.contains(value) ) {
+      var entryValue = text ? '"$value"' : '$value' ;
+      return RegExp('"$key":\\s*$entryValue').hasMatch( message ) ;
+    }
+    return false ;
+  }
+
   @override
   String toString() {
     return 'RESTError{requestedURL: $requestedURL, status: $status, message: $message, error: $error}';

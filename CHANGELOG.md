@@ -1,3 +1,9 @@
+## 1.1.2
+
+- Fix HttpCache to identify requests with complex body already in cache.
+- HttpError: response body as HttpError.message.
+- swiss_knife: ^2.3.4
+
 ## 1.1.1
 
 - swiss_knife: ^2.3.1

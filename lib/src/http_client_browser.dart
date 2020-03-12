@@ -59,12 +59,12 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
         completer.complete(response);
       }
       else {
-        _completeOnError(completer, client, request, log, xhr.status, e) ;
+        _completeOnError(completer, client, request, log, xhr.status, xhr.responseText, e) ;
       }
     });
 
     xhr.onError.listen( (e) {
-      _completeOnError(completer, client, request, log, xhr.status, e) ;
+      _completeOnError(completer, client, request, log, xhr.status, xhr.responseText, e) ;
     } );
 
     if (request.sendData != null) {
@@ -76,8 +76,10 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     return completer.future ;
   }
 
-  void _completeOnError(Completer<HttpResponse> originalRequestCompleter, HttpClient client, HttpRequest request, bool log, int status, dynamic error) async {
-    var httpError = HttpError(request.url, request.requestURL, status, '$error', error);
+  void _completeOnError(Completer<HttpResponse> originalRequestCompleter, HttpClient client, HttpRequest request, bool log, int status, String responseBody, dynamic error) async {
+    var message = responseBody ?? '$error' ;
+
+    var httpError = HttpError(request.url, request.requestURL, status, message, error);
 
     var requestCompleted = await _checkForRetry(originalRequestCompleter, client, request, log, status, httpError) ;
 
@@ -90,6 +92,8 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     if (request.retries >= 3) {
       return false ;
     }
+
+    if ( httpError.isOAuthAuthorizationError ) return false ;
 
     if ( status == 0 || status == 401 ) {
       return _checkForRetry_authorizationProvider(originalRequestCompleter, client, request, log, httpError) ;

@@ -25,6 +25,18 @@ class _CacheRequest implements Comparable<_CacheRequest> {
 
   int get accessTime => _accessTime;
 
+  bool isExpired( int timeout ) {
+    if (timeout == null || timeout <= 0) return false ;
+
+    var expireTime = accessTime + timeout ;
+    var now = DateTime.now().millisecondsSinceEpoch ;
+    return now > expireTime ;
+  }
+
+  bool isValid( int timeout ) {
+    return !isExpired(timeout) ;
+  }
+
   void updateAccessTime() {
     _accessTime = DateTime.now().millisecondsSinceEpoch ;
   }
@@ -46,25 +58,24 @@ class _CacheRequest implements Comparable<_CacheRequest> {
     return memory ;
   }
 
-
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is _CacheRequest &&
-          runtimeType == other.runtimeType &&
-          _method == other._method &&
-          _url == other._url &&
-          _queryParameters == other._queryParameters &&
-          _sameBody( _body , other._body ) &&
-          _contentType == other._contentType &&
-          _accept == other._accept;
+          other is _CacheRequest &&
+              runtimeType == other.runtimeType &&
+              _method == other._method &&
+              _url == other._url &&
+              _queryParameters == other._queryParameters &&
+              isEqualsDeep( _body , other._body ) &&
+              _contentType == other._contentType &&
+              _accept == other._accept;
 
   @override
   int get hashCode =>
       _method.hashCode ^
       (_url != null ? _url.hashCode : 0) ^
-      (_queryParameters != null ? _queryParameters.hashCode : 0) ^
-      (_body != null ? _body.hashCode : 0) ^
+      deepHashCode(_queryParameters) ^
+      deepHashCode(_body) ^
       (_contentType != null ? _contentType.hashCode : 0) ^
       (_accept != null ? _accept.hashCode : 0) ;
 
@@ -74,34 +85,20 @@ class _CacheRequest implements Comparable<_CacheRequest> {
     return instanceTime < other.instanceTime ? -1 : ( instanceTime == other.instanceTime ? 0 : 1 ) ;
   }
 
-  bool _sameBody(dynamic body1, dynamic body2) {
-    if ( identical(body1, body2) ) return true ;
-    if (body1 == body2) return true ;
-
-    if (body1 == null || body2 == null) return false ;
-
-    if ( body1 is String && body2 is String ) return body1 == body2 ;
-
-    if ( body1 is Map && body2 is Map ) return isEquivalentMap(body1, body2) ;
-
-    if ( body1 is List && body2 is List ) return isEquivalentList(body1, body2) ;
-
-    return false ;
-  }
-
 }
 
 class HttpCache {
 
   int _maxCacheMemory ;
-  int _timeout ;
+  Duration _timeout ;
 
-  HttpCache( [int maxCacheMemory , int timeout] ) {
+  bool verbose ;
+
+  HttpCache( { int maxCacheMemory , Duration timeout , bool verbose } ) {
     this.maxCacheMemory = maxCacheMemory ;
     this.timeout = timeout ;
+    this.verbose = verbose ?? true ;
   }
-
-  bool verbose = true ;
 
   bool get isVerbose => verbose != null && verbose ;
 
@@ -119,22 +116,34 @@ class HttpCache {
     }
   }
 
-  int get timeout => _timeout;
+  Duration get timeout => _timeout;
 
-  bool get hasTimeout => _timeout != null && _timeout > 0 ;
+  bool get hasTimeout => _timeout != null && _timeout.inMilliseconds > 0 ;
 
-  set timeout(int value) {
-    if (value == null || value <= 0) {
+  set timeout(Duration value) {
+    if (value == null || value.inMilliseconds <= 0) {
       _timeout = null;
     }
     else {
-      if (value < 1000) value = 1000 ;
+      if (value.inSeconds < 1) value = Duration(seconds: 1) ;
       _timeout = value ;
     }
   }
 
 
   final Map<_CacheRequest,HttpResponse> _cache = {} ;
+
+  MapEntry<_CacheRequest,HttpResponse> _getCacheEntry(_CacheRequest key) {
+    if (key == null) return null ;
+
+    if ( !_cache.containsKey(key) ) return null ;
+
+    for ( var entry in _cache.entries ) {
+      if ( entry.key == key ) return entry ;
+    }
+
+    return null ;
+  }
 
   int calculateCacheUsedMemory() {
     var total = 0 ;
@@ -208,9 +217,9 @@ class HttpCache {
     return removed ;
   }
 
-  int cleanCacheTimedOut( [int timeout] ) {
+  int cleanCacheTimedOut( [Duration timeout] ) {
     timeout ??= this.timeout;
-    if (timeout == null || timeout <= 0) return 0 ;
+    if (timeout == null || timeout.inMilliseconds <= 0) return 0 ;
 
     // ignore: omit_local_variable_types
     List<MapEntry<_CacheRequest,HttpResponse>> entries = List.from( _cache.entries ) ;
@@ -227,7 +236,7 @@ class HttpCache {
     for (var entry in entries) {
       var accessTime = max( entry.key.accessTime , entry.value.accessTime ) ;
       var elapsedTime = now-accessTime;
-      if ( elapsedTime <= timeout ) break;
+      if ( elapsedTime <= timeout.inMilliseconds ) break;
 
       var memory = entry.key.memorySize() + entry.value.memorySize() ;
       _cache.remove(entry.key) ;
@@ -251,12 +260,25 @@ class HttpCache {
 
     var cacheRequest = _CacheRequest(method, requestURL, queryParameters, body, contentType, accept) ;
 
-    var cachedResponse = _cache[cacheRequest] ;
+    var cachedEntry = _getCacheEntry(cacheRequest) ;
 
-    if (cachedResponse != null) {
+    if (cachedEntry != null) {
+      var cachedRequest = cachedEntry.key;
 
-      if (isVerbose) print('[HttpCache] Cached request: $method > $requestURL > $cachedResponse');
-      return cachedResponse ;
+      if ( cachedRequest.isValid( timeout != null ? timeout.inMilliseconds : null ) ) {
+        cachedRequest.updateAccessTime();
+
+        var cachedResponse = cachedEntry.value;
+        if (isVerbose) print('[HttpCache] Cached request: $method > $requestURL > $cachedResponse');
+
+        return cachedResponse ;
+      }
+      else {
+        _cache.remove(cachedRequest) ;
+      }
+    }
+    else {
+      _getCacheEntry(cacheRequest) ;
     }
 
     var response = await httpClient.requestURL(method, requestURL, authorization: authorization, queryParameters: queryParameters, body: body, contentType: contentType, accept: accept);
