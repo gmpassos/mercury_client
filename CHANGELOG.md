@@ -1,3 +1,7 @@
+## 1.1.3
+
+- swiss_knife: ^2.3.7
+
 ## 1.1.2
 
 - Fix HttpCache to identify requests with complex body already in cache.
