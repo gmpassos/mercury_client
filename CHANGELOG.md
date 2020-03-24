@@ -1,3 +1,11 @@
+## 1.1.4
+
+- HttpResponse.bodyType/isBodyTypeJSON
+- BearerCredential.findToken
+- fix HttpResponse.getResponseHeader()
+- getHttpMethod()
+- swiss_knife: ^2.3.9
+
 ## 1.1.3
 
 - swiss_knife: ^2.3.7

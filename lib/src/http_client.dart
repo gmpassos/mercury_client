@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:enum_to_string/enum_to_string.dart';
+import 'package:swiss_knife/swiss_knife.dart';
 
 import 'http_client_none.dart'
 if (dart.library.html) "http_client_browser.dart"
@@ -127,13 +128,25 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
 
   bool get hasBody => body != null && body.isNotEmpty ;
 
+  String get bodyType => getResponseHeader('Content-Type') ;
+
+  bool get isBodyTypeJSON {
+    var type = bodyType;
+    if (type == null) return false ;
+    type = type.trim().toLowerCase() ;
+    return type == 'application/json' || type == 'json' ;
+  }
+
   String getResponseHeader(String headerKey) {
     if (_responseHeaderGetter == null) return null ;
+
     try {
       return _responseHeaderGetter(headerKey);
     }
-    finally {
+    catch (e,s) {
       print("[HttpResponse] Can't access response header: $headerKey") ;
+      print(e);
+      print(s);
       return null ;
     }
   }
@@ -319,20 +332,64 @@ class BasicCredential extends Credential {
 
 
 class BearerCredential extends Credential {
+
+  static dynamic findToken(Map json, String tokenKey) {
+    if (json.isEmpty || tokenKey == null || tokenKey.isEmpty) return null ;
+
+    var tokenKeys = tokenKey.split('/') ;
+
+    dynamic token = findKeyValue(json, [ tokenKeys.removeAt(0) ] , true ) ;
+    if (token == null) return null ;
+
+    for (var k in tokenKeys) {
+      if (token is Map) {
+        token = findKeyValue(token, [ k ] , true ) ;
+      }
+      else if (token is List && isInt(k)) {
+        var idx = parseInt(k) ;
+        token = token[idx] ;
+      }
+      else {
+        token = null ;
+      }
+
+      if (token == null) return null ;
+    }
+
+    if (token is String || token is num) {
+      return token;
+    }
+
+    return null ;
+  }
+
   final String token ;
 
   BearerCredential(this.token);
 
-  factory BearerCredential.fromJSONToken( dynamic json , [String tokenKey = 'access_token']) {
+  static const List<String> _DEFAULT_EXTRA_TOKEN_KEYS = ['accessToken', 'accessToken/token'] ;
+
+  factory BearerCredential.fromJSONToken( dynamic json , [String mainTokenKey = 'access_token', List<String> extraTokenKeys = _DEFAULT_EXTRA_TOKEN_KEYS ]) {
     if (json is Map) {
-      var token = json[tokenKey] ;
-      if (token is String || token is num) {
+      var token = findKeyPathValue(json, mainTokenKey, isValidValue: isValidTokenValue) ;
+
+      if (token == null && extraTokenKeys != null) {
+        for (var key in extraTokenKeys) {
+          token = findKeyPathValue(json, key, isValidValue: isValidTokenValue) ;
+          if (token != null) break ;
+        }
+      }
+
+      if (token != null) {
         var tokenStr = token.toString().trim() ;
         return tokenStr != null && tokenStr.isNotEmpty ? BearerCredential(tokenStr) : null ;
       }
     }
+
     return null ;
   }
+
+  static bool isValidTokenValue(v) => v is String || v is num ;
 
   @override
   String get type => 'Bearer' ;
@@ -478,6 +535,23 @@ enum HttpMethod {
   PUT,
   DELETE,
   PATCH
+}
+
+
+HttpMethod getHttpMethod(String method, [HttpMethod def]) {
+  if (method == null) return def ;
+  method = method.trim().toUpperCase() ;
+  if (method.isEmpty) return def ;
+
+  switch (method) {
+    case 'GET': return HttpMethod.GET ;
+    case 'OPTIONS': return HttpMethod.OPTIONS ;
+    case 'POST': return HttpMethod.POST ;
+    case 'PUT': return HttpMethod.PUT ;
+    case 'DELETE': return HttpMethod.DELETE ;
+    case 'PATCH': return HttpMethod.PATCH ;
+    default: return def ;
+  }
 }
 
 class HttpRequest {
