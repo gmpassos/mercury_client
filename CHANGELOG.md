@@ -1,3 +1,9 @@
+## 1.1.5
+
+- getHttpClientRuntimeUri()
+- HttpRequester integrated with JSONPaging.
+- HttpResponse.asJSONPaging
+
 ## 1.1.4
 
 - HttpResponse.bodyType/isBodyTypeJSON

@@ -221,3 +221,7 @@ HttpClientRequester createHttpClientRequester() {
   return HttpClientRequesterIO() ;
 }
 
+Uri getHttpClientRuntimeUri() {
+  return Uri( scheme: 'http' , host: 'localhost' , port: 80 ) ;
+}
+

@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:enum_to_string/enum_to_string.dart';
+import 'package:mercury_client/mercury_client.dart';
 import 'package:swiss_knife/swiss_knife.dart';
 
 import 'http_client_none.dart'
 if (dart.library.html) "http_client_browser.dart"
 if (dart.library.io) "http_client_io.dart" ;
+
 
 ///////////////////////////////////////////////////////
 
@@ -135,6 +137,13 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
     if (type == null) return false ;
     type = type.trim().toLowerCase() ;
     return type == 'application/json' || type == 'json' ;
+  }
+
+  JSONPaging get asJSONPaging {
+    if ( isBodyTypeJSON ) {
+      return JSONPaging.from( json ) ;
+    }
+    return null ;
   }
 
   String getResponseHeader(String headerKey) {
@@ -1198,3 +1207,152 @@ Converter<List<int>, String> contentTypeToDecoder(String mimeType, [String chars
   return latin1.decoder ;
 }
 
+class HttpRequester {
+
+  final MapProperties config ;
+  final MapProperties properties ;
+  HttpCache httpCache ;
+
+  String _scheme ;
+  String _host ;
+  HttpMethod _httpMethod ;
+  String _path ;
+  String _bodyType ;
+  String _body ;
+  String _responseType ;
+
+  HttpRequester(this.config , [MapProperties properties, this.httpCache]) :
+        properties = properties ?? {}
+  {
+
+    var runtimeUri = getHttpClientRuntimeUri() ;
+
+    var schemeType = config.findPropertyAsStringTrimLC( ['scheme','protocol','type'] , 'http') ;
+    var secure = config.findPropertyAsBool( ['scure','ssl','https'] , false ) ;
+
+    var host = config.getPropertyAsStringTrimLC('host') ;
+    var method = config.findPropertyAsStringTrimLC( ['method' , 'htttp_method', 'htttpMethod'] ) ;
+
+    var path = config.getPropertyAsString('path', '/') ;
+
+    var bodyType = config.findPropertyAsStringTrimLC( ['body_type', 'bodyType', 'content_type', 'content-type', 'contentType'] );
+    var body = config.getPropertyAsStringTrimLC( 'body' );
+
+    var responseType = config.findPropertyAsStringTrimLC( ['response_type', 'responseType'] );
+
+    /////
+
+    var scheme = schemeType == 'https' ? 'https' : ( schemeType == 'http' ? 'http' : runtimeUri.scheme ) ;
+
+    if (secure) {
+      scheme = 'https' ;
+    }
+
+    if (host == null) {
+      host = '${ runtimeUri.host }:${ runtimeUri.port }' ;
+    }
+    else if ( RegExp(r'^:?\d+$').hasMatch(host) ) {
+      var port = host ;
+      if ( port.startsWith(':') ) port = port.substring(1) ;
+      host = '${ runtimeUri.host }:$port' ;
+    }
+
+    /////
+
+    var httpMethod = getHttpMethod(method, HttpMethod.GET) ;
+
+    /////
+
+    var pathBuilt = '/' ;
+
+    if (path != null) {
+      pathBuilt = path.contains('{{') ? buildStringPattern(path, properties.toStringProperties()) : path ;
+    }
+
+    /////
+
+    var bodyBuilt ;
+
+    if (body != null) {
+      bodyBuilt = body.contains('{{') ? buildStringPattern(body, properties.toStringProperties()) : body ;
+    }
+
+    /////
+
+    _host = host ;
+    _scheme = scheme ;
+    _httpMethod = httpMethod ;
+    _path = pathBuilt ;
+    _responseType = responseType ;
+    _bodyType = bodyType ;
+    _body = bodyBuilt ;
+
+  }
+
+  String get scheme => _scheme;
+  String get host => _host;
+  HttpMethod get httpMethod => _httpMethod;
+  String get path => _path;
+  String get bodyType => _bodyType;
+  String get body => _body;
+  String get responseType => _responseType;
+
+  String get baseURL => '$_scheme://$_host/' ;
+
+  HttpClient _httpClient ;
+
+  HttpClient get httpClient {
+    _httpClient ??= HttpClient( baseURL );
+    return _httpClient ;
+  }
+
+  Future<dynamic> doRequest() {
+    return doRequestWithClient( httpClient ) ;
+  }
+
+  Future<dynamic> doRequestWithClient( HttpClient httpClient ) async {
+
+    HttpResponse httpResponse ;
+    if ( httpCache != null ) {
+      httpResponse = await httpCache.request( httpClient , httpMethod, path, body: _body, contentType: bodyType) ;
+    }
+    else {
+      httpResponse = await httpClient.request( httpMethod, path, body: _body, contentType: bodyType) ;
+    }
+
+    return _processResponse(httpResponse, httpClient);
+  }
+
+  dynamic _processResponse(HttpResponse httpResponse, HttpClient client) {
+    if ( !httpResponse.isOK ) return null ;
+
+    if ( _responseType == 'json' ) {
+      return httpResponse.json ;
+    }
+    else if ( _responseType == 'jsonpaging' || _responseType == 'json_paging' ) {
+      return _asJSONPaging(client, httpResponse) ;
+    }
+
+    if ( httpResponse.isBodyTypeJSON ) {
+      var asJSONPaging = _asJSONPaging(client, httpResponse) ;
+      return asJSONPaging ?? httpResponse.json ;
+    }
+
+    return httpResponse.body ;
+  }
+
+  JSONPaging _asJSONPaging( HttpClient client, HttpResponse httpResponse ) {
+    var paging = httpResponse.asJSONPaging ;
+    if (paging == null) return null ;
+
+    paging.pagingRequester = (page) async {
+      var method = getHttpMethod( httpResponse.method ) ;
+      var url = paging.pagingRequestURL(httpResponse.requestedURL, page) ;
+      var httpResponse2 = await client.requestURL( method , url.toString() ) ;
+      return _asJSONPaging(client, httpResponse2) ;
+    };
+
+    return paging ;
+  }
+
+}

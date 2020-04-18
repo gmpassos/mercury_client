@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:html' as browser ;
+import 'dart:html';
 
 import 'http_client.dart';
 
@@ -188,5 +189,7 @@ HttpClientRequester createHttpClientRequester() {
   return HttpClientRequesterBrowser() ;
 }
 
-
-
+Uri getHttpClientRuntimeUri() {
+  var href = Uri.parse( window.location.href ) ;
+  return href ;
+}
