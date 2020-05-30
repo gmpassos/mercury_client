@@ -100,7 +100,7 @@ void main() {
       var client = HttpClient('http://localhost:${testServer.port}/tests') ;
       expect( client.baseURL , matches(RegExp(r'http://localhost:\d+/tests')));
 
-      var response = await client.get("foo", parameters: {'a': '123'}) ;
+      var response = await client.get('foo', parameters: {'a': '123'}) ;
 
       expect( response.isOK , equals(true) );
 
@@ -115,7 +115,7 @@ void main() {
       var client = HttpClient('http://localhost:${testServer.port}/tests') ;
       expect( client.baseURL , matches(RegExp(r'http://localhost:\d+/tests')));
 
-      var response = await client.post("foo", parameters: {'á': '12 3', 'b': '456'}, body: "Boooodyyy!", contentType: 'application/json') ;
+      var response = await client.post('foo', parameters: {'á': '12 3', 'b': '456'}, body: 'Boooodyyy!', contentType: 'application/json') ;
 
       expect( response.isOK , equals(true) );
 

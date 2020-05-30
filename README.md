@@ -1,6 +1,15 @@
 # Mercury Client
 
-A Simple Dart HTTP client with Web and Native support.
+Portable HTTP client (Browser and Native support) with memory cache. 
+
+## Methods:
+
+  - GET
+  - POST
+  - PUT
+  - DELETE
+  - PATCH
+  - OPTIONS.
 
 ## Usage
 

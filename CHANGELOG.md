@@ -2,6 +2,9 @@
 
 - Implementation of DELETE HTTP Method.
 - Added HttpClient.urlFilter: HttpClientURLFilter
+- Internally use of `HttpMethod` enum when possible. Avoids use of Method as String.
+- API Documentation.
+- dartfmt and clean code.
 - swiss_knife: ^2.4.1
 
 ## 1.1.5
