@@ -9,7 +9,6 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
   @override
   Future<HttpResponse> doHttpRequest(
       HttpClient client, HttpRequest request, bool log) {
-
     if (log) {
       print('<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<');
       print(client);
@@ -21,13 +20,14 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
 
     var xhr = browser.HttpRequest();
 
-    var methodName = getHttpMethodName(request.method, HttpMethod.GET) ;
+    var methodName = getHttpMethodName(request.method, HttpMethod.GET);
 
-    assert( RegExp(r'^(?:GET|OPTIONS|POST|PUT|DELETE|PATCH|HEAD)$').hasMatch(methodName) ) ;
+    assert(RegExp(r'^(?:GET|OPTIONS|POST|PUT|DELETE|PATCH|HEAD)$')
+        .hasMatch(methodName));
 
     var url = request.requestURL;
 
-    xhr.open(methodName , url, async: true);
+    xhr.open(methodName, url, async: true);
 
     if (request.withCredentials != null) {
       xhr.withCredentials = request.withCredentials;
@@ -187,8 +187,8 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
 
   //////////////////////////////////
 
-  HttpResponse _processResponse(
-      HttpClient client, HttpMethod method, String url, browser.HttpRequest xhr) {
+  HttpResponse _processResponse(HttpClient client, HttpMethod method,
+      String url, browser.HttpRequest xhr) {
     var resp = HttpResponse(method, url, xhr.responseUrl, xhr.status,
         xhr.responseText, (key) => xhr.getResponseHeader(key), xhr);
 

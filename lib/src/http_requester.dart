@@ -1,9 +1,7 @@
-
 import 'package:swiss_knife/swiss_knife.dart';
 
 import 'http_cache.dart';
 import 'http_client.dart';
-
 
 /// A Class able to do a HTTP request based in properties:
 /// - httpMethod: The HTTP Method name.
@@ -59,9 +57,9 @@ class HttpRequester {
     var body = config.getPropertyAsStringTrimLC('body');
 
     var responseType =
-    config.findPropertyAsStringTrimLC(['response_type', 'responseType']);
+        config.findPropertyAsStringTrimLC(['response_type', 'responseType']);
 
-    if (responseType != null) responseType = responseType.toLowerCase() ;
+    if (responseType != null) responseType = responseType.toLowerCase();
 
     /////
 
@@ -191,6 +189,4 @@ class HttpRequester {
 
     return paging;
   }
-
 }
-

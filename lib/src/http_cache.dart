@@ -108,6 +108,7 @@ class _CacheRequest implements Comparable<_CacheRequest> {
 class HttpCache {
   /// Max memory that the cache can use.
   int _maxCacheMemory;
+
   /// Timeout of stored requests.
   Duration _timeout;
 
@@ -131,6 +132,7 @@ class HttpCache {
 
   /// The maximum memory usage.
   int get maxCacheMemory => _maxCacheMemory;
+
   set maxCacheMemory(int value) {
     if (value == null || value <= 0) {
       _maxCacheMemory = null;
@@ -145,6 +147,7 @@ class HttpCache {
 
   /// The timeout of stored requests.
   Duration get timeout => _timeout;
+
   set timeout(Duration value) {
     if (value == null || value.inMilliseconds <= 0) {
       _timeout = null;
@@ -156,7 +159,6 @@ class HttpCache {
 
   /// Returns [true] if the cached request have timeout.
   bool get hasTimeout => _timeout != null && _timeout.inMilliseconds > 0;
-
 
   final Map<_CacheRequest, HttpResponse> _cache = {};
 
@@ -271,7 +273,8 @@ class HttpCache {
       _cache.remove(entry.key);
       removed += memory;
 
-      _log('Removed cached entry> memory: $memory ; timeout: $elapsedTime / $timeout');
+      _log(
+          'Removed cached entry> memory: $memory ; timeout: $elapsedTime / $timeout');
     }
 
     _log('Total removed memory: $removed');
@@ -530,5 +533,4 @@ class HttpCache {
   dynamic _jsonDecode(String s) {
     return jsonDecode(s);
   }
-
 }

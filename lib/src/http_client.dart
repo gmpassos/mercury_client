@@ -8,7 +8,6 @@ import 'http_client_none.dart'
     if (dart.library.html) "http_client_browser.dart"
     if (dart.library.io) "http_client_io.dart";
 
-
 typedef ResponseHeaderGetter = String Function(String headerKey);
 
 /// Represents a HTTP Status with helpers. Base for [HttpResponse] and [HttpError].
@@ -134,7 +133,6 @@ class HttpError extends HttpStatus {
 
 /// The response of a [HttpRequest].
 class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
-
   /// Response Method
   final HttpMethod method;
 
@@ -176,7 +174,6 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
         (url == requestedURL ? url.length : url.length + requestedURL.length);
     return memory;
   }
-
 
   /// Returns the [body] as JSON.
   dynamic get json => hasBody ? jsonDecode(body) : null;
@@ -233,7 +230,6 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
         : (instanceTime == other.instanceTime ? 0 : 1);
   }
 }
-
 
 /// Represents a body content, used by [HttpRequest].
 class HttpBody {
@@ -374,9 +370,9 @@ abstract class Credential {
 
 /// A HTTP Basic Credential for the `Authorization` header.
 class BasicCredential extends Credential {
-
   /// Plain username of the credential.
   final String username;
+
   /// Plain password of the credential.
   final String password;
 
@@ -417,7 +413,6 @@ class BasicCredential extends Credential {
 
 /// A HTTP Bearer Credential for the `Authorization` header.
 class BearerCredential extends Credential {
-
   /// Finds the token inside a [json] map using the [tokenKey].
   /// [tokenKey] can be a tree path using `/` as node delimiter.
   static dynamic findToken(Map json, String tokenKey) {
@@ -507,7 +502,6 @@ class BearerCredential extends Credential {
 
 /// A [Credential] that injects fields in the Query paramaters.
 class QueryStringCredential extends Credential {
-
   /// The Credential tokes. Usually: `{'access_token': 'the_toke_string'}`s
   final Map<String, String> fields;
 
@@ -681,21 +675,27 @@ String getHttpMethodName(HttpMethod method, [HttpMethod def]) {
   method ??= def;
 
   switch (method) {
-    case HttpMethod.GET: return 'GET';
-    case HttpMethod.OPTIONS: return 'OPTIONS';
-    case HttpMethod.POST: return 'POST';
-    case HttpMethod.PUT: return 'PUT';
-    case HttpMethod.DELETE: return 'DELETE';
-    case HttpMethod.PATCH: return 'PATCH';
-    case HttpMethod.HEAD: return 'HEAD';
-    default: return null ;
+    case HttpMethod.GET:
+      return 'GET';
+    case HttpMethod.OPTIONS:
+      return 'OPTIONS';
+    case HttpMethod.POST:
+      return 'POST';
+    case HttpMethod.PUT:
+      return 'PUT';
+    case HttpMethod.DELETE:
+      return 'DELETE';
+    case HttpMethod.PATCH:
+      return 'PATCH';
+    case HttpMethod.HEAD:
+      return 'HEAD';
+    default:
+      return null;
   }
 }
 
-
 /// Represents the HTTP request.
 class HttpRequest {
-
   /// HTTP Method.
   final HttpMethod method;
 
@@ -891,7 +891,8 @@ abstract class HttpClientRequester {
 
       return doHttpRequest(
           client,
-          HttpRequest(HttpMethod.POST, url, buildRequestURL(client, url, authorization),
+          HttpRequest(
+              HttpMethod.POST, url, buildRequestURL(client, url, authorization),
               authorization: authorization,
               queryParameters: queryParameters,
               withCredentials: _withCredentials(client, authorization),
@@ -924,7 +925,8 @@ abstract class HttpClientRequester {
 
     return doHttpRequest(
         client,
-        HttpRequest(HttpMethod.PUT, url, buildRequestURL(client, url, authorization),
+        HttpRequest(
+            HttpMethod.PUT, url, buildRequestURL(client, url, authorization),
             authorization: authorization,
             queryParameters: queryParameters,
             withCredentials: _withCredentials(client, authorization),
@@ -945,7 +947,8 @@ abstract class HttpClientRequester {
 
     return doHttpRequest(
         client,
-        HttpRequest(HttpMethod.PATCH, url, buildRequestURL(client, url, authorization),
+        HttpRequest(
+            HttpMethod.PATCH, url, buildRequestURL(client, url, authorization),
             authorization: authorization,
             queryParameters: queryParameters,
             withCredentials: _withCredentials(client, authorization),
@@ -966,7 +969,8 @@ abstract class HttpClientRequester {
 
     return doHttpRequest(
         client,
-        HttpRequest(HttpMethod.DELETE, url, buildRequestURL(client, url, authorization),
+        HttpRequest(
+            HttpMethod.DELETE, url, buildRequestURL(client, url, authorization),
             authorization: authorization,
             queryParameters: queryParameters,
             withCredentials: _withCredentials(client, authorization),
@@ -1090,7 +1094,8 @@ class HttpClient {
       baseURL = baseURL.substring(0, baseURL.length - 1);
     }
 
-    if (baseURL == null || baseURL.isEmpty) throw ArgumentError('Invalid baseURL') ;
+    if (baseURL == null || baseURL.isEmpty)
+      throw ArgumentError('Invalid baseURL');
 
     this.baseURL = baseURL;
 
@@ -1111,7 +1116,7 @@ class HttpClient {
   /// Returns [true] if this [baseURL] is `localhost`.
   bool isBaseUrlLocalhost() {
     var uri = Uri.parse(baseURL);
-    return isLocalhost( uri.host) ;
+    return isLocalhost(uri.host);
   }
 
   /// Requests using [method] and [path] and returns a decoded JSON.
@@ -1208,7 +1213,10 @@ class HttpClient {
   Authorization _authorizationResolved;
 
   Authorization get resolvedAuthorization => _authorizationResolved;
-  bool get isAuthorizationResolved => _authorizationResolved != null && _authorizationResolved.isCredentialResolved ;
+
+  bool get isAuthorizationResolved =>
+      _authorizationResolved != null &&
+      _authorizationResolved.isCredentialResolved;
 
   Future<Authorization> _buildRequestAuthorization(
       Credential credential) async {
@@ -1533,10 +1541,8 @@ class HttpClient {
 typedef SimulateResponse = String Function(
     String url, Map<String, String> queryParameters);
 
-
 /// A Simulated [HttpClientRequester]. Usefull for tests and mocks.
 class HttpClientRequesterSimulation extends HttpClientRequester {
-
   final Map<RegExp, SimulateResponse> _getPatterns = {};
 
   /// Defines a reply [response] for GET requests with [urlPattern].
@@ -1600,7 +1606,8 @@ class HttpClientRequesterSimulation extends HttpClientRequester {
   ////////////
 
   /// Returns for parameter [method] a [Map] with [RegExp] patterns as key and [SimulateResponse] as value.
-  Map<RegExp, SimulateResponse> getSimulationPatternsByMethod(HttpMethod method) {
+  Map<RegExp, SimulateResponse> getSimulationPatternsByMethod(
+      HttpMethod method) {
     switch (method) {
       case HttpMethod.GET:
         return _getPatterns ?? _anyPatterns;
@@ -1611,7 +1618,7 @@ class HttpClientRequesterSimulation extends HttpClientRequester {
       case HttpMethod.POST:
         return _postPatterns ?? _anyPatterns;
       default:
-        return _anyPatterns ;
+        return _anyPatterns;
     }
   }
 
@@ -1689,10 +1696,10 @@ Converter<List<int>, String> contentTypeToDecoder(String mimeType,
 
 /// Creates a HttpClientRequester based in imported platform.
 HttpClientRequester createHttpClientRequester() {
-  return createHttpClientRequesterImpl() ;
+  return createHttpClientRequesterImpl();
 }
 
 /// Returns the base runtime Uri for the platform.
 Uri getHttpClientRuntimeUri() {
-  return getHttpClientRuntimeUriImpl() ;
+  return getHttpClientRuntimeUriImpl();
 }
