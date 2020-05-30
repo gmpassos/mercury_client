@@ -1,3 +1,11 @@
+## 1.1.7
+
+- Fix HTTPS request for dart:io implementation.
+- Reuse connections for dart:io implementation.
+- Added example.
+- Fix documentation.
+- dartfmt.
+
 ## 1.1.6
 
 - Implementation of DELETE HTTP Method.

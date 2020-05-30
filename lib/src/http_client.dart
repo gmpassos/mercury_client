@@ -1064,6 +1064,9 @@ abstract class HttpClientRequester {
 
     return httpBody ?? HttpBody.NULL;
   }
+
+  /// Closes the [HttpClientRequester] and internal instances.
+  void close() {}
 }
 
 typedef HttpClientURLFilter = String Function(
@@ -1515,8 +1518,6 @@ class HttpClient {
     }
 
     var url2 = uri2.toString();
-
-    print('Request URL: $url2');
 
     return url2;
   }
