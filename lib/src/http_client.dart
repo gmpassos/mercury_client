@@ -20,8 +20,6 @@ class HttpStatus {
 
   HttpStatus(this.url, this.requestedURL, this.status);
 
-  /////
-
   /// Returns [true] if is a successful status.
   bool get isOK => isStatusSuccessful;
 
@@ -52,8 +50,6 @@ class HttpStatus {
   /// Returns [true] if any error happens: [isStatusNetworkError] || [isStatusServerError] || [isStatusAccessError]
   bool get isStatusError =>
       isStatusNetworkError || isStatusServerError || isStatusAccessError;
-
-  /////
 
   /// Returns [true] if this status is equals parameter [status].
   bool isStatus(int status) {
@@ -1631,8 +1627,6 @@ class HttpClientRequesterSimulation extends HttpClientRequester {
     }
     return null;
   }
-
-  //////////////////////
 
   /// Implementation for simulated requests.
   @override
