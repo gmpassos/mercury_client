@@ -1,3 +1,9 @@
+## 1.1.6
+
+- Implementation of DELETE HTTP Method.
+- Added HttpClient.urlFilter: HttpClientURLFilter
+- swiss_knife: ^2.4.1
+
 ## 1.1.5
 
 - getHttpClientRuntimeUri()

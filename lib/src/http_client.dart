@@ -180,20 +180,7 @@ class HttpBody {
   static final HttpBody NULL = HttpBody(null,null) ;
 
   static String normalizeType(String bodyType) {
-    if (bodyType == null) return null ;
-
-    bodyType = bodyType.trim() ;
-    if (bodyType.isEmpty) return null ;
-
-    var bodyTypeLC = bodyType.toLowerCase() ;
-
-    if ( bodyTypeLC == 'json' || bodyTypeLC.endsWith('/json') ) return 'application/json' ;
-    if ( bodyTypeLC == 'jpeg' || bodyTypeLC.endsWith('/jpeg') ) return 'image/jpeg' ;
-    if ( bodyTypeLC == 'png' || bodyTypeLC.endsWith('/png') ) return 'image/png' ;
-    if (bodyTypeLC == 'text') return 'text/plain' ;
-    if (bodyTypeLC == 'html') return 'text/html' ;
-
-    return bodyType ;
+    return MimeType.parseAsString(bodyType) ;
   }
 
   ////////
@@ -618,6 +605,8 @@ abstract class HttpClientRequester {
       case HttpMethod.OPTIONS: return requestOPTIONS(client, url, authorization: authorization) ;
       case HttpMethod.POST: return requestPOST(client, url, authorization: authorization, queryParameters: queryParameters, body: body, contentType: contentType, accept: accept) ;
       case HttpMethod.PUT: return requestPUT(client, url, authorization: authorization, body: body, contentType: contentType, accept: accept) ;
+      case HttpMethod.PATCH: return requestPATCH(client, url, authorization: authorization, body: body, contentType: contentType, accept: accept) ;
+      case HttpMethod.DELETE: return requestDELETE(client, url, authorization: authorization, body: body, contentType: contentType, accept: accept) ;
 
       default: throw StateError("Can't handle method: ${ EnumToString.parse(method) }") ;
     }
@@ -700,7 +689,7 @@ abstract class HttpClientRequester {
     }
   }
 
-  Future<HttpResponse> requestPUT(HttpClient client, String url, { Authorization authorization, dynamic body, String contentType, String accept }) {
+  Future<HttpResponse> requestPUT(HttpClient client, String url, { Authorization authorization, Map<String,String> queryParameters, dynamic body, String contentType, String accept }) {
     var httpBody = HttpBody(body, contentType);
     var requestBody = buildRequestBody(client, httpBody, authorization) ;
 
@@ -708,6 +697,41 @@ abstract class HttpClientRequester {
         client,
         HttpRequest('PUT' , url, buildRequestURL(client, url, authorization),
             authorization: authorization,
+            queryParameters: queryParameters,
+            withCredentials: _withCredentials(client, authorization) ,
+            requestHeaders: buildRequestHeaders(client, url, authorization, requestBody.content, requestBody.contentType, accept),
+            sendData: requestBody.content
+        )
+        , client.logRequests
+    ) ;
+  }
+
+  Future<HttpResponse> requestPATCH(HttpClient client, String url, { Authorization authorization, Map<String,String> queryParameters, dynamic body, String contentType, String accept }) {
+    var httpBody = HttpBody(body, contentType);
+    var requestBody = buildRequestBody(client, httpBody, authorization) ;
+
+    return doHttpRequest(
+        client,
+        HttpRequest('PATCH' , url, buildRequestURL(client, url, authorization),
+            authorization: authorization,
+            queryParameters: queryParameters,
+            withCredentials: _withCredentials(client, authorization) ,
+            requestHeaders: buildRequestHeaders(client, url, authorization, requestBody.content, requestBody.contentType, accept),
+            sendData: requestBody.content
+        )
+        , client.logRequests
+    ) ;
+  }
+
+  Future<HttpResponse> requestDELETE(HttpClient client, String url, { Authorization authorization, Map<String,String> queryParameters, dynamic body, String contentType, String accept }) {
+    var httpBody = HttpBody(body, contentType);
+    var requestBody = buildRequestBody(client, httpBody, authorization) ;
+
+    return doHttpRequest(
+        client,
+        HttpRequest('DELETE' , url, buildRequestURL(client, url, authorization),
+            authorization: authorization,
+            queryParameters: queryParameters,
             withCredentials: _withCredentials(client, authorization) ,
             requestHeaders: buildRequestHeaders(client, url, authorization, requestBody.content, requestBody.contentType, accept),
             sendData: requestBody.content
@@ -790,6 +814,8 @@ abstract class HttpClientRequester {
 
 }
 
+typedef HttpClientURLFilter = String Function(String url, Map<String,String> queryParameters) ;
+
 class HttpClient {
 
   String baseURL ;
@@ -810,6 +836,7 @@ class HttpClient {
     _clientRequester = clientRequester ?? createHttpClientRequester() ;
   }
 
+  HttpClientURLFilter urlFilter ;
 
   @override
   String toString() {
@@ -938,6 +965,8 @@ class HttpClient {
     return _clientRequester.request(this, method, url, authorization: requestAuthorization, queryParameters: queryParameters, body: body, contentType: contentType, accept: accept);
   }
 
+  //////////////
+
   Future<HttpResponse> get(String path, { bool fullPath, Credential authorization, Map<String,String> parameters } ) async {
     var url = _buildURL(path, fullPath, parameters);
     var requestAuthorization = await _buildRequestAuthorization(authorization);
@@ -950,9 +979,62 @@ class HttpClient {
     return _clientRequester.requestOPTIONS(this, url, authorization: requestAuthorization);
   }
 
-  Future<HttpResponse> post(String path, { bool fullPath, Credential authorization, Map<String,String> parameters , dynamic body , String contentType , String accept}) async {
+  Future<HttpResponse> post(String path, { bool fullPath, Credential authorization, Map<String,String> parameters, dynamic body , String contentType , String accept}) async {
     var url = _buildURL(path, fullPath);
 
+    var ret_url_parameters = _build_URL_and_Parameters(url, parameters);
+    url = ret_url_parameters.key ;
+    parameters = ret_url_parameters.value ;
+
+    var requestAuthorization = await _buildRequestAuthorization(authorization);
+    return _clientRequester.requestPOST(this, url, authorization: requestAuthorization, queryParameters: parameters, body: body, contentType: contentType, accept: accept);
+  }
+
+  Future<HttpResponse> put(String path, { bool fullPath, Credential authorization, Map<String,String> parameters, dynamic body , String contentType , String accept}) async {
+    var url = _buildURL(path, fullPath);
+
+    var ret_url_parameters = _build_URL_and_Parameters(url, parameters);
+    url = ret_url_parameters.key ;
+    parameters = ret_url_parameters.value ;
+
+    var requestAuthorization = await _buildRequestAuthorization(authorization);
+    return _clientRequester.requestPUT(this, url, authorization: requestAuthorization, queryParameters: parameters, body: body, contentType: contentType, accept: accept);
+  }
+
+  Future<HttpResponse> patch(String path, { bool fullPath, Credential authorization, Map<String,String> parameters, dynamic body , String contentType , String accept}) async {
+    var url = _buildURL(path, fullPath);
+
+    var ret_url_parameters = _build_URL_and_Parameters(url, parameters);
+    url = ret_url_parameters.key ;
+    parameters = ret_url_parameters.value ;
+
+    var requestAuthorization = await _buildRequestAuthorization(authorization);
+    return _clientRequester.requestPATCH(this, url, authorization: requestAuthorization, queryParameters: parameters, body: body, contentType: contentType, accept: accept);
+  }
+
+  Future<HttpResponse> delete(String path, { bool fullPath, Credential authorization, Map<String,String> parameters, dynamic body , String contentType , String accept}) async {
+    var url = _buildURL(path, fullPath);
+
+    var ret_url_parameters = _build_URL_and_Parameters(url, parameters);
+    url = ret_url_parameters.key ;
+    parameters = ret_url_parameters.value ;
+
+    var requestAuthorization = await _buildRequestAuthorization(authorization);
+    return _clientRequester.requestDELETE(this, url, authorization: requestAuthorization, queryParameters: parameters, body: body, contentType: contentType, accept: accept);
+  }
+
+  //////////////
+
+  Uri _removeURIQueryParameters(var uri) {
+    if ( uri.schema.toLowerCase() == 'https' ) {
+      return Uri.https(uri.authority,  Uri.decodeComponent( uri.path ) ) ;
+    }
+    else {
+      return Uri.http(uri.authority, Uri.decodeComponent( uri.path ) ) ;
+    }
+  }
+
+  MapEntry<String , Map<String,String>> _build_URL_and_Parameters(String url, Map<String,String> parameters) {
     var uri = Uri.parse(url);
 
     if (uri.queryParameters != null && uri.queryParameters.isNotEmpty) {
@@ -966,23 +1048,7 @@ class HttpClient {
       url = _removeURIQueryParameters(uri).toString() ;
     }
 
-    var requestAuthorization = await _buildRequestAuthorization(authorization);
-    return _clientRequester.requestPOST(this, url, authorization: requestAuthorization, queryParameters: parameters, body: body, contentType: contentType, accept: accept);
-  }
-
-  Future<HttpResponse> put(String path, { bool fullPath, Credential authorization, dynamic body , String contentType , String accept}) async {
-    var url = _buildURL(path, fullPath);
-    var requestAuthorization = await _buildRequestAuthorization(authorization);
-    return _clientRequester.requestPUT(this, url, authorization: requestAuthorization, body: body, contentType: contentType, accept: accept);
-  }
-
-  Uri _removeURIQueryParameters(var uri) {
-    if ( uri.schema.toLowerCase() == 'https' ) {
-      return Uri.https(uri.authority,  Uri.decodeComponent( uri.path ) ) ;
-    }
-    else {
-      return Uri.http(uri.authority, Uri.decodeComponent( uri.path ) ) ;
-    }
+    return MapEntry(url , parameters) ;
   }
 
   String buildRequestURL(String path, bool fullPath, [Map<String,String> queryParameters]) {
@@ -1018,6 +1084,13 @@ class HttpClient {
     }
     else {
       url = '$baseURL$path' ;
+    }
+
+    if (urlFilter != null) {
+      var url2 = urlFilter(url, queryParameters);
+      if (url2 != null && url2.isNotEmpty && url2 != url) {
+        url = url2 ;
+      }
     }
 
     return _buildURLWithParameters(url, queryParameters) ;
