@@ -35,6 +35,7 @@ class HttpStatus {
   /// Returns [true] if is 401 status (Unauthenticated).
   bool get isStatusUnauthenticated => isStatus(401);
 
+  /// Returns [true] if is 403 status (Forbidden).
   bool get isStatusForbidden => isStatus(403);
 
   /// Returns [true] if any network error happens.
