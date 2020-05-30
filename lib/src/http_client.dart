@@ -1094,8 +1094,9 @@ class HttpClient {
       baseURL = baseURL.substring(0, baseURL.length - 1);
     }
 
-    if (baseURL == null || baseURL.isEmpty)
+    if (baseURL == null || baseURL.isEmpty) {
       throw ArgumentError('Invalid baseURL');
+    }
 
     this.baseURL = baseURL;
 
