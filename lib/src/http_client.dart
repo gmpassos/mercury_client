@@ -1536,8 +1536,6 @@ class HttpClient {
   }
 }
 
-////////////////////////////////////////
-
 typedef SimulateResponse = String Function(
     String url, Map<String, String> queryParameters);
 
