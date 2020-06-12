@@ -146,15 +146,16 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       HttpRequest request,
       bool log,
       HttpError httpError) async {
-    if (request.authorization != null &&
-        request.authorization.authorizationProvider != null) {
-      var authorizationProvider = request.authorization.authorizationProvider;
-      var credential = await authorizationProvider(client, httpError);
+
+    var authorization = request.authorization;
+
+    if (authorization != null && !authorization.isStaticCredential) {
+      var credential = await authorization.resolveCredential(client, httpError) ;
 
       if (credential != null) {
         request.incrementRetries();
 
-        var authorization2 = Authorization(credential);
+        var authorization2 = Authorization.fromCredential(credential);
         var request2 = request.copy(client, authorization2);
 
         return _retryRequest(originalRequestCompleter, client, request2, log);
@@ -185,8 +186,6 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     return true;
   }
 
-  //////////////////////////////////
-
   HttpResponse _processResponse(HttpClient client, HttpMethod method,
       String url, browser.HttpRequest xhr) {
     var resp = HttpResponse(method, url, xhr.responseUrl, xhr.status,
@@ -196,8 +195,8 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
 
     if (responseHeaderWithToken != null) {
       var accessToken = resp.getResponseHeader(responseHeaderWithToken);
-      if (accessToken != null) {
-        client.authorization = BearerCredential(accessToken);
+      if (accessToken != null && accessToken.isNotEmpty) {
+        client.authorization = Authorization.fromCredential( BearerCredential(accessToken) );
       }
     }
 

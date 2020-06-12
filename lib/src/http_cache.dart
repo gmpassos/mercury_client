@@ -455,8 +455,6 @@ class HttpCache {
         accept: accept);
   }
 
-  ////
-
   /// Does a request and decodes response to JSON.
   Future<dynamic> requestJSON(
       HttpClient httpClient, HttpMethod method, String path,

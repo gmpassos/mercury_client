@@ -1,3 +1,10 @@
+## 1.1.8
+
+- Refactor class Authorization: _AuthorizationStatic, _AuthorizationResolvable.
+- Change field HttpClient.authorization from Credential to Authorization.
+- Added HttpClient.authorizationResolutionInterceptor
+- swiss_knife: ^2.5.3
+
 ## 1.1.7
 
 - Fix HTTPS request for dart:io implementation.
