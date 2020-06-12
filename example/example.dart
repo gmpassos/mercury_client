@@ -1,4 +1,3 @@
-
 import 'package:mercury_client/mercury_client.dart';
 
 void main() async {
@@ -35,5 +34,4 @@ void main() async {
   print('------------------------------------------------\n');
 
   print('By!');
-
 }

@@ -146,11 +146,10 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       HttpRequest request,
       bool log,
       HttpError httpError) async {
-
     var authorization = request.authorization;
 
     if (authorization != null && !authorization.isStaticCredential) {
-      var credential = await authorization.resolveCredential(client, httpError) ;
+      var credential = await authorization.resolveCredential(client, httpError);
 
       if (credential != null) {
         request.incrementRetries();
@@ -196,7 +195,8 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     if (responseHeaderWithToken != null) {
       var accessToken = resp.getResponseHeader(responseHeaderWithToken);
       if (accessToken != null && accessToken.isNotEmpty) {
-        client.authorization = Authorization.fromCredential( BearerCredential(accessToken) );
+        client.authorization =
+            Authorization.fromCredential(BearerCredential(accessToken));
       }
     }
 

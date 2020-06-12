@@ -289,52 +289,52 @@ typedef AuthorizationProvider = Future<Credential> Function(
 /// Represents a kind of HTTP Authorization.
 abstract class Authorization {
   /// Copies this instance.
-  Authorization copy() ;
+  Authorization copy();
 
   /// Returns [true] if the [Credential] is already resolved.
-  bool get isCredentialResolved ;
+  bool get isCredentialResolved;
 
   /// Returns [true] if resolved [Credential] uses `Authorization` HTTP header.
-  bool get usesAuthorizationHeader => isCredentialResolved && resolvedCredential.usesAuthorizationHeader ;
+  bool get usesAuthorizationHeader =>
+      isCredentialResolved && resolvedCredential.usesAuthorizationHeader;
 
   /// Returns the resolved [Credential].
   ///
   /// Throws [StateError] if not resolved.
-  Credential get resolvedCredential ;
+  Credential get resolvedCredential;
 
   /// Returns [true] if the [Credential] is static
   /// (future calls to [resolveCredential] will return the same instance).
-  bool get isStaticCredential ;
+  bool get isStaticCredential;
 
   /// Returns the resolved [Credential] or [null] if not resolved.
-  Credential get tryResolvedCredential ;
+  Credential get tryResolvedCredential;
 
   /// Resolves the actual [Credential] for the [HttpRequest].
   /// This method should cache the last resolved [Credential]
   /// and avoid unnecessary resolving procedures.
-  Future<Credential> resolveCredential(HttpClient client, HttpError lastError) ;
+  Future<Credential> resolveCredential(HttpClient client, HttpError lastError);
 
   Authorization._();
 
   /// Constructs a [AuthorizationStatic].
   factory Authorization.fromCredential(Credential credential) {
-    return _AuthorizationStatic(credential) ;
+    return _AuthorizationStatic(credential);
   }
 
   /// Constructs a [AuthorizationResolvable].
   factory Authorization.fromProvider(AuthorizationProvider provider) {
-    return _AuthorizationResolvable(provider) ;
+    return _AuthorizationResolvable(provider);
   }
 }
 
 /// A static [Authorization], with [Credential] already resolved.
 class _AuthorizationStatic extends Authorization {
-
   /// The resolved [Credential].
   final Credential credential;
 
   _AuthorizationStatic(this.credential) : super._() {
-    if (credential == null) throw ArgumentError.notNull('credential') ;
+    if (credential == null) throw ArgumentError.notNull('credential');
   }
 
   @override
@@ -344,19 +344,21 @@ class _AuthorizationStatic extends Authorization {
   bool get isCredentialResolved => credential != null;
 
   @override
-  bool get isStaticCredential => true ;
+  bool get isStaticCredential => true;
 
   @override
   Credential get resolvedCredential {
-    if ( !isCredentialResolved ) throw StateError('Credential not resolved') ;
+    if (!isCredentialResolved) throw StateError('Credential not resolved');
     return credential;
   }
 
   @override
-  Credential get tryResolvedCredential => credential ;
+  Credential get tryResolvedCredential => credential;
 
   @override
-  Future<Credential> resolveCredential(HttpClient client, HttpError lastError) async => credential;
+  Future<Credential> resolveCredential(
+          HttpClient client, HttpError lastError) async =>
+      credential;
 
   @override
   String toString() {
@@ -369,14 +371,15 @@ class _AuthorizationResolvable extends Authorization {
   /// a function.
   final AuthorizationProvider authorizationProvider;
 
-  _AuthorizationResolvable( this.authorizationProvider ) : super._() {
-    if (authorizationProvider == null) throw ArgumentError.notNull('authorizationProvider') ;
+  _AuthorizationResolvable(this.authorizationProvider) : super._() {
+    if (authorizationProvider == null)
+      throw ArgumentError.notNull('authorizationProvider');
   }
 
   /// Copies this instance.
   @override
   Authorization copy() {
-    var authorization = _AuthorizationResolvable( authorizationProvider );
+    var authorization = _AuthorizationResolvable(authorizationProvider);
     authorization._resolvedCredential = _resolvedCredential;
     return authorization;
   }
@@ -388,18 +391,18 @@ class _AuthorizationResolvable extends Authorization {
   bool get isCredentialResolved => _resolvedCredential != null;
 
   @override
-  bool get isStaticCredential => false ;
+  bool get isStaticCredential => false;
 
   @override
   Credential get resolvedCredential {
-    if ( !isCredentialResolved ) throw StateError('Credential not resolved') ;
+    if (!isCredentialResolved) throw StateError('Credential not resolved');
     return _resolvedCredential;
   }
 
   @override
-  Credential get tryResolvedCredential => _resolvedCredential ;
+  Credential get tryResolvedCredential => _resolvedCredential;
 
-  Future<Credential> _resolveFuture ;
+  Future<Credential> _resolveFuture;
 
   /// Resolve the actual [Credential] for the [HttpRequest].
   @override
@@ -409,14 +412,14 @@ class _AuthorizationResolvable extends Authorization {
 
     if (_resolveFuture != null) {
       var credential = await _resolveFuture;
-      return _resolvedCredential ?? credential ;
+      return _resolvedCredential ?? credential;
     }
 
     _resolveFuture = authorizationProvider(client, lastError);
 
-    var credential = await _resolveFuture ;
+    var credential = await _resolveFuture;
     _resolvedCredential = credential;
-    _resolveFuture = null ;
+    _resolveFuture = null;
 
     return _resolvedCredential;
   }
@@ -1154,7 +1157,7 @@ abstract class HttpClientRequester {
 typedef HttpClientURLFilter = String Function(
     String url, Map<String, String> queryParameters);
 
-typedef AuthorizationInterceptor = void Function(Authorization authorization) ;
+typedef AuthorizationInterceptor = void Function(Authorization authorization);
 
 /// Mercury HTTP Client.
 class HttpClient {
@@ -1262,7 +1265,7 @@ class HttpClient {
   Authorization _authorization;
 
   /// The [Authorization] (that resolves [Credential]) for requests.
-  Authorization get authorization => _authorization ;
+  Authorization get authorization => _authorization;
 
   set authorization(Authorization authorization) {
     _authorization = authorization;
@@ -1270,18 +1273,19 @@ class HttpClient {
   }
 
   void _notifyResolvedAuthorization() {
-    if ( _authorization != null && authorizationResolutionInterceptor != null && _authorization.isCredentialResolved ) {
+    if (_authorization != null &&
+        authorizationResolutionInterceptor != null &&
+        _authorization.isCredentialResolved) {
       try {
-        authorizationResolutionInterceptor(_authorization) ;
-      }
-      catch(e,s) {
+        authorizationResolutionInterceptor(_authorization);
+      } catch (e, s) {
         print(e);
         print(s);
       }
     }
   }
 
-  AuthorizationInterceptor authorizationResolutionInterceptor ;
+  AuthorizationInterceptor authorizationResolutionInterceptor;
 
   String _responseHeaderWithToken;
 
@@ -1317,20 +1321,22 @@ class HttpClient {
       return Authorization.fromCredential(credential);
     }
 
-    return _resolveAuthorization() ;
+    return _resolveAuthorization();
   }
 
   /// Returns [true] if [authorization] is resolved.
-  bool get isAuthorizationResolved => authorization != null && authorization.isCredentialResolved ;
+  bool get isAuthorizationResolved =>
+      authorization != null && authorization.isCredentialResolved;
 
   /// Returns the [authorization] if is resolved.
-  Authorization get resolvedAuthorization => isAuthorizationResolved ? authorization : null ;
+  Authorization get resolvedAuthorization =>
+      isAuthorizationResolved ? authorization : null;
 
   Future<Authorization> _resolveAuthorization() async {
-    if (_authorization == null) return Future.value(null) ;
-    await _authorization.resolveCredential(this, null) ;
+    if (_authorization == null) return Future.value(null);
+    await _authorization.resolveCredential(this, null);
     _notifyResolvedAuthorization();
-    return _authorization ;
+    return _authorization;
   }
 
   /// Does a request using [method].

@@ -52,7 +52,8 @@ class HttpClientRequesterIO extends HttpClientRequester {
     if (responseHeaderWithToken != null) {
       var accessToken = resp.getResponseHeader(responseHeaderWithToken);
       if (accessToken != null && accessToken.isNotEmpty) {
-        client.authorization = Authorization.fromCredential( BearerCredential(accessToken) ) ;
+        client.authorization =
+            Authorization.fromCredential(BearerCredential(accessToken));
       }
     }
 
