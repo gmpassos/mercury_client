@@ -372,8 +372,9 @@ class _AuthorizationResolvable extends Authorization {
   final AuthorizationProvider authorizationProvider;
 
   _AuthorizationResolvable(this.authorizationProvider) : super._() {
-    if (authorizationProvider == null)
+    if (authorizationProvider == null) {
       throw ArgumentError.notNull('authorizationProvider');
+    }
   }
 
   /// Copies this instance.
