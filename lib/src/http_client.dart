@@ -232,8 +232,9 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
 }
 
 /// Function to dynamically build a HTTP body.
-typedef HttpBodyBuilder = dynamic Function(Map<String,String> parameters) ;
-typedef HttpBodyBuilderTyped = dynamic Function(Map<String,String> parameters, String type) ;
+typedef HttpBodyBuilder = dynamic Function(Map<String, String> parameters);
+typedef HttpBodyBuilderTyped = dynamic Function(
+    Map<String, String> parameters, String type);
 
 /// Represents a body content, used by [HttpRequest].
 class HttpBody {
@@ -254,16 +255,14 @@ class HttpBody {
     _contentType = normalizeType(type);
 
     if (content is HttpBodyBuilder) {
-      var f = content as HttpBodyBuilder ;
-      content = f(parameters ?? {}) ;
-    }
-    else if (content is HttpBodyBuilderTyped) {
-      var f = content as HttpBodyBuilderTyped ;
-      content = f(parameters ?? {} , _contentType) ;
-    }
-    else if (content is Function) {
-      var f = content as Function ;
-      content = f() ;
+      var f = content as HttpBodyBuilder;
+      content = f(parameters ?? {});
+    } else if (content is HttpBodyBuilderTyped) {
+      var f = content as HttpBodyBuilderTyped;
+      content = f(parameters ?? {}, _contentType);
+    } else if (content is Function) {
+      var f = content as Function;
+      content = f();
     }
 
     if (content is String) {
@@ -271,7 +270,7 @@ class HttpBody {
     } else if (isJSONType ||
         (_contentType == null && (content is Map || content is List))) {
       _content = json.encode(content);
-      _contentType ??= MimeType.APPLICATION_JSON ;
+      _contentType ??= MimeType.APPLICATION_JSON;
     } else if (content == null) {
       _content = null;
     } else {
@@ -332,7 +331,7 @@ abstract class Authorization {
   Credential get tryResolvedCredential;
 
   /// Returns [true] if is in the process of [Credential] resolution.
-  bool get isResolvingCredential => false ;
+  bool get isResolvingCredential => false;
 
   /// Resolves the actual [Credential] for the [HttpRequest].
   /// This method should cache the last resolved [Credential]
@@ -430,7 +429,7 @@ class _AuthorizationResolvable extends Authorization {
   Future<Credential> _resolveFuture;
 
   @override
-  bool get isResolvingCredential => _resolveFuture != null ;
+  bool get isResolvingCredential => _resolveFuture != null;
 
   /// Resolve the actual [Credential] for the [HttpRequest].
   @override
@@ -493,26 +492,26 @@ class BasicCredential extends Credential {
   BasicCredential(this.username, this.password);
 
   factory BasicCredential.fromJSON(dynamic json) {
-    if (json == null) return null ;
+    if (json == null) return null;
 
     if (json is List) {
-      if (json.length < 2) return null ;
-      return BasicCredential(json[0] , json[1]) ;
-    }
-    else if (json is Map) {
-      if (json.length < 2) return null ;
+      if (json.length < 2) return null;
+      return BasicCredential(json[0], json[1]);
+    } else if (json is Map) {
+      if (json.length < 2) return null;
 
-      var user = findKeyValue(json, ['username','user','login','email','account'], true) ;
-      var pass = findKeyValue(json, ['password','pass','secret','token'], true) ;
+      var user = findKeyValue(
+          json, ['username', 'user', 'login', 'email', 'account'], true);
+      var pass =
+          findKeyValue(json, ['password', 'pass', 'secret', 'token'], true);
 
-      return BasicCredential(user, pass) ;
+      return BasicCredential(user, pass);
+    } else if (json is String) {
+      var parts = json.split(RegExp(r'[:;\s]+'));
+      if (parts.length < 2) return null;
+      return BasicCredential(parts[0], parts[1]);
     }
-    else if (json is String) {
-      var parts = json.split(RegExp(r'[:;\s]+')) ;
-      if (parts.length < 2) return null ;
-      return BasicCredential(parts[0] , parts[1]) ;
-    }
-    return null ;
+    return null;
   }
 
   /// Instantiate using a base64 encoded credential, in format  `$username:$password`.
@@ -808,14 +807,15 @@ HttpMethod getHttpMethod(String method, [HttpMethod def]) {
 }
 
 bool canHttpMethodHaveBody(HttpMethod method) {
-  if (method == null) return false ;
+  if (method == null) return false;
 
   switch (method) {
     case HttpMethod.POST:
     case HttpMethod.PUT:
     case HttpMethod.PATCH:
-      return true ;
-    default: return false ;
+      return true;
+    default:
+      return false;
   }
 }
 
@@ -1224,66 +1224,71 @@ typedef AuthorizationInterceptor = void Function(Authorization authorization);
 
 /// Represents a simple HTTP call that can be called many times.
 class HttpCall<R> {
-
-  final HttpClient client ;
-  final HttpMethod method ;
+  final HttpClient client;
+  final HttpMethod method;
   final String path;
   final bool fullPath;
-  final dynamic body ;
-  final int maxRetries ;
+  final dynamic body;
+  final int maxRetries;
 
-  HttpCall({
-    String baseURL, HttpClient client,
-    HttpMethod method, String path, bool fullPath,
-    this.body, int maxRetries
-  }) :
-    client = client ?? HttpClient( baseURL ?? getUriBase().toString() ) ,
-    method = method ?? HttpMethod.GET,
-    path = path ?? '',
-    fullPath = fullPath ?? false ,
-    maxRetries = maxRetries ?? 0
-  ;
+  HttpCall(
+      {String baseURL,
+      HttpClient client,
+      HttpMethod method,
+      String path,
+      bool fullPath,
+      this.body,
+      int maxRetries})
+      : client = client ?? HttpClient(baseURL ?? getUriBase().toString()),
+        method = method ?? HttpMethod.GET,
+        path = path ?? '',
+        fullPath = fullPath ?? false,
+        maxRetries = maxRetries ?? 0;
 
   /// Performs a call, making the HTTP request.
-  Future<HttpResponse> call(Map<String, dynamic> parameters, { dynamic body, int maxRetries }) async {
-    maxRetries ??= this.maxRetries ;
+  Future<HttpResponse> call(Map<String, dynamic> parameters,
+      {dynamic body, int maxRetries}) async {
+    maxRetries ??= this.maxRetries;
 
-    var limit = Math.max( 1 , 1+maxRetries ) ;
+    var limit = Math.max(1, 1 + maxRetries);
 
-    var response ;
+    var response;
 
-    for (var i = 0 ; i < limit ; i++) {
-      response = await _doRequestImp(parameters, body) ;
-      if ( response.isOK ) {
-        return response ;
+    for (var i = 0; i < limit; i++) {
+      response = await _doRequestImp(parameters, body);
+      if (response.isOK) {
+        return response;
       }
     }
 
-    return response ;
+    return response;
   }
 
   /// Performs a call, making the HTTP request, than resolves the response.
-  Future<R> callAndResolve(Map<String, dynamic> parameters, { dynamic body, int maxRetries }) async {
-    var response = await call(parameters, body: body, maxRetries: maxRetries) ;
+  Future<R> callAndResolve(Map<String, dynamic> parameters,
+      {dynamic body, int maxRetries}) async {
+    var response = await call(parameters, body: body, maxRetries: maxRetries);
     return resolveResponse(response);
   }
 
-  Future<HttpResponse> _doRequestImp(Map<String, dynamic> parameters, dynamic body) async {
-    if ( canHttpMethodHaveBody(method) ) {
+  Future<HttpResponse> _doRequestImp(
+      Map<String, dynamic> parameters, dynamic body) async {
+    if (canHttpMethodHaveBody(method)) {
       body ??= this.body;
-    }
-    else {
-      body = null ;
+    } else {
+      body = null;
     }
 
-    var response = await requestHttpClient(client, method, path, fullPath, parameters, body) ;
-    return response ;
+    var response = await requestHttpClient(
+        client, method, path, fullPath, parameters, body);
+    return response;
   }
 
   Map<String, String> toQueryParameters(Map<String, dynamic> parameters) {
-    Map<String,String> queryParameters ;
+    Map<String, String> queryParameters;
     if (parameters != null) {
-      queryParameters = parameters.map((key, value) => MapEntry('$key', '$value')) ;
+      queryParameters =
+          parameters.map((key, value) => MapEntry('$key', '$value'));
     }
     return queryParameters;
   }
@@ -1291,23 +1296,29 @@ class HttpCall<R> {
   /// Method responsible to request the [HttpClient].
   ///
   /// Can be overwritten by other implementations.
-  Future<HttpResponse> requestHttpClient(HttpClient client, HttpMethod method, String path, bool fullPath, Map<String,dynamic> parameters, dynamic body) {
+  Future<HttpResponse> requestHttpClient(
+      HttpClient client,
+      HttpMethod method,
+      String path,
+      bool fullPath,
+      Map<String, dynamic> parameters,
+      dynamic body) {
     var queryParameters = toQueryParameters(parameters);
-    return client.request(method, path, fullPath: fullPath, queryParameters: queryParameters, body: body) ;
+    return client.request(method, path,
+        fullPath: fullPath, queryParameters: queryParameters, body: body);
   }
 
   /// Method responsible to resolve the [response] to a [R] value.
   ///
   /// Can be overwritten by other implementations.
   R resolveResponse(HttpResponse response) {
-    if ( !response.isOK ) {
-      throw StateError("Can't perform request. Response{ status: ${response.status} ; body: ${response.body}} > $this") ;
-    }
-    else if ( response.isBodyTypeJSON ) {
-      return response.json as R ;
-    }
-    else {
-      return response.body as R ;
+    if (!response.isOK) {
+      throw StateError(
+          "Can't perform request. Response{ status: ${response.status} ; body: ${response.body}} > $this");
+    } else if (response.isBodyTypeJSON) {
+      return response.json as R;
+    } else {
+      return response.body as R;
     }
   }
 
@@ -1315,9 +1326,7 @@ class HttpCall<R> {
   String toString() {
     return 'HttpCall{client: $client, method: $method, path: $path, fullPath: $fullPath, body: $body, maxRetries: $maxRetries}';
   }
-
 }
-
 
 /// Mercury HTTP Client.
 class HttpClient {
@@ -1495,10 +1504,10 @@ class HttpClient {
   Future<Authorization> _resolveAuthorization() async {
     if (_authorization == null) return Future.value(null);
 
-    if ( _authorization.isResolvingCredential ) {
+    if (_authorization.isResolvingCredential) {
       print('WARNING: '
-          'Authorization[${ _authorization.runtimeType }] is already resolving a credential! '
-          '(NOTE: Do not use this client instance for network resolution while resolving a Credential)') ;
+          'Authorization[${_authorization.runtimeType}] is already resolving a credential! '
+          '(NOTE: Do not use this client instance for network resolution while resolving a Credential)');
     }
 
     await _authorization.resolveCredential(this, null);
