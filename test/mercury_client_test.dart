@@ -80,7 +80,7 @@ class TestServer {
 }
 
 void main() {
-  group('A group of tests', () {
+  group('HttpClient', () {
     TestServer testServer;
 
     setUp(() {
