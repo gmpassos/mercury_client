@@ -110,7 +110,7 @@ void main() {
       testServer.waitOpen();
 
       var client = HttpClient('http://localhost:${testServer.port}/tests');
-      expect(client.baseURL, matches(RegExp(r'http://localhost:\d+/tests')));
+      expect(client.baseURL, matches(RegExp(r'^http://localhost:\d+/tests$')));
 
       var response = await client.post('foo',
           parameters: {'á': '12 3', 'b': '456'},
@@ -123,6 +123,25 @@ void main() {
           response.body,
           equals(
               'Hello, world! Method: POST ; Path: /tests/foo?%C3%A1=12+3&b=456 ; Content-Type: application/json <Boooodyyy!>'));
+    });
+
+    test('Method POS: path pattern', () async {
+      testServer.waitOpen();
+
+      var client = HttpClient('http://localhost:${testServer.port}/tests');
+      expect(client.baseURL, matches(RegExp(r'^http://localhost:\d+/tests$')));
+
+      var response = await client.post('foo/{{id}}',
+          parameters: {'á': '12 3', 'b': '456', 'id': '1001'},
+          body: 'Body!',
+          contentType: 'application/json');
+
+      expect(response.isOK, equals(true));
+
+      expect(
+          response.body,
+          equals(
+              'Hello, world! Method: POST ; Path: /tests/foo/1001?%C3%A1=12+3&b=456&id=1001 ; Content-Type: application/json <Body!>'));
     });
   });
 }
