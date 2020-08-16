@@ -5,6 +5,7 @@
 - Request `parameters` now accepts variables in values: `{{var}}`.
 - dartfmt.
 - swiss_knife: ^2.5.10
+- CI: dartanalyzer
 
 ## 1.1.9
 
