@@ -1,3 +1,10 @@
+## 1.1.12
+
+- `buildURLWithQueryParameters`:
+  - avoid empty fragment in URL.
+  - new parameter `removeFragment` to force null URL fragment. 
+- swiss_knife: ^2.5.13
+
 ## 1.1.11
 
 - swiss_knife: ^2.5.12

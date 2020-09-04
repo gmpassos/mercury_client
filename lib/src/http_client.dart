@@ -658,7 +658,7 @@ class QueryStringCredential extends Credential {
   /// Builds the [HttpRequest] URL.
   @override
   String buildURL(String url) {
-    return buildURLWithQueryParameters(url, fields);
+    return buildURLWithQueryParameters(url, fields, removeFragment: true);
   }
 }
 
@@ -753,21 +753,29 @@ class JSONBodyCredential extends Credential {
   }
 }
 
-/// Builds an URL with Query parameters adding the map [fields] to current
+/// Builds an URL with Query parameters adding the map [parameters] to current
 /// Query parameters.
-String buildURLWithQueryParameters(String url, Map<String, String> fields) {
-  if (fields == null || fields.isEmpty) return url;
+///
+/// [removeFragment] If [true] will remove URL fragment.
+String buildURLWithQueryParameters(String url, Map<String, String> parameters,
+    {bool removeFragment = false}) {
+  if (parameters == null || parameters.isEmpty) return url;
 
   var uri = Uri.parse(url);
 
   Map<String, String> queryParameters;
 
   if (uri.query == null || uri.query.isEmpty) {
-    queryParameters = Map.from(fields);
+    queryParameters = Map.from(parameters);
   } else {
     queryParameters = uri.queryParameters ?? {};
     queryParameters = Map.from(queryParameters);
-    queryParameters.addAll(fields);
+    queryParameters.addAll(parameters);
+  }
+
+  var fragment = uri.fragment;
+  if ((removeFragment ?? false) || (fragment != null && fragment.isEmpty)) {
+    fragment = null;
   }
 
   return Uri(
@@ -777,7 +785,7 @@ String buildURLWithQueryParameters(String url, Map<String, String> fields) {
           port: uri.port,
           path: Uri.decodeComponent(uri.path),
           queryParameters: queryParameters,
-          fragment: uri.fragment)
+          fragment: fragment)
       .toString();
 }
 
@@ -1201,7 +1209,8 @@ abstract class HttpClientRequester {
   String buildRequestURL(HttpClient client, String url,
       [Authorization authorization, Map<String, String> queryParameters]) {
     if (queryParameters != null && queryParameters.isNotEmpty) {
-      url = buildURLWithQueryParameters(url, queryParameters);
+      url = buildURLWithQueryParameters(url, queryParameters,
+          removeFragment: true);
     }
 
     if (authorization != null && authorization.isCredentialResolved) {
