@@ -1,3 +1,10 @@
+## 1.1.11
+
+- swiss_knife: ^2.5.12
+- pedantic: ^1.9.2
+- test: ^1.15.3
+- test_coverage: ^0.4.3
+
 ## 1.1.10
 
 - Added `HttpResponse.bodyMimeType`.
