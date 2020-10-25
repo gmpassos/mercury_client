@@ -273,7 +273,7 @@ class HttpBody {
       _content = content;
     } else if (isJSONType ||
         (_contentType == null && (content is Map || content is List))) {
-      _content = json.encode(content);
+      _content = encodeJSON(content);
       _contentType ??= MimeType.APPLICATION_JSON;
     } else if (content == null) {
       _content = null;
@@ -718,9 +718,9 @@ class JSONBodyCredential extends Credential {
   String buildJSONAuthorizationBodyJSON(String body) {
     if (body == null) {
       if (field == null || field.isEmpty) {
-        return json.encode(authorization);
+        return encodeJSON(authorization);
       } else {
-        return json.encode({'$field': authorization});
+        return encodeJSON({'$field': authorization});
       }
     }
 
@@ -749,7 +749,7 @@ class JSONBodyCredential extends Credential {
       bodyJson[field] = authorization;
     }
 
-    return json.encode(bodyJson);
+    return encodeJSON(bodyJson);
   }
 }
 
@@ -993,7 +993,8 @@ abstract class HttpClientRequester {
             accept: accept);
 
       default:
-        throw StateError("Can't handle method: ${EnumToString.parse(method)}");
+        throw StateError(
+            "Can't handle method: ${EnumToString.convertToString(method)}");
     }
   }
 
@@ -1790,6 +1791,10 @@ class HttpClient {
         uriParameters
             .forEach((k, v) => queryParameters.putIfAbsent(k, () => v));
       }
+    }
+
+    if (queryParameters != null && queryParameters.isEmpty) {
+      queryParameters = null;
     }
 
     var uri2;

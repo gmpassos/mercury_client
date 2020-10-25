@@ -1,3 +1,10 @@
+## 1.1.13
+
+- Using `encodeJSON` that accepts more dynamic trees.
+- Avoid empty querystring at the end of path (`.../foo?`) for empty `queryParameters`. 
+- enum_to_string: ^1.0.13
+- swiss_knife: ^2.5.16
+
 ## 1.1.12
 
 - `buildURLWithQueryParameters`:
