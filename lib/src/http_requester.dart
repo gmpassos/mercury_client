@@ -173,7 +173,7 @@ class HttpRequester {
       return asJSONPaging ?? httpResponse.json;
     }
 
-    return httpResponse.body;
+    return httpResponse.bodyAsString;
   }
 
   JSONPaging _asJSONPaging(HttpClient client, HttpResponse httpResponse) {

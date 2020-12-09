@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io' as io;
+import 'dart:typed_data';
+
+import 'package:swiss_knife/swiss_knife.dart';
 
 import 'http_client.dart';
 
@@ -40,6 +43,7 @@ class HttpClientRequesterIO extends HttpClientRequester {
   Future<HttpResponse> _processResponse(HttpClient client, HttpMethod method,
       String url, Uri requestURI, io.HttpClientResponse r) async {
     var contentType = r.headers.contentType;
+
     var body = await _decodeBody(contentType, r);
 
     var responseHeaders = await _decodeHeaders(r);
@@ -72,17 +76,39 @@ class HttpClientRequesterIO extends HttpClientRequester {
 
   ////////////////////////////////
 
-  Future<String> _decodeBody(
+  Future<HttpBody> _decodeBody(
       io.ContentType contentType, io.HttpClientResponse r) async {
-    var decoder = contentType != null
-        ? contentTypeToDecoder(contentType.mimeType, contentType.charset)
-        : latin1.decoder;
+    var mimeType =
+        contentType != null ? MimeType.parse(contentType.toString()) : null;
+
+    if (mimeType != null) {
+      if (mimeType.isStringType || mimeType.charset != null) {
+        var s = await _decodeBodyAsString(mimeType, r);
+        return HttpBody(s, mimeType);
+      } else {
+        var bytes = await _decodeBodyAsBytes(r);
+        return HttpBody(bytes, mimeType);
+      }
+    } else {
+      var bytes = await _decodeBodyAsBytes(r);
+      return HttpBody(bytes);
+    }
+  }
+
+  Future<List<int>> _decodeBodyAsBytes(io.HttpClientResponse r) async {
+    var bytes = await r.expand((e) => e).toList();
+    return bytes;
+  }
+
+  Future<String> _decodeBodyAsString(
+      MimeType mimeType, io.HttpClientResponse r) async {
+    var decoder =
+        mimeType != null ? contentTypeToDecoder(mimeType) : latin1.decoder;
     return decoder.bind(r).join();
   }
 
   Future<Map<String, String>> _decodeHeaders(io.HttpClientResponse r) async {
-    // ignore: omit_local_variable_types
-    Map<String, String> headers = {};
+    var headers = <String, String>{};
 
     r.headers.forEach((key, vals) {
       headers[key] = vals != null && vals.isNotEmpty ? vals[0] : null;
@@ -188,3 +214,23 @@ HttpClientRequester createHttpClientRequesterImpl() {
 Uri getHttpClientRuntimeUriImpl() {
   return Uri(scheme: 'http', host: 'localhost', port: 80);
 }
+
+class HttpBlobIO extends HttpBlob<TypedData> {
+  HttpBlobIO(TypedData blob, MimeType mimeType) : super(blob, mimeType);
+
+  @override
+  int size() => blob.lengthInBytes;
+
+  @override
+  Future<ByteBuffer> readByteBuffer() async {
+    return blob.buffer;
+  }
+}
+
+HttpBlob createHttpBlobImpl(dynamic content, MimeType mimeType) {
+  if (content == null) return null;
+  if (content is HttpBlob) return content;
+  return HttpBlobIO(content, mimeType);
+}
+
+bool isHttpBlobImpl(dynamic o) => o is HttpBlob;

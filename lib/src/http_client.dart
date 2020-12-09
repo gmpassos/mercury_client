@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:enum_to_string/enum_to_string.dart';
 import 'package:swiss_knife/swiss_knife.dart';
@@ -131,13 +132,181 @@ class HttpError extends HttpStatus {
   }
 }
 
+abstract class HttpBlob<B> {
+  final B blob;
+
+  final MimeType mimeType;
+
+  HttpBlob(
+    this.blob,
+    this.mimeType,
+  );
+
+  int size();
+
+  Future<ByteBuffer> readByteBuffer();
+}
+
+HttpBlob createHttpBlob(List content, MimeType mimeType) {
+  return createHttpBlobImpl(content, mimeType);
+}
+
+bool isHttpBlob(dynamic o) {
+  return isHttpBlobImpl(o);
+}
+
+/// A wrapper for multiple types of data body.
+class HttpBody {
+  final MimeType mimeType;
+  final dynamic _body;
+
+  factory HttpBody(dynamic body, [MimeType mimeType]) {
+    if (body == null) return null;
+    if (body is HttpBody) return body;
+    return HttpBody._(body, mimeType);
+  }
+
+  HttpBody._(this._body, [this.mimeType]);
+
+  bool get isNull => _body == null;
+
+  bool get isString => _body is String;
+
+  bool get isBlob => isHttpBlob(_body);
+
+  bool get isByteBuffer => _body is ByteBuffer;
+
+  bool get isBytesArray => _body is List<int>;
+
+  int get size {
+    if (isNull) return 0;
+
+    if (isString) {
+      return (_body as String).length;
+    } else if (isByteBuffer) {
+      var bytes = _body as ByteBuffer;
+      return bytes.lengthInBytes;
+    } else if (isBytesArray) {
+      var a = _body as List<int>;
+      return a.length;
+    } else if (isBlob) {
+      return asBlob.size();
+    } else {
+      return 0;
+    }
+  }
+
+  String get asString {
+    if (isNull) return null;
+
+    if (isString) {
+      return _body as String;
+    } else if (isByteBuffer) {
+      var bytes = _body as ByteBuffer;
+      var bits16 = mimeType != null && mimeType.isCharsetUTF16;
+      var bytesLists = bits16 ? bytes.asUint16List() : bytes.asUint8List();
+      return String.fromCharCodes(bytesLists);
+    } else if (isBytesArray) {
+      var a = _body as List<int>;
+      return String.fromCharCodes(a);
+    } else {
+      return null;
+    }
+  }
+
+  ByteBuffer get asByteBuffer {
+    if (isNull) return null;
+
+    if (isByteBuffer) {
+      return _body as ByteBuffer;
+    } else if (isBytesArray) {
+      var a = _body as List<int>;
+      if (a is TypedData) {
+        return (a as TypedData).buffer;
+      } else {
+        return Uint8List.fromList(a).buffer;
+      }
+    } else if (isString) {
+      var s = _body as String;
+      return Uint8List.fromList(s.codeUnits).buffer;
+    }
+
+    return null;
+  }
+
+  List<int> get asByteArray {
+    if (isNull) return null;
+
+    if (isByteBuffer) {
+      return (_body as ByteBuffer).asUint8List();
+    } else if (isBytesArray) {
+      return _body as List<int>;
+    } else if (isString) {
+      var s = _body as String;
+      return s.codeUnits;
+    }
+
+    return null;
+  }
+
+  HttpBlob get asBlob {
+    if (isNull) return null;
+
+    if (isBlob) {
+      if (_body is HttpBlob) return _body as HttpBlob;
+      return createHttpBlob(_body, mimeType);
+    } else if (isByteBuffer) {
+      return createHttpBlob([_body], mimeType);
+    } else if (isBytesArray) {
+      return createHttpBlob([_body], mimeType);
+    } else if (isString) {
+      return createHttpBlob([_body], mimeType);
+    }
+
+    return null;
+  }
+
+  Future<ByteBuffer> get asByteBufferAsync async {
+    var byteBuffer = asByteBuffer;
+    if (byteBuffer != null) return byteBuffer;
+
+    if (isBlob) {
+      var blob = _body as HttpBlob;
+      return blob.readByteBuffer();
+    }
+
+    return null;
+  }
+
+  Future<List<int>> get asByteArrayAsync async {
+    var a = asByteArray;
+    if (a != null) return a;
+    var bytes = await asByteBufferAsync;
+    return bytes.asUint8List();
+  }
+
+  Future<String> get asStringAsync async {
+    var s = asString;
+    if (s != null) return s;
+
+    var bytes = await asByteBufferAsync;
+    var bits16 = mimeType != null && mimeType.isCharsetUTF16;
+    var bytesLists = bits16 ? bytes.asUint16List() : bytes.asUint8List();
+    return bytes != null ? String.fromCharCodes(bytesLists) : null;
+  }
+
+  /// Alias to [asString].
+  @override
+  String toString() => asString ?? '';
+}
+
 /// The response of a [HttpRequest].
 class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
   /// Response Method
   final HttpMethod method;
 
   /// Response body.
-  final String body;
+  final HttpBody _body;
 
   /// A getter capable to get a header entry value.
   final ResponseHeaderGetter _responseHeaderGetter;
@@ -151,9 +320,10 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
   int _accessTime;
 
   HttpResponse(
-      this.method, String url, String requestedURL, int status, this.body,
+      this.method, String url, String requestedURL, int status, HttpBody body,
       [this._responseHeaderGetter, this.request])
-      : super(url, requestedURL, status) {
+      : _body = body,
+        super(url, requestedURL, status) {
     _accessTime = instanceTime;
   }
 
@@ -170,16 +340,22 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
         8 +
         8 +
         (method != null ? 4 : 0) +
-        (body != null ? body.length : 0) +
+        (_body != null ? _body.size : 0) +
         (url == requestedURL ? url.length : url.length + requestedURL.length);
     return memory;
   }
 
+  /// Returns the response [HttpBody].
+  HttpBody get body => _body;
+
+  /// Returns the [body] as [String].
+  String get bodyAsString => _body?.asString;
+
   /// Returns the [body] as JSON.
-  dynamic get json => hasBody ? jsonDecode(body) : null;
+  dynamic get json => hasBody ? jsonDecode(bodyAsString) : null;
 
   /// Returns [true] if has [body].
-  bool get hasBody => body != null && body.isNotEmpty;
+  bool get hasBody => _body != null && _body.size > 0;
 
   /// The [body] type (Content-Type).
   String get bodyType => getResponseHeader('Content-Type');
@@ -222,7 +398,7 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
   String toString([bool withBody]) {
     withBody ??= false;
     var infos = 'method: $method, requestedURL: $requestedURL, status: $status';
-    if (withBody) infos += ', body: $body';
+    if (withBody) infos += ', body: $bodyAsString';
     return 'RESTResponse{$infos}';
   }
 
@@ -241,8 +417,8 @@ typedef HttpBodyBuilderTyped = dynamic Function(
     Map<String, String> parameters, String type);
 
 /// Represents a body content, used by [HttpRequest].
-class HttpBody {
-  static final HttpBody NULL = HttpBody(null, null);
+class HttpRequestBody {
+  static final HttpRequestBody NULL = HttpRequestBody(null, null);
 
   /// Normalizes a Content-Type, allowing aliases like: json, png, jpeg and javascript.
   static String normalizeType(String bodyType) {
@@ -251,11 +427,12 @@ class HttpBody {
 
   ////////
 
-  String _content;
+  HttpBody _content;
 
   String _contentType;
 
-  HttpBody(dynamic content, String type, [Map<String, String> parameters]) {
+  HttpRequestBody(dynamic content, String type,
+      [Map<String, String> parameters]) {
     _contentType = normalizeType(type);
 
     if (content is HttpBodyBuilder) {
@@ -269,24 +446,41 @@ class HttpBody {
       content = f();
     }
 
-    if (content is String) {
+    if (content == null) {
+      _content = null;
+    } else if (content is HttpBody) {
       _content = content;
+    } else if (content is String) {
+      _content = HttpBody(content, MimeType.parse(_contentType));
     } else if (isJSONType ||
         (_contentType == null && (content is Map || content is List))) {
-      _content = encodeJSON(content);
       _contentType ??= MimeType.APPLICATION_JSON;
-    } else if (content == null) {
-      _content = null;
+      var jsonEncoded = encodeJSON(content);
+      _content = HttpBody(jsonEncoded, MimeType.parse(_contentType));
     } else {
-      _content = '$content';
+      _content = HttpBody(content.toString(), MimeType.parse(_contentType));
     }
   }
 
   /// Content of the body.
-  String get content => _content;
+  String get contentAsString {
+    return _content?.asString;
+  }
+
+  dynamic get contentAsSendData {
+    if (_content == null) return null;
+    if (_content.isString) return _content.asString;
+    if (_content.isByteBuffer) return _content.asByteBuffer;
+    if (_content.isBytesArray) return _content.asByteArray;
+    if (_content.isBlob) return _content.asBlob.blob;
+    return _content.asString;
+  }
 
   /// Type of the body (Content-Type header).
   String get contentType => _contentType;
+
+  /// Returns [true] if has content.
+  bool get hasContent => _content != null;
 
   /// Returns [true] if has no content.
   bool get hasNoContent => _content == null;
@@ -480,7 +674,7 @@ abstract class Credential {
   }
 
   /// Builds the [HttpRequest] body. Used by credentials that injects tokens/credentials in the body.
-  HttpBody buildBody(HttpBody body) {
+  HttpRequestBody buildBody(HttpRequestBody body) {
     return null;
   }
 }
@@ -701,22 +895,23 @@ class JSONBodyCredential extends Credential {
 
   /// Builds the [HttpRequest] body with the [Credential].
   @override
-  HttpBody buildBody(HttpBody body) {
+  HttpRequestBody buildBody(HttpRequestBody body) {
     if (body == null || body.isNull) {
       return buildJSONAuthorizationBody(null);
     } else if (body.isJSONType) {
-      return buildJSONAuthorizationBody(body.content);
+      return buildJSONAuthorizationBody(body);
     } else {
       return body;
     }
   }
 
-  HttpBody buildJSONAuthorizationBody(String body) {
-    return HttpBody(buildJSONAuthorizationBodyJSON(body), 'application/json');
+  HttpRequestBody buildJSONAuthorizationBody(HttpRequestBody body) {
+    return HttpRequestBody(
+        buildJSONAuthorizationBodyJSON(body), 'application/json');
   }
 
-  String buildJSONAuthorizationBodyJSON(String body) {
-    if (body == null) {
+  String buildJSONAuthorizationBodyJSON(HttpRequestBody body) {
+    if (body == null || body.hasNoContent) {
       if (field == null || field.isEmpty) {
         return encodeJSON(authorization);
       } else {
@@ -724,7 +919,7 @@ class JSONBodyCredential extends Credential {
       }
     }
 
-    var bodyJson = json.decode(body);
+    var bodyJson = json.decode(body.contentAsString);
 
     if (field == null || field.isEmpty) {
       if (authorization is Map) {
@@ -908,7 +1103,7 @@ class HttpRequest {
     }
 
     var requestHeaders = client.clientRequester.buildRequestHeaders(
-        client, url, authorization, sendData, headerContentType, headerAccept);
+        client, url, authorization, headerContentType, headerAccept);
 
     // ignore: omit_local_variable_types
     Map<String, String> queryParameters =
@@ -1042,14 +1237,14 @@ abstract class HttpClientRequester {
       dynamic body,
       String contentType,
       String accept}) {
-    var httpBody = HttpBody(body, contentType, queryParameters);
+    var httpBody = HttpRequestBody(body, contentType, queryParameters);
     var requestBody = buildRequestBody(client, httpBody, authorization);
 
     if (queryParameters != null &&
         queryParameters.isNotEmpty &&
         requestBody.isNull) {
-      var requestHeaders = buildRequestHeaders(client, url, authorization,
-          requestBody.content, requestBody.contentType, accept);
+      var requestHeaders = buildRequestHeaders(
+          client, url, authorization, requestBody.contentType, accept);
       requestHeaders ??= {};
 
       var formData = buildPOSTFormData(queryParameters, requestHeaders);
@@ -1073,9 +1268,9 @@ abstract class HttpClientRequester {
               authorization: authorization,
               queryParameters: queryParameters,
               withCredentials: _withCredentials(client, authorization),
-              requestHeaders: buildRequestHeaders(client, url, authorization,
-                  requestBody.content, requestBody.contentType, accept),
-              sendData: requestBody.content),
+              requestHeaders: buildRequestHeaders(
+                  client, url, authorization, requestBody.contentType, accept),
+              sendData: requestBody.contentAsSendData),
           client.logRequests);
     }
   }
@@ -1086,7 +1281,7 @@ abstract class HttpClientRequester {
       dynamic body,
       String contentType,
       String accept}) {
-    var httpBody = HttpBody(body, contentType, queryParameters);
+    var httpBody = HttpRequestBody(body, contentType, queryParameters);
     var requestBody = buildRequestBody(client, httpBody, authorization);
 
     return doHttpRequest(
@@ -1096,9 +1291,9 @@ abstract class HttpClientRequester {
             authorization: authorization,
             queryParameters: queryParameters,
             withCredentials: _withCredentials(client, authorization),
-            requestHeaders: buildRequestHeaders(client, url, authorization,
-                requestBody.content, requestBody.contentType, accept),
-            sendData: requestBody.content),
+            requestHeaders: buildRequestHeaders(
+                client, url, authorization, requestBody.contentType, accept),
+            sendData: requestBody.contentAsSendData),
         client.logRequests);
   }
 
@@ -1108,7 +1303,7 @@ abstract class HttpClientRequester {
       dynamic body,
       String contentType,
       String accept}) {
-    var httpBody = HttpBody(body, contentType, queryParameters);
+    var httpBody = HttpRequestBody(body, contentType, queryParameters);
     var requestBody = buildRequestBody(client, httpBody, authorization);
 
     return doHttpRequest(
@@ -1118,9 +1313,9 @@ abstract class HttpClientRequester {
             authorization: authorization,
             queryParameters: queryParameters,
             withCredentials: _withCredentials(client, authorization),
-            requestHeaders: buildRequestHeaders(client, url, authorization,
-                requestBody.content, requestBody.contentType, accept),
-            sendData: requestBody.content),
+            requestHeaders: buildRequestHeaders(
+                client, url, authorization, requestBody.contentType, accept),
+            sendData: requestBody.contentAsSendData),
         client.logRequests);
   }
 
@@ -1130,7 +1325,7 @@ abstract class HttpClientRequester {
       dynamic body,
       String contentType,
       String accept}) {
-    var httpBody = HttpBody(body, contentType, queryParameters);
+    var httpBody = HttpRequestBody(body, contentType, queryParameters);
     var requestBody = buildRequestBody(client, httpBody, authorization);
 
     return doHttpRequest(
@@ -1140,9 +1335,9 @@ abstract class HttpClientRequester {
             authorization: authorization,
             queryParameters: queryParameters,
             withCredentials: _withCredentials(client, authorization),
-            requestHeaders: buildRequestHeaders(client, url, authorization,
-                requestBody.content, requestBody.contentType, accept),
-            sendData: requestBody.content),
+            requestHeaders: buildRequestHeaders(
+                client, url, authorization, requestBody.contentType, accept),
+            sendData: requestBody.contentAsSendData),
         client.logRequests);
   }
 
@@ -1177,10 +1372,7 @@ abstract class HttpClientRequester {
 
   /// Helper to build the request headers.
   Map<String, String> buildRequestHeaders(HttpClient client, String url,
-      [Authorization authorization,
-      dynamic body,
-      String contentType,
-      String accept]) {
+      [Authorization authorization, String contentType, String accept]) {
     var header = client.buildRequestHeaders(url);
 
     if (contentType != null) {
@@ -1223,14 +1415,14 @@ abstract class HttpClientRequester {
   }
 
   /// Helper to build the request body.
-  HttpBody buildRequestBody(
-      HttpClient client, HttpBody httpBody, Authorization authorization) {
+  HttpRequestBody buildRequestBody(HttpClient client, HttpRequestBody httpBody,
+      Authorization authorization) {
     if (authorization != null && authorization.isCredentialResolved) {
       var jsonBody = authorization.resolvedCredential.buildBody(httpBody);
       if (jsonBody != null) return jsonBody;
     }
 
-    return httpBody ?? HttpBody.NULL;
+    return httpBody ?? HttpRequestBody.NULL;
   }
 
   /// Closes the [HttpClientRequester] and internal instances.
@@ -1338,11 +1530,11 @@ class HttpCall<R> {
   R resolveResponse(HttpResponse response) {
     if (!response.isOK) {
       throw StateError(
-          "Can't perform request. Response{ status: ${response.status} ; body: ${response.body}} > $this");
+          "Can't perform request. Response{ status: ${response.status} ; body: ${response.bodyAsString}} > $this");
     } else if (response.isBodyTypeJSON) {
       return response.json as R;
     } else {
-      return response.body as R;
+      return response.bodyAsString as R;
     }
   }
 
@@ -1413,21 +1605,21 @@ class HttpClient {
             body: body,
             contentType: contentType,
             accept: accept)
-        .then((r) => _jsonDecode(r.body));
+        .then((r) => _jsonDecode(r.bodyAsString));
   }
 
   /// Does a GET request and returns a decoded JSON.
   Future<dynamic> getJSON(String path,
       {Credential authorization, Map<String, String> parameters}) async {
     return get(path, authorization: authorization, parameters: parameters)
-        .then((r) => _jsonDecode(r.body));
+        .then((r) => _jsonDecode(r.bodyAsString));
   }
 
   /// Does an OPTION request and returns a decoded JSON.
   Future<dynamic> optionsJSON(String path,
       {Credential authorization, Map<String, String> parameters}) async {
     return options(path, authorization: authorization, parameters: parameters)
-        .then((r) => _jsonDecode(r.body));
+        .then((r) => _jsonDecode(r.bodyAsString));
   }
 
   /// Does a POST request and returns a decoded JSON.
@@ -1441,7 +1633,7 @@ class HttpClient {
             parameters: parameters,
             body: body,
             contentType: contentType)
-        .then((r) => _jsonDecode(r.body));
+        .then((r) => _jsonDecode(r.bodyAsString));
   }
 
   /// Does a PUT request and returns a decoded JSON.
@@ -1449,7 +1641,7 @@ class HttpClient {
       {Credential authorization, dynamic body, String contentType}) async {
     return put(path,
             authorization: authorization, body: body, contentType: contentType)
-        .then((r) => _jsonDecode(r.body));
+        .then((r) => _jsonDecode(r.bodyAsString));
   }
 
   /// If set to true, sends credential to cross sites.
@@ -1824,7 +2016,7 @@ class HttpClient {
   }
 }
 
-typedef SimulateResponse = String Function(
+typedef SimulateResponse = dynamic Function(
     String url, Map<String, String> queryParameters);
 
 /// A Simulated [HttpClientRequester]. Usefull for tests and mocks.
@@ -1944,33 +2136,18 @@ class HttpClientRequesterSimulation extends HttpClientRequester {
 
     var respVal = resp(url, queryParameters);
 
-    var restResponse = HttpResponse(method, url, url, 200, respVal);
+    var restResponse = HttpResponse(method, url, url, 200, HttpBody(respVal));
 
     return Future.value(restResponse);
   }
 }
 
 /// Returns de decoder for a Content-Type at parameter [mimeType] and [charset].
-Converter<List<int>, String> contentTypeToDecoder(String mimeType,
-    [String charset]) {
-  if (charset != null) {
-    charset = charset.trim().toLowerCase();
-
-    if (charset == 'utf8' || charset == 'utf-8') {
-      return utf8.decoder;
-    } else if (charset == 'latin1' ||
-        charset == 'latin-1' ||
-        charset == 'iso-8859-1') {
-      return latin1.decoder;
-    }
-  }
-
+Converter<List<int>, String> contentTypeToDecoder(MimeType mimeType) {
   if (mimeType != null) {
-    mimeType = mimeType.trim().toLowerCase();
-
-    if (mimeType == 'application/json') {
+    if (mimeType.isJSON || mimeType.isCharsetUTF8) {
       return utf8.decoder;
-    } else if (mimeType == 'application/x-www-form-urlencoded') {
+    } else if (mimeType.isFormURLEncoded || mimeType.isCharsetLATIN1) {
       return latin1.decoder;
     }
   }

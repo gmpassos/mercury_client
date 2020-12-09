@@ -1,3 +1,11 @@
+## 1.1.14
+
+- Renamed `HttpBody` to `HttpRequestBody`.
+- New class `HttpBody`, to wrap multiple types of data body.
+- `HttpResponse.body` now is a `HttpBody` no a `String`.
+- enum_to_string: ^1.0.14
+- swiss_knife: ^2.5.19
+  
 ## 1.1.13
 
 - Using `encodeJSON` that accepts more dynamic trees.

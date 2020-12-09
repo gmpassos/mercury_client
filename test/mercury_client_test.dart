@@ -102,7 +102,7 @@ void main() {
 
       expect(response.isOK, equals(true));
 
-      expect(response.body,
+      expect(response.bodyAsString,
           equals('Hello, world! Method: GET ; Path: /tests/foo?a=123'));
     });
 
@@ -120,7 +120,7 @@ void main() {
       expect(response.isOK, equals(true));
 
       expect(
-          response.body,
+          response.bodyAsString,
           equals(
               'Hello, world! Method: POST ; Path: /tests/foo?%C3%A1=12+3&b=456 ; Content-Type: application/json <Boooodyyy!>'));
     });
@@ -139,7 +139,7 @@ void main() {
       expect(response.isOK, equals(true));
 
       expect(
-          response.body,
+          response.bodyAsString,
           equals(
               'Hello, world! Method: POST ; Path: /tests/foo/1001?%C3%A1=12+3&b=456&id=1001 ; Content-Type: application/json <Body!>'));
     });

@@ -471,7 +471,7 @@ class HttpCache {
             body: body,
             contentType: contentType,
             accept: accept)
-        .then((r) => _jsonDecode(r.body));
+        .then((r) => _jsonDecode(r.bodyAsString));
   }
 
   /// Does a GET request and decodes response to JSON.
@@ -483,7 +483,7 @@ class HttpCache {
             fullPath: fullPath,
             authorization: authorization,
             parameters: parameters)
-        .then((r) => _jsonDecode(r.body));
+        .then((r) => _jsonDecode(r.bodyAsString));
   }
 
   /// Does an OPTIONS request and decodes response to JSON.
@@ -495,7 +495,7 @@ class HttpCache {
             fullPath: fullPath,
             authorization: authorization,
             parameters: parameters)
-        .then((r) => _jsonDecode(r.body));
+        .then((r) => _jsonDecode(r.bodyAsString));
   }
 
   /// Does a POST request and decodes response to JSON.
@@ -511,7 +511,7 @@ class HttpCache {
             parameters: parameters,
             body: body,
             contentType: contentType)
-        .then((r) => _jsonDecode(r.body));
+        .then((r) => _jsonDecode(r.bodyAsString));
   }
 
   /// Does a PUT request and decodes response to JSON.
@@ -525,7 +525,7 @@ class HttpCache {
             authorization: authorization,
             body: body,
             contentType: contentType)
-        .then((r) => _jsonDecode(r.body));
+        .then((r) => _jsonDecode(r.bodyAsString));
   }
 
   dynamic _jsonDecode(String s) {

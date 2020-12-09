@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:html' as browser;
-import 'dart:html';
+import 'dart:typed_data';
+
+import 'package:swiss_knife/swiss_knife.dart';
 
 import 'http_client.dart';
 
@@ -60,7 +62,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
 
       if (accepted || fileUri || notModified || unknownRedirect) {
         var response =
-            _processResponse(client, request.method, request.url, xhr);
+            _processResponse(client, request, request.method, request.url, xhr);
         completer.complete(response);
       } else {
         _completeOnError(
@@ -185,15 +187,19 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     return true;
   }
 
-  HttpResponse _processResponse(HttpClient client, HttpMethod method,
-      String url, browser.HttpRequest xhr) {
-    var resp = HttpResponse(method, url, xhr.responseUrl, xhr.status,
-        xhr.responseText, (key) => xhr.getResponseHeader(key), xhr);
+  HttpResponse _processResponse(HttpClient client, HttpRequest request,
+      HttpMethod method, String url, browser.HttpRequest xhr) {
+    var contentType = xhr.getResponseHeader('Content-Type');
+
+    var body = HttpBody(xhr.response, MimeType.parse(contentType));
+
+    var response = HttpResponse(method, url, xhr.responseUrl, xhr.status, body,
+        (key) => xhr.getResponseHeader(key), xhr);
 
     var responseHeaderWithToken = client.responseHeaderWithToken;
 
     if (responseHeaderWithToken != null) {
-      var accessToken = resp.getResponseHeader(responseHeaderWithToken);
+      var accessToken = response.getResponseHeader(responseHeaderWithToken);
       if (accessToken != null && accessToken.isNotEmpty) {
         client.authorization =
             Authorization.fromCredential(BearerCredential(accessToken));
@@ -204,13 +210,13 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
 
     if (responseProcessor != null) {
       try {
-        responseProcessor(client, xhr, resp);
+        responseProcessor(client, xhr, response);
       } catch (e) {
         print(e);
       }
     }
 
-    return resp;
+    return response;
   }
 }
 
@@ -219,6 +225,52 @@ HttpClientRequester createHttpClientRequesterImpl() {
 }
 
 Uri getHttpClientRuntimeUriImpl() {
-  var href = Uri.parse(window.location.href);
+  var href = Uri.parse(browser.window.location.href);
   return href;
 }
+
+class HttpBlobBrowser extends HttpBlob<browser.Blob> {
+  HttpBlobBrowser(browser.Blob blob, MimeType mimeType) : super(blob, mimeType);
+
+  @override
+  int size() => blob.size;
+
+  @override
+  Future<ByteBuffer> readByteBuffer() {
+    var completer = Completer<ByteBuffer>();
+
+    var reader = browser.FileReader();
+
+    reader.onLoadEnd.listen((e) {
+      var result = reader.result;
+
+      ByteBuffer data;
+      if (result is ByteBuffer) {
+        data = result;
+      } else if (result is String) {
+        data = Uint16List.fromList(result.codeUnits).buffer;
+      } else if (result is List<int>) {
+        if (result is TypedData) {
+          data = (result as TypedData).buffer;
+        } else {
+          data = Uint8List.fromList(result).buffer;
+        }
+      }
+      completer.complete(data);
+    });
+
+    reader.readAsArrayBuffer(blob);
+
+    return completer.future;
+  }
+}
+
+HttpBlob createHttpBlobImpl(dynamic content, MimeType mimeType) {
+  if (content == null) return null;
+  if (content is HttpBlob) return content;
+  if (content is browser.Blob) return HttpBlobBrowser(content, mimeType);
+  var blob = browser.Blob([content], mimeType?.toString());
+  return HttpBlobBrowser(blob, mimeType);
+}
+
+bool isHttpBlobImpl(dynamic o) => o is HttpBlob || o is browser.Blob;
