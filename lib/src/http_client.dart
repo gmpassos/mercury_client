@@ -172,6 +172,8 @@ class HttpBody {
 
   bool get isString => _body is String;
 
+  bool get isMap => _body is Map;
+
   bool get isBlob => isHttpBlob(_body);
 
   bool get isByteBuffer => _body is ByteBuffer;
@@ -183,6 +185,8 @@ class HttpBody {
 
     if (isString) {
       return (_body as String).length;
+    } else if (isMap) {
+      return asString.length;
     } else if (isByteBuffer) {
       var bytes = _body as ByteBuffer;
       return bytes.lengthInBytes;
@@ -209,6 +213,8 @@ class HttpBody {
     } else if (isBytesArray) {
       var a = _body as List<int>;
       return String.fromCharCodes(a);
+    } else if (isMap) {
+      return json.encode(_body);
     } else {
       return null;
     }
@@ -229,6 +235,9 @@ class HttpBody {
     } else if (isString) {
       var s = _body as String;
       return Uint8List.fromList(s.codeUnits).buffer;
+    } else if (isMap) {
+      var s = asString;
+      return Uint8List.fromList(s.codeUnits).buffer;
     }
 
     return null;
@@ -243,6 +252,9 @@ class HttpBody {
       return _body as List<int>;
     } else if (isString) {
       var s = _body as String;
+      return s.codeUnits;
+    } else if (isMap) {
+      var s = asString;
       return s.codeUnits;
     }
 
@@ -261,6 +273,8 @@ class HttpBody {
       return createHttpBlob([_body], mimeType);
     } else if (isString) {
       return createHttpBlob([_body], mimeType);
+    } else if (isMap) {
+      return createHttpBlob([asString], mimeType);
     }
 
     return null;
@@ -636,13 +650,24 @@ class _AuthorizationResolvable extends Authorization {
     if (_resolvedCredential != null) return _resolvedCredential;
 
     if (_resolveFuture != null) {
-      var credential = await _resolveFuture;
-      return _resolvedCredential ?? credential;
+      try {
+        var credential = await _resolveFuture;
+        return _resolvedCredential ?? credential;
+      } catch (e) {
+        return _resolvedCredential;
+      }
     }
 
     _resolveFuture = authorizationProvider(client, lastError);
 
-    var credential = await _resolveFuture;
+    Credential credential;
+    try {
+      credential = await _resolveFuture;
+    } catch (e, s) {
+      print(e);
+      print(s);
+    }
+
     _resolvedCredential = credential;
     _resolveFuture = null;
 
@@ -1171,18 +1196,21 @@ abstract class HttpClientRequester {
       case HttpMethod.PUT:
         return requestPUT(client, url,
             authorization: authorization,
+            queryParameters: queryParameters,
             body: body,
             contentType: contentType,
             accept: accept);
       case HttpMethod.PATCH:
         return requestPATCH(client, url,
             authorization: authorization,
+            queryParameters: queryParameters,
             body: body,
             contentType: contentType,
             accept: accept);
       case HttpMethod.DELETE:
         return requestDELETE(client, url,
             authorization: authorization,
+            queryParameters: queryParameters,
             body: body,
             contentType: contentType,
             accept: accept);
@@ -1305,6 +1333,15 @@ abstract class HttpClientRequester {
       String accept}) {
     var httpBody = HttpRequestBody(body, contentType, queryParameters);
     var requestBody = buildRequestBody(client, httpBody, authorization);
+
+    if (queryParameters != null &&
+        queryParameters.isNotEmpty &&
+        requestBody.isNull) {
+      var mimeType = MimeType.parse(MimeType.APPLICATION_JSON);
+      var body = HttpBody(queryParameters, mimeType);
+      httpBody = HttpRequestBody(body, contentType, queryParameters);
+      requestBody = buildRequestBody(client, httpBody, authorization);
+    }
 
     return doHttpRequest(
         client,
@@ -1562,6 +1599,8 @@ class HttpClient {
   HttpClient(String baseURL, [HttpClientRequester clientRequester]) {
     _id = ++_idCounter;
 
+    baseURL = baseURL.trimLeft();
+
     if (baseURL.endsWith('/')) {
       baseURL = baseURL.substring(0, baseURL.length - 1);
     }
@@ -1573,6 +1612,39 @@ class HttpClient {
     this.baseURL = baseURL;
 
     _clientRequester = clientRequester ?? createHttpClientRequester();
+  }
+
+  /// Returns a new [HttpClient] instance using [baseURL].
+  ///
+  /// [preserveAuthorization] if [true] will keep the same [authorization] instance.
+  /// NOTE: If the current instance is using the same [baseURL], [this] instance is returned.
+  HttpClient withBaseURL(String baseURL, {bool preserveAuthorization = false}) {
+    if (this.baseURL == baseURL) {
+      return this;
+    }
+    var httpClient = HttpClient(baseURL, clientRequester);
+
+    if (preserveAuthorization ?? false) {
+      httpClient._authorization = _authorization;
+    }
+
+    return httpClient;
+  }
+
+  /// Returns a new [HttpClient] instance using [basePath] as path of [baseURL].
+  HttpClient withBasePath(String basePath) {
+    var uri = Uri.parse(baseURL);
+
+    var uri2 = Uri(
+      scheme: uri.scheme,
+      host: uri.host,
+      port: (uri.port != 80 && uri.port != 443) ? uri.port : null,
+      path: basePath,
+      query: uri.hasQuery ? uri.query : null,
+      userInfo: isNotEmptyString(uri.userInfo) ? uri.userInfo : null,
+    );
+
+    return withBaseURL(uri2.toString());
   }
 
   /// The URL filter, if present.

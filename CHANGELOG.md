@@ -1,3 +1,13 @@
+## 1.1.15
+
+- `HttpClient`:
+  - `baseURL` now is normalized with `trimLeft()`, since any URI can't start with spaces.
+  - Added `withBasePath` and `withBaseURL`.
+  - `PUT`, `PATH` and `DELETE` now accepts `queryParameters`.
+- `Authorization`: credential resolution handles better exceptions when calling [authorizationProvider].
+- `HttpBody`: Added `isMap` and `asMap`.
+- swiss_knife: ^2.5.20
+
 ## 1.1.14
 
 - Renamed `HttpBody` to `HttpRequestBody`.
