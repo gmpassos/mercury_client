@@ -1093,6 +1093,9 @@ class HttpRequest {
   /// The query parameters of the request.
   final Map<String, String> queryParameters;
 
+  /// If [true] avoid a request URL with a `queryString`.
+  final bool noQueryString;
+
   /// Authorization instance for the request.
   final Authorization authorization;
 
@@ -1114,6 +1117,7 @@ class HttpRequest {
 
   HttpRequest(this.method, this.url, this.requestURL,
       {this.queryParameters,
+      this.noQueryString,
       this.authorization,
       this.withCredentials,
       this.responseType,
@@ -1131,19 +1135,29 @@ class HttpRequest {
         client, url, authorization, headerContentType, headerAccept);
 
     // ignore: omit_local_variable_types
-    Map<String, String> queryParameters =
-        this.queryParameters != null ? Map.from(this.queryParameters) : null;
-    var requestURL = client.clientRequester
-        .buildRequestURL(client, url, authorization, queryParameters);
+    Map<String, String> queryParameters = this.queryParameters != null
+        ? Map<String, String>.from(this.queryParameters)
+        : null;
 
-    var copy = HttpRequest(method, url, requestURL,
-        queryParameters: queryParameters,
+    var requestURL = client.clientRequester.buildRequestURL(client, url,
         authorization: authorization,
-        withCredentials: withCredentials,
-        responseType: responseType,
-        mimeType: mimeType,
-        requestHeaders: requestHeaders,
-        sendData: sendData);
+        queryParameters: queryParameters,
+        noQueryString: noQueryString);
+
+    var copy = HttpRequest(
+      method,
+      url,
+      requestURL,
+      queryParameters: queryParameters,
+      noQueryString: noQueryString,
+      authorization: authorization,
+      withCredentials: withCredentials,
+      responseType: responseType,
+      mimeType: mimeType,
+      requestHeaders: requestHeaders,
+      sendData: sendData,
+    );
+
     copy._retries = _retries;
 
     return copy;
@@ -1176,20 +1190,26 @@ abstract class HttpClientRequester {
   Future<HttpResponse> request(HttpClient client, HttpMethod method, String url,
       {Authorization authorization,
       Map<String, String> queryParameters,
+      bool noQueryString = false,
       dynamic body,
       String contentType,
       String accept}) {
     switch (method) {
       case HttpMethod.GET:
         return requestGET(client, url,
-            authorization: authorization, queryParameters: queryParameters);
+            authorization: authorization,
+            queryParameters: queryParameters,
+            noQueryString: noQueryString);
       case HttpMethod.OPTIONS:
         return requestOPTIONS(client, url,
-            authorization: authorization, queryParameters: queryParameters);
+            authorization: authorization,
+            queryParameters: queryParameters,
+            noQueryString: noQueryString);
       case HttpMethod.POST:
         return requestPOST(client, url,
             authorization: authorization,
             queryParameters: queryParameters,
+            noQueryString: noQueryString,
             body: body,
             contentType: contentType,
             accept: accept);
@@ -1197,6 +1217,7 @@ abstract class HttpClientRequester {
         return requestPUT(client, url,
             authorization: authorization,
             queryParameters: queryParameters,
+            noQueryString: noQueryString,
             body: body,
             contentType: contentType,
             accept: accept);
@@ -1204,6 +1225,7 @@ abstract class HttpClientRequester {
         return requestPATCH(client, url,
             authorization: authorization,
             queryParameters: queryParameters,
+            noQueryString: noQueryString,
             body: body,
             contentType: contentType,
             accept: accept);
@@ -1211,6 +1233,7 @@ abstract class HttpClientRequester {
         return requestDELETE(client, url,
             authorization: authorization,
             queryParameters: queryParameters,
+            noQueryString: noQueryString,
             body: body,
             contentType: contentType,
             accept: accept);
@@ -1234,11 +1257,18 @@ abstract class HttpClientRequester {
   }
 
   Future<HttpResponse> requestGET(HttpClient client, String url,
-      {Authorization authorization, Map<String, String> queryParameters}) {
+      {Authorization authorization,
+      Map<String, String> queryParameters,
+      bool noQueryString = false}) {
     return doHttpRequest(
         client,
-        HttpRequest(HttpMethod.GET, url,
-            buildRequestURL(client, url, authorization, queryParameters),
+        HttpRequest(
+            HttpMethod.GET,
+            url,
+            buildRequestURL(client, url,
+                authorization: authorization,
+                queryParameters: queryParameters,
+                noQueryString: noQueryString),
             authorization: authorization,
             queryParameters: queryParameters,
             withCredentials: _withCredentials(client, authorization),
@@ -1247,21 +1277,30 @@ abstract class HttpClientRequester {
   }
 
   Future<HttpResponse> requestOPTIONS(HttpClient client, String url,
-      {Authorization authorization, Map<String, String> queryParameters}) {
+      {Authorization authorization,
+      Map<String, String> queryParameters,
+      bool noQueryString = false}) {
     return doHttpRequest(
         client,
-        HttpRequest(HttpMethod.OPTIONS, url,
-            buildRequestURL(client, url, authorization, queryParameters),
-            authorization: authorization,
-            queryParameters: queryParameters,
-            withCredentials: _withCredentials(client, authorization),
-            requestHeaders: buildRequestHeaders(client, url, authorization)),
+        HttpRequest(
+          HttpMethod.OPTIONS,
+          url,
+          buildRequestURL(client, url,
+              authorization: authorization,
+              queryParameters: queryParameters,
+              noQueryString: noQueryString),
+          authorization: authorization,
+          queryParameters: queryParameters,
+          withCredentials: _withCredentials(client, authorization),
+          requestHeaders: buildRequestHeaders(client, url, authorization),
+        ),
         client.logRequests);
   }
 
   Future<HttpResponse> requestPOST(HttpClient client, String url,
       {Authorization authorization,
       Map<String, String> queryParameters,
+      bool noQueryString = false,
       dynamic body,
       String contentType,
       String accept}) {
@@ -1281,24 +1320,34 @@ abstract class HttpClientRequester {
       return doHttpRequest(
           client,
           HttpRequest(
-              HttpMethod.POST, url, buildRequestURL(client, url, authorization),
-              authorization: authorization,
-              queryParameters: queryParameters,
-              withCredentials: _withCredentials(client, authorization),
-              requestHeaders: requestHeaders,
-              sendData: formData),
+            HttpMethod.POST,
+            url,
+            buildRequestURL(client, url,
+                authorization: authorization, noQueryString: noQueryString),
+            authorization: authorization,
+            queryParameters: queryParameters,
+            withCredentials: _withCredentials(client, authorization),
+            requestHeaders: requestHeaders,
+            sendData: formData,
+          ),
           client.logRequests);
     } else {
       return doHttpRequest(
           client,
-          HttpRequest(HttpMethod.POST, url,
-              buildRequestURL(client, url, authorization, queryParameters),
-              authorization: authorization,
-              queryParameters: queryParameters,
-              withCredentials: _withCredentials(client, authorization),
-              requestHeaders: buildRequestHeaders(
-                  client, url, authorization, requestBody.contentType, accept),
-              sendData: requestBody.contentAsSendData),
+          HttpRequest(
+            HttpMethod.POST,
+            url,
+            buildRequestURL(client, url,
+                authorization: authorization,
+                queryParameters: queryParameters,
+                noQueryString: noQueryString),
+            authorization: authorization,
+            queryParameters: queryParameters,
+            withCredentials: _withCredentials(client, authorization),
+            requestHeaders: buildRequestHeaders(
+                client, url, authorization, requestBody.contentType, accept),
+            sendData: requestBody.contentAsSendData,
+          ),
           client.logRequests);
     }
   }
@@ -1306,6 +1355,7 @@ abstract class HttpClientRequester {
   Future<HttpResponse> requestPUT(HttpClient client, String url,
       {Authorization authorization,
       Map<String, String> queryParameters,
+      bool noQueryString = false,
       dynamic body,
       String contentType,
       String accept}) {
@@ -1315,19 +1365,24 @@ abstract class HttpClientRequester {
     return doHttpRequest(
         client,
         HttpRequest(
-            HttpMethod.PUT, url, buildRequestURL(client, url, authorization),
-            authorization: authorization,
-            queryParameters: queryParameters,
-            withCredentials: _withCredentials(client, authorization),
-            requestHeaders: buildRequestHeaders(
-                client, url, authorization, requestBody.contentType, accept),
-            sendData: requestBody.contentAsSendData),
+          HttpMethod.PUT,
+          url,
+          buildRequestURL(client, url,
+              authorization: authorization, noQueryString: noQueryString),
+          authorization: authorization,
+          queryParameters: queryParameters,
+          withCredentials: _withCredentials(client, authorization),
+          requestHeaders: buildRequestHeaders(
+              client, url, authorization, requestBody.contentType, accept),
+          sendData: requestBody.contentAsSendData,
+        ),
         client.logRequests);
   }
 
   Future<HttpResponse> requestPATCH(HttpClient client, String url,
       {Authorization authorization,
       Map<String, String> queryParameters,
+      bool noQueryString = false,
       dynamic body,
       String contentType,
       String accept}) {
@@ -1346,19 +1401,24 @@ abstract class HttpClientRequester {
     return doHttpRequest(
         client,
         HttpRequest(
-            HttpMethod.PATCH, url, buildRequestURL(client, url, authorization),
-            authorization: authorization,
-            queryParameters: queryParameters,
-            withCredentials: _withCredentials(client, authorization),
-            requestHeaders: buildRequestHeaders(
-                client, url, authorization, requestBody.contentType, accept),
-            sendData: requestBody.contentAsSendData),
+          HttpMethod.PATCH,
+          url,
+          buildRequestURL(client, url,
+              authorization: authorization, noQueryString: noQueryString),
+          authorization: authorization,
+          queryParameters: queryParameters,
+          withCredentials: _withCredentials(client, authorization),
+          requestHeaders: buildRequestHeaders(
+              client, url, authorization, requestBody.contentType, accept),
+          sendData: requestBody.contentAsSendData,
+        ),
         client.logRequests);
   }
 
   Future<HttpResponse> requestDELETE(HttpClient client, String url,
       {Authorization authorization,
       Map<String, String> queryParameters,
+      bool noQueryString = false,
       dynamic body,
       String contentType,
       String accept}) {
@@ -1368,13 +1428,17 @@ abstract class HttpClientRequester {
     return doHttpRequest(
         client,
         HttpRequest(
-            HttpMethod.DELETE, url, buildRequestURL(client, url, authorization),
-            authorization: authorization,
-            queryParameters: queryParameters,
-            withCredentials: _withCredentials(client, authorization),
-            requestHeaders: buildRequestHeaders(
-                client, url, authorization, requestBody.contentType, accept),
-            sendData: requestBody.contentAsSendData),
+          HttpMethod.DELETE,
+          url,
+          buildRequestURL(client, url,
+              authorization: authorization, noQueryString: noQueryString),
+          authorization: authorization,
+          queryParameters: queryParameters,
+          withCredentials: _withCredentials(client, authorization),
+          requestHeaders: buildRequestHeaders(
+              client, url, authorization, requestBody.contentType, accept),
+          sendData: requestBody.contentAsSendData,
+        ),
         client.logRequests);
   }
 
@@ -1437,7 +1501,9 @@ abstract class HttpClientRequester {
 
   /// Helper to build the request URL.
   String buildRequestURL(HttpClient client, String url,
-      [Authorization authorization, Map<String, String> queryParameters]) {
+      {Authorization authorization,
+      Map<String, String> queryParameters,
+      bool noQueryString = false}) {
     if (queryParameters != null && queryParameters.isNotEmpty) {
       url = buildURLWithQueryParameters(url, queryParameters,
           removeFragment: true);
@@ -1446,6 +1512,10 @@ abstract class HttpClientRequester {
     if (authorization != null && authorization.isCredentialResolved) {
       var authorizationURL = authorization.resolvedCredential.buildURL(url);
       if (authorizationURL != null) return authorizationURL;
+    }
+
+    if (noQueryString ?? false) {
+      url = removeUriQueryString(url).toString();
     }
 
     return url;
@@ -1810,12 +1880,11 @@ class HttpClient {
       Map<String, String> parameters,
       dynamic body,
       String contentType,
-      String accept}) async {
+      String accept,
+      bool noQueryString = false}) async {
     var url = buildMethodRequestURL(method, path, fullPath, parameters);
 
-    var ret_url_parameters = _build_URL_and_Parameters(
-        url, parameters, methodAcceptsQueryString(method));
-
+    var ret_url_parameters = _build_URL_and_Parameters(url, parameters);
     url = ret_url_parameters.key;
     parameters = ret_url_parameters.value;
 
@@ -1824,7 +1893,8 @@ class HttpClient {
         queryParameters: parameters,
         body: body,
         contentType: contentType,
-        accept: accept);
+        accept: accept,
+        noQueryString: noQueryString);
   }
 
   /// Builds the URL for [method] using [path] or [fullPath].
@@ -1835,6 +1905,7 @@ class HttpClient {
   Future<HttpResponse> requestURL(HttpMethod method, String url,
       {Credential authorization,
       Map<String, String> queryParameters,
+      noQueryString = false,
       dynamic body,
       String contentType,
       String accept}) async {
@@ -1842,6 +1913,7 @@ class HttpClient {
     return _clientRequester.request(this, method, url,
         authorization: requestAuthorization,
         queryParameters: queryParameters,
+        noQueryString: noQueryString,
         body: body,
         contentType: contentType,
         accept: accept);
@@ -1881,7 +1953,7 @@ class HttpClient {
       String accept}) async {
     var url = _buildURL(path, fullPath, parameters);
 
-    var ret_url_parameters = _build_URL_and_Parameters(url, parameters, false);
+    var ret_url_parameters = _build_URL_and_Parameters(url, parameters);
     url = ret_url_parameters.key;
     parameters = ret_url_parameters.value;
 
@@ -1904,7 +1976,7 @@ class HttpClient {
       String accept}) async {
     var url = _buildURL(path, fullPath, parameters);
 
-    var ret_url_parameters = _build_URL_and_Parameters(url, parameters, false);
+    var ret_url_parameters = _build_URL_and_Parameters(url, parameters);
     url = ret_url_parameters.key;
     parameters = ret_url_parameters.value;
 
@@ -1927,7 +1999,7 @@ class HttpClient {
       String accept}) async {
     var url = _buildURL(path, fullPath, parameters);
 
-    var ret_url_parameters = _build_URL_and_Parameters(url, parameters, false);
+    var ret_url_parameters = _build_URL_and_Parameters(url, parameters);
     url = ret_url_parameters.key;
     parameters = ret_url_parameters.value;
 
@@ -1950,7 +2022,7 @@ class HttpClient {
       String accept}) async {
     var url = _buildURL(path, fullPath, parameters);
 
-    var ret_url_parameters = _build_URL_and_Parameters(url, parameters, false);
+    var ret_url_parameters = _build_URL_and_Parameters(url, parameters);
     url = ret_url_parameters.key;
     parameters = ret_url_parameters.value;
 
@@ -1974,7 +2046,7 @@ class HttpClient {
   }
 
   MapEntry<String, Map<String, String>> _build_URL_and_Parameters(
-      String url, Map<String, String> parameters, bool allowURLQueryString) {
+      String url, Map<String, String> parameters) {
     var uri = Uri.parse(url);
 
     if (uri.queryParameters != null && uri.queryParameters.isNotEmpty) {
@@ -1991,8 +2063,26 @@ class HttpClient {
     return MapEntry(url, parameters);
   }
 
-  /// Builds a request URL, using [baseURL] with [path] or [fullPath].
-  String buildRequestURL(String path, bool fullPath,
+  /// Builds a Request URL, with the same rules of [requestURL].
+  String buildRequestURL(HttpMethod method, String path,
+      {bool fullPath,
+      Authorization authorization,
+      Map<String, String> parameters,
+      bool noQueryString = false}) {
+    var url = buildMethodRequestURL(method, path, fullPath, parameters);
+
+    var ret_url_parameters = _build_URL_and_Parameters(url, parameters);
+    url = ret_url_parameters.key;
+    parameters = ret_url_parameters.value;
+
+    return _clientRequester.buildRequestURL(this, url,
+        authorization: authorization,
+        queryParameters: parameters,
+        noQueryString: noQueryString);
+  }
+
+  /// Builds a URL, using [baseURL] with [path] or [fullPath].
+  String buildURL(String path, bool fullPath,
       [Map<String, String> queryParameters, bool allowURLQueryString = true]) {
     return _buildURL(path, fullPath, queryParameters, allowURLQueryString);
   }

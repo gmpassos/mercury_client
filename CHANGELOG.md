@@ -1,3 +1,7 @@
+## 1.1.16
+
+- `HttpRequest` and `HttpClient`: Added `noQueryString` parameter.
+
 ## 1.1.15
 
 - `HttpClient`:
