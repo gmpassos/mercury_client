@@ -47,6 +47,9 @@ class TestServer {
         response += ' <$body>';
       }
 
+      request.response.headers
+          .add('Content-Length', response.length, preserveHeaderCase: true);
+
       request.response.write(response);
       await request.response.close();
     }
@@ -98,12 +101,26 @@ void main() {
       var client = HttpClient('http://localhost:${testServer.port}/tests');
       expect(client.baseURL, matches(RegExp(r'http://localhost:\d+/tests')));
 
-      var response = await client.get('foo', parameters: {'a': '123'});
+      var progress = <String>[];
+
+      var response = await client.get('foo', parameters: {'a': '123'},
+          progressListener: (request, loaded, total, ratio, upload) {
+        progress.add('${upload ? 'upload' : 'download'}[$loaded/$total]');
+      });
 
       expect(response.isOK, equals(true));
 
       expect(response.bodyAsString,
           equals('Hello, world! Method: GET ; Path: /tests/foo?a=123'));
+
+      print('PROGRESS: $progress');
+
+      expect(
+          progress.firstWhere(
+                  (e) => e.contains('download[') && e.contains('/50]'),
+                  orElse: () => null) !=
+              null,
+          isTrue);
     });
 
     test('Method POST', () async {

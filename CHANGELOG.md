@@ -1,3 +1,8 @@
+## 1.1.17
+
+- Added parameter `queryString`.
+- Added `ProgressListener`.
+
 ## 1.1.16
 
 - `HttpRequest` and `HttpClient`: Added `noQueryString` parameter.

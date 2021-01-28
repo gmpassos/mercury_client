@@ -29,27 +29,37 @@ class HttpClientRequesterIO extends HttpClientRequester {
   }
 
   @override
-  Future<HttpResponse> doHttpRequest(
-      HttpClient client, HttpRequest request, bool log) async {
+  Future<HttpResponse> doHttpRequest(HttpClient client, HttpRequest request,
+      ProgressListener progressListener, bool log) async {
     var uri = Uri.parse(request.requestURL);
 
     var req = await _request(client, request, uri);
+    var response = await req.close();
 
-    var r = await req.close();
-
-    return _processResponse(client, request.method, request.url, uri, r);
+    return _processResponse(client, request, uri, response, progressListener);
   }
 
-  Future<HttpResponse> _processResponse(HttpClient client, HttpMethod method,
-      String url, Uri requestURI, io.HttpClientResponse r) async {
-    var contentType = r.headers.contentType;
+  Future<HttpResponse> _processResponse(
+      HttpClient client,
+      HttpRequest request,
+      Uri requestURI,
+      io.HttpClientResponse response,
+      ProgressListener progressListener) async {
+    var contentType = response.headers.contentType;
 
-    var body = await _decodeBody(contentType, r);
+    var body =
+        await _decodeBody(request, response, contentType, progressListener);
 
-    var responseHeaders = await _decodeHeaders(r);
+    var responseHeaders = await _decodeHeaders(response);
 
-    var resp = HttpResponse(method, url, requestURI.toString(), r.statusCode,
-        body, (key) => responseHeaders[key.toLowerCase()], r);
+    var resp = HttpResponse(
+        request.method,
+        request.url,
+        requestURI.toString(),
+        response.statusCode,
+        body,
+        (key) => responseHeaders[key.toLowerCase()],
+        response);
 
     var responseHeaderWithToken = client.responseHeaderWithToken;
 
@@ -65,7 +75,7 @@ class HttpClientRequesterIO extends HttpClientRequester {
 
     if (responseProcessor != null) {
       try {
-        responseProcessor(client, r, resp);
+        responseProcessor(client, response, resp);
       } catch (e) {
         print(e);
       }
@@ -77,34 +87,75 @@ class HttpClientRequesterIO extends HttpClientRequester {
   ////////////////////////////////
 
   Future<HttpBody> _decodeBody(
-      io.ContentType contentType, io.HttpClientResponse r) async {
+      HttpRequest request,
+      io.HttpClientResponse response,
+      io.ContentType contentType,
+      ProgressListener progressListener) async {
     var mimeType =
         contentType != null ? MimeType.parse(contentType.toString()) : null;
 
     if (mimeType != null) {
       if (mimeType.isStringType || mimeType.charset != null) {
-        var s = await _decodeBodyAsString(mimeType, r);
+        var s = await _decodeBodyAsString(
+            request, response, mimeType, progressListener);
         return HttpBody(s, mimeType);
       } else {
-        var bytes = await _decodeBodyAsBytes(r);
+        var bytes =
+            await _decodeBodyAsBytes(request, response, progressListener);
         return HttpBody(bytes, mimeType);
       }
     } else {
-      var bytes = await _decodeBodyAsBytes(r);
+      var bytes = await _decodeBodyAsBytes(request, response, progressListener);
       return HttpBody(bytes);
     }
   }
 
-  Future<List<int>> _decodeBodyAsBytes(io.HttpClientResponse r) async {
-    var bytes = await r.expand((e) => e).toList();
-    return bytes;
+  Future<List<int>> _decodeBodyAsBytes(HttpRequest request,
+      io.HttpClientResponse response, ProgressListener progressListener) async {
+    if (progressListener != null) {
+      var total = response.contentLength;
+      var loaded = 0;
+
+      return await response.expand((e) {
+        try {
+          loaded += e.length;
+          progressListener(request, loaded, total, loaded / total, false);
+        } catch (ex, st) {
+          print(ex);
+          print(st);
+        }
+        return e;
+      }).toList();
+    } else {
+      return await response.expand((e) => e).toList();
+    }
   }
 
   Future<String> _decodeBodyAsString(
-      MimeType mimeType, io.HttpClientResponse r) async {
+      HttpRequest request,
+      io.HttpClientResponse response,
+      MimeType mimeType,
+      ProgressListener progressListener) async {
     var decoder =
         mimeType != null ? contentTypeToDecoder(mimeType) : latin1.decoder;
-    return decoder.bind(r).join();
+
+    if (progressListener != null) {
+      var total = response.contentLength;
+      var loaded = 0;
+
+      return decoder.bind(response).map((e) {
+        try {
+          loaded += e.length;
+          progressListener(request, loaded, total, loaded / total, false);
+        } catch (ex, st) {
+          print(ex);
+          print(st);
+        }
+        return e;
+      }).join();
+    } else {
+      return decoder.bind(response).join();
+    }
   }
 
   Future<Map<String, String>> _decodeHeaders(io.HttpClientResponse r) async {

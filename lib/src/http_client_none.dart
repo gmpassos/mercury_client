@@ -7,8 +7,8 @@ import 'http_client.dart';
 
 class HttpClientRequesterNone extends HttpClientRequester {
   @override
-  Future<HttpResponse> doHttpRequest(
-      HttpClient client, HttpRequest request, bool log) {
+  Future<HttpResponse> doHttpRequest(HttpClient client, HttpRequest request,
+      ProgressListener progressListener, bool log) {
     return Future.error(HttpError(
         request.url,
         request.requestURL,

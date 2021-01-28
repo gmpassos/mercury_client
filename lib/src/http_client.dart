@@ -1184,6 +1184,9 @@ class HttpRequest {
   }
 }
 
+typedef ProgressListener = void Function(
+    HttpRequest request, int loaded, int total, double ratio, bool upload);
+
 /// Abstract [HttpClient] requester. This should implement the actual
 /// request process.
 abstract class HttpClientRequester {
@@ -1193,18 +1196,21 @@ abstract class HttpClientRequester {
       bool noQueryString = false,
       dynamic body,
       String contentType,
-      String accept}) {
+      String accept,
+      ProgressListener progressListener}) {
     switch (method) {
       case HttpMethod.GET:
         return requestGET(client, url,
             authorization: authorization,
             queryParameters: queryParameters,
-            noQueryString: noQueryString);
+            noQueryString: noQueryString,
+            progressListener: progressListener);
       case HttpMethod.OPTIONS:
         return requestOPTIONS(client, url,
             authorization: authorization,
             queryParameters: queryParameters,
-            noQueryString: noQueryString);
+            noQueryString: noQueryString,
+            progressListener: progressListener);
       case HttpMethod.POST:
         return requestPOST(client, url,
             authorization: authorization,
@@ -1212,7 +1218,8 @@ abstract class HttpClientRequester {
             noQueryString: noQueryString,
             body: body,
             contentType: contentType,
-            accept: accept);
+            accept: accept,
+            progressListener: progressListener);
       case HttpMethod.PUT:
         return requestPUT(client, url,
             authorization: authorization,
@@ -1220,7 +1227,8 @@ abstract class HttpClientRequester {
             noQueryString: noQueryString,
             body: body,
             contentType: contentType,
-            accept: accept);
+            accept: accept,
+            progressListener: progressListener);
       case HttpMethod.PATCH:
         return requestPATCH(client, url,
             authorization: authorization,
@@ -1228,7 +1236,8 @@ abstract class HttpClientRequester {
             noQueryString: noQueryString,
             body: body,
             contentType: contentType,
-            accept: accept);
+            accept: accept,
+            progressListener: progressListener);
       case HttpMethod.DELETE:
         return requestDELETE(client, url,
             authorization: authorization,
@@ -1236,7 +1245,8 @@ abstract class HttpClientRequester {
             noQueryString: noQueryString,
             body: body,
             contentType: contentType,
-            accept: accept);
+            accept: accept,
+            progressListener: progressListener);
 
       default:
         throw StateError(
@@ -1259,7 +1269,8 @@ abstract class HttpClientRequester {
   Future<HttpResponse> requestGET(HttpClient client, String url,
       {Authorization authorization,
       Map<String, String> queryParameters,
-      bool noQueryString = false}) {
+      bool noQueryString = false,
+      ProgressListener progressListener}) {
     return doHttpRequest(
         client,
         HttpRequest(
@@ -1273,13 +1284,15 @@ abstract class HttpClientRequester {
             queryParameters: queryParameters,
             withCredentials: _withCredentials(client, authorization),
             requestHeaders: buildRequestHeaders(client, url, authorization)),
+        progressListener,
         client.logRequests);
   }
 
   Future<HttpResponse> requestOPTIONS(HttpClient client, String url,
       {Authorization authorization,
       Map<String, String> queryParameters,
-      bool noQueryString = false}) {
+      bool noQueryString = false,
+      ProgressListener progressListener}) {
     return doHttpRequest(
         client,
         HttpRequest(
@@ -1294,6 +1307,7 @@ abstract class HttpClientRequester {
           withCredentials: _withCredentials(client, authorization),
           requestHeaders: buildRequestHeaders(client, url, authorization),
         ),
+        progressListener,
         client.logRequests);
   }
 
@@ -1303,7 +1317,8 @@ abstract class HttpClientRequester {
       bool noQueryString = false,
       dynamic body,
       String contentType,
-      String accept}) {
+      String accept,
+      ProgressListener progressListener}) {
     var httpBody = HttpRequestBody(body, contentType, queryParameters);
     var requestBody = buildRequestBody(client, httpBody, authorization);
 
@@ -1330,6 +1345,7 @@ abstract class HttpClientRequester {
             requestHeaders: requestHeaders,
             sendData: formData,
           ),
+          progressListener,
           client.logRequests);
     } else {
       return doHttpRequest(
@@ -1348,6 +1364,7 @@ abstract class HttpClientRequester {
                 client, url, authorization, requestBody.contentType, accept),
             sendData: requestBody.contentAsSendData,
           ),
+          progressListener,
           client.logRequests);
     }
   }
@@ -1358,7 +1375,8 @@ abstract class HttpClientRequester {
       bool noQueryString = false,
       dynamic body,
       String contentType,
-      String accept}) {
+      String accept,
+      ProgressListener progressListener}) {
     var httpBody = HttpRequestBody(body, contentType, queryParameters);
     var requestBody = buildRequestBody(client, httpBody, authorization);
 
@@ -1376,6 +1394,7 @@ abstract class HttpClientRequester {
               client, url, authorization, requestBody.contentType, accept),
           sendData: requestBody.contentAsSendData,
         ),
+        progressListener,
         client.logRequests);
   }
 
@@ -1385,7 +1404,8 @@ abstract class HttpClientRequester {
       bool noQueryString = false,
       dynamic body,
       String contentType,
-      String accept}) {
+      String accept,
+      ProgressListener progressListener}) {
     var httpBody = HttpRequestBody(body, contentType, queryParameters);
     var requestBody = buildRequestBody(client, httpBody, authorization);
 
@@ -1412,6 +1432,7 @@ abstract class HttpClientRequester {
               client, url, authorization, requestBody.contentType, accept),
           sendData: requestBody.contentAsSendData,
         ),
+        progressListener,
         client.logRequests);
   }
 
@@ -1421,7 +1442,8 @@ abstract class HttpClientRequester {
       bool noQueryString = false,
       dynamic body,
       String contentType,
-      String accept}) {
+      String accept,
+      ProgressListener progressListener}) {
     var httpBody = HttpRequestBody(body, contentType, queryParameters);
     var requestBody = buildRequestBody(client, httpBody, authorization);
 
@@ -1439,12 +1461,13 @@ abstract class HttpClientRequester {
               client, url, authorization, requestBody.contentType, accept),
           sendData: requestBody.contentAsSendData,
         ),
+        progressListener,
         client.logRequests);
   }
 
   /// Implements teh actual HTTP request for imported platform.
-  Future<HttpResponse> doHttpRequest(
-      HttpClient client, HttpRequest request, bool log);
+  Future<HttpResponse> doHttpRequest(HttpClient client, HttpRequest request,
+      ProgressListener progressListener, bool log);
 
   String buildPOSTFormData(Map<String, String> data,
       [Map<String, String> requestHeaders]) {
@@ -1878,13 +1901,16 @@ class HttpClient {
       {bool fullPath,
       Credential authorization,
       Map<String, String> parameters,
+      String queryString,
       dynamic body,
       String contentType,
       String accept,
-      bool noQueryString = false}) async {
+      bool noQueryString = false,
+      ProgressListener progressListener}) async {
     var url = buildMethodRequestURL(method, path, fullPath, parameters);
 
-    var ret_url_parameters = _build_URL_and_Parameters(url, parameters);
+    var ret_url_parameters =
+        _build_URL_and_Parameters(url, parameters, queryString);
     url = ret_url_parameters.key;
     parameters = ret_url_parameters.value;
 
@@ -1894,7 +1920,8 @@ class HttpClient {
         body: body,
         contentType: contentType,
         accept: accept,
-        noQueryString: noQueryString);
+        noQueryString: noQueryString,
+        progressListener: progressListener);
   }
 
   /// Builds the URL for [method] using [path] or [fullPath].
@@ -1908,7 +1935,8 @@ class HttpClient {
       noQueryString = false,
       dynamic body,
       String contentType,
-      String accept}) async {
+      String accept,
+      ProgressListener progressListener}) async {
     var requestAuthorization = await _buildRequestAuthorization(authorization);
     return _clientRequester.request(this, method, url,
         authorization: requestAuthorization,
@@ -1916,7 +1944,8 @@ class HttpClient {
         noQueryString: noQueryString,
         body: body,
         contentType: contentType,
-        accept: accept);
+        accept: accept,
+        progressListener: progressListener);
   }
 
   //////////////
@@ -1925,22 +1954,26 @@ class HttpClient {
   Future<HttpResponse> get(String path,
       {bool fullPath,
       Credential authorization,
-      Map<String, String> parameters}) async {
+      Map<String, String> parameters,
+      ProgressListener progressListener}) async {
     var url = _buildURL(path, fullPath, parameters, true);
     var requestAuthorization = await _buildRequestAuthorization(authorization);
     return _clientRequester.requestGET(this, url,
-        authorization: requestAuthorization);
+        authorization: requestAuthorization,
+        progressListener: progressListener);
   }
 
   /// Does an OPTIONS request.
   Future<HttpResponse> options(String path,
       {bool fullPath,
       Credential authorization,
-      Map<String, String> parameters}) async {
+      Map<String, String> parameters,
+      ProgressListener progressListener}) async {
     var url = _buildURL(path, fullPath, parameters, true);
     var requestAuthorization = await _buildRequestAuthorization(authorization);
     return _clientRequester.requestOPTIONS(this, url,
-        authorization: requestAuthorization);
+        authorization: requestAuthorization,
+        progressListener: progressListener);
   }
 
   /// Does a POST request.
@@ -1948,12 +1981,15 @@ class HttpClient {
       {bool fullPath,
       Credential authorization,
       Map<String, String> parameters,
+      String queryString,
       dynamic body,
       String contentType,
-      String accept}) async {
+      String accept,
+      ProgressListener progressListener}) async {
     var url = _buildURL(path, fullPath, parameters);
 
-    var ret_url_parameters = _build_URL_and_Parameters(url, parameters);
+    var ret_url_parameters =
+        _build_URL_and_Parameters(url, parameters, queryString);
     url = ret_url_parameters.key;
     parameters = ret_url_parameters.value;
 
@@ -1963,7 +1999,8 @@ class HttpClient {
         queryParameters: parameters,
         body: body,
         contentType: contentType,
-        accept: accept);
+        accept: accept,
+        progressListener: progressListener);
   }
 
   /// Does a PUT request.
@@ -1971,12 +2008,15 @@ class HttpClient {
       {bool fullPath,
       Credential authorization,
       Map<String, String> parameters,
+      String queryString,
       dynamic body,
       String contentType,
-      String accept}) async {
+      String accept,
+      ProgressListener progressListener}) async {
     var url = _buildURL(path, fullPath, parameters);
 
-    var ret_url_parameters = _build_URL_and_Parameters(url, parameters);
+    var ret_url_parameters =
+        _build_URL_and_Parameters(url, parameters, queryString);
     url = ret_url_parameters.key;
     parameters = ret_url_parameters.value;
 
@@ -1986,7 +2026,8 @@ class HttpClient {
         queryParameters: parameters,
         body: body,
         contentType: contentType,
-        accept: accept);
+        accept: accept,
+        progressListener: progressListener);
   }
 
   /// Does a PATCH request.
@@ -1994,12 +2035,15 @@ class HttpClient {
       {bool fullPath,
       Credential authorization,
       Map<String, String> parameters,
+      String queryString,
       dynamic body,
       String contentType,
-      String accept}) async {
+      String accept,
+      ProgressListener progressListener}) async {
     var url = _buildURL(path, fullPath, parameters);
 
-    var ret_url_parameters = _build_URL_and_Parameters(url, parameters);
+    var ret_url_parameters =
+        _build_URL_and_Parameters(url, parameters, queryString);
     url = ret_url_parameters.key;
     parameters = ret_url_parameters.value;
 
@@ -2009,7 +2053,8 @@ class HttpClient {
         queryParameters: parameters,
         body: body,
         contentType: contentType,
-        accept: accept);
+        accept: accept,
+        progressListener: progressListener);
   }
 
   /// Does a DELETE request.
@@ -2017,12 +2062,15 @@ class HttpClient {
       {bool fullPath,
       Credential authorization,
       Map<String, String> parameters,
+      String queryString,
       dynamic body,
       String contentType,
-      String accept}) async {
+      String accept,
+      ProgressListener progressListener}) async {
     var url = _buildURL(path, fullPath, parameters);
 
-    var ret_url_parameters = _build_URL_and_Parameters(url, parameters);
+    var ret_url_parameters =
+        _build_URL_and_Parameters(url, parameters, queryString);
     url = ret_url_parameters.key;
     parameters = ret_url_parameters.value;
 
@@ -2032,7 +2080,8 @@ class HttpClient {
         queryParameters: parameters,
         body: body,
         contentType: contentType,
-        accept: accept);
+        accept: accept,
+        progressListener: progressListener);
   }
 
   //////////////
@@ -2045,8 +2094,26 @@ class HttpClient {
     }
   }
 
+  Uri _setURIQueryString(Uri uri, String queryString) {
+    var port = uri.port;
+
+    if (uri.scheme == 'https' && uri.port == 443) {
+      port = null;
+    } else if (uri.scheme == 'http' && uri.port == 80) {
+      port = null;
+    }
+
+    return Uri(
+        scheme: uri.scheme,
+        userInfo: uri.userInfo,
+        host: uri.host,
+        port: port,
+        path: Uri.decodeComponent(uri.path),
+        query: queryString);
+  }
+
   MapEntry<String, Map<String, String>> _build_URL_and_Parameters(
-      String url, Map<String, String> parameters) {
+      String url, Map<String, String> parameters, String queryString) {
     var uri = Uri.parse(url);
 
     if (uri.queryParameters != null && uri.queryParameters.isNotEmpty) {
@@ -2058,6 +2125,18 @@ class HttpClient {
       }
 
       url = _removeURIQueryParameters(uri).toString();
+      uri = Uri.parse(url);
+    }
+
+    if (isNotEmptyString(queryString)) {
+      if (queryString.contains('{{')) {
+        queryString = buildStringPattern(queryString, parameters ?? {});
+      }
+
+      uri = _setURIQueryString(uri, queryString);
+      url = uri.toString();
+
+      parameters = null;
     }
 
     return MapEntry(url, parameters);
@@ -2068,10 +2147,12 @@ class HttpClient {
       {bool fullPath,
       Authorization authorization,
       Map<String, String> parameters,
+      String queryString,
       bool noQueryString = false}) {
     var url = buildMethodRequestURL(method, path, fullPath, parameters);
 
-    var ret_url_parameters = _build_URL_and_Parameters(url, parameters);
+    var ret_url_parameters =
+        _build_URL_and_Parameters(url, parameters, queryString);
     url = ret_url_parameters.key;
     parameters = ret_url_parameters.value;
 
@@ -2276,8 +2357,8 @@ class HttpClientRequesterSimulation extends HttpClientRequester {
 
   /// Implementation for simulated requests.
   @override
-  Future<HttpResponse> doHttpRequest(
-      HttpClient client, HttpRequest request, bool log) {
+  Future<HttpResponse> doHttpRequest(HttpClient client, HttpRequest request,
+      ProgressListener progressListener, bool log) {
     var methodPatterns = getSimulationPatternsByMethod(request.method);
     return _requestSimulated(client, request.method, request.requestURL,
         methodPatterns, request.queryParameters);

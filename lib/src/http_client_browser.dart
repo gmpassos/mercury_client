@@ -9,8 +9,8 @@ import 'http_client.dart';
 /// HttpClientRequester implementation for Browser.
 class HttpClientRequesterBrowser extends HttpClientRequester {
   @override
-  Future<HttpResponse> doHttpRequest(
-      HttpClient client, HttpRequest request, bool log) {
+  Future<HttpResponse> doHttpRequest(HttpClient client, HttpRequest request,
+      ProgressListener progressListener, bool log) {
     if (log) {
       print('<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<');
       print(client);
@@ -49,7 +49,39 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       });
     }
 
+    if (progressListener != null) {
+      xhr.upload.onProgress.listen((e) {
+        try {
+          progressListener(
+              request, e.loaded, e.total, e.loaded / e.total, true);
+        } catch (e, s) {
+          print(e);
+          print(s);
+        }
+      });
+
+      xhr.onProgress.listen((e) {
+        try {
+          progressListener(
+              request, e.loaded, e.total, e.loaded / e.total, false);
+        } catch (e, s) {
+          print(e);
+          print(s);
+        }
+      });
+    }
+
     xhr.onLoad.listen((e) {
+      if (progressListener != null) {
+        try {
+          progressListener(
+              request, e.loaded, e.total, e.loaded / e.total, false);
+        } catch (e, s) {
+          print(e);
+          print(s);
+        }
+      }
+
       var accepted = xhr.status >= 200 && xhr.status < 300;
       var fileUri = xhr.status == 0; // file:// URIs have status of 0.
       var notModified = xhr.status == 304;
@@ -65,14 +97,14 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
             _processResponse(client, request, request.method, request.url, xhr);
         completer.complete(response);
       } else {
-        _completeOnError(
-            completer, client, request, log, xhr.status, xhr.responseText, e);
+        _completeOnError(completer, client, request, progressListener, log,
+            xhr.status, xhr.responseText, e);
       }
     });
 
     xhr.onError.listen((e) {
-      _completeOnError(
-          completer, client, request, log, xhr.status, xhr.responseText, e);
+      _completeOnError(completer, client, request, progressListener, log,
+          xhr.status, xhr.responseText, e);
     });
 
     if (request.sendData != null) {
@@ -88,6 +120,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       Completer<HttpResponse> originalRequestCompleter,
       HttpClient client,
       HttpRequest request,
+      ProgressListener progressListener,
       bool log,
       int status,
       String responseBody,
@@ -97,8 +130,8 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     var httpError =
         HttpError(request.url, request.requestURL, status, message, error);
 
-    var requestCompleted = await _checkForRetry(
-        originalRequestCompleter, client, request, log, status, httpError);
+    var requestCompleted = await _checkForRetry(originalRequestCompleter,
+        client, request, progressListener, log, status, httpError);
 
     if (!requestCompleted) {
       originalRequestCompleter.completeError(httpError);
@@ -109,6 +142,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       Completer<HttpResponse> originalRequestCompleter,
       HttpClient client,
       HttpRequest request,
+      ProgressListener progressListener,
       bool log,
       int status,
       HttpError httpError) async {
@@ -119,11 +153,11 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     if (httpError.isOAuthAuthorizationError) return false;
 
     if (status == 0 || status == 401) {
-      return _checkForRetry_authorizationProvider(
-          originalRequestCompleter, client, request, log, httpError);
+      return _checkForRetry_authorizationProvider(originalRequestCompleter,
+          client, request, progressListener, log, httpError);
     } else {
-      return _checkForRetry_networkIssue(
-          originalRequestCompleter, client, request, log, status, httpError);
+      return _checkForRetry_networkIssue(originalRequestCompleter, client,
+          request, progressListener, log, status, httpError);
     }
   }
 
@@ -131,12 +165,14 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       Completer<HttpResponse> originalRequestCompleter,
       HttpClient client,
       HttpRequest request,
+      ProgressListener progressListener,
       bool log,
       int status,
       HttpError httpError) async {
     if (status == 0 || status == 504) {
       request.incrementRetries();
-      return _retryRequest(originalRequestCompleter, client, request, log);
+      return _retryRequest(
+          originalRequestCompleter, client, request, progressListener, log);
     }
 
     return false;
@@ -146,6 +182,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       Completer<HttpResponse> originalRequestCompleter,
       HttpClient client,
       HttpRequest request,
+      ProgressListener progressListener,
       bool log,
       HttpError httpError) async {
     var authorization = request.authorization;
@@ -159,7 +196,8 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
         var authorization2 = Authorization.fromCredential(credential);
         var request2 = request.copy(client, authorization2);
 
-        return _retryRequest(originalRequestCompleter, client, request2, log);
+        return _retryRequest(
+            originalRequestCompleter, client, request2, progressListener, log);
       } else {
         originalRequestCompleter.completeError(httpError);
         return true;
@@ -169,8 +207,12 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     return false;
   }
 
-  Future<bool> _retryRequest(Completer<HttpResponse> originalRequestCompleter,
-      HttpClient client, HttpRequest request, bool log) async {
+  Future<bool> _retryRequest(
+      Completer<HttpResponse> originalRequestCompleter,
+      HttpClient client,
+      HttpRequest request,
+      ProgressListener progressListener,
+      bool log) async {
     try {
       if (log) {
         print('<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<');
@@ -179,7 +221,8 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
         print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
       }
 
-      var response = await doHttpRequest(client, request, log);
+      var response =
+          await doHttpRequest(client, request, progressListener, log);
       originalRequestCompleter.complete(response);
     } catch (error) {
       originalRequestCompleter.completeError(error);
