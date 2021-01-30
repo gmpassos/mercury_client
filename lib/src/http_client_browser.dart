@@ -125,7 +125,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       int status,
       String responseBody,
       dynamic error) async {
-    var message = responseBody ?? '$error';
+    var message = responseBody ?? _errorToString(error);
 
     var httpError =
         HttpError(request.url, request.requestURL, status, message, error);
@@ -136,6 +136,15 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     if (!requestCompleted) {
       originalRequestCompleter.completeError(httpError);
     }
+  }
+
+  String _errorToString(dynamic error) {
+    if (error == null) return '';
+    if (error is String) return error;
+    if (error is browser.Event) {
+      return '{type: ${error.type} ; target: ${error.target} ; error: $error}';
+    }
+    return '$error';
   }
 
   Future<bool> _checkForRetry(

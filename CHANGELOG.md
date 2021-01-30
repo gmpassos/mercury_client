@@ -1,3 +1,14 @@
+## 1.1.18
+
+- Added `browser` test.
+  - Tests now runs with `vm` and `browser` platform.
+  - The browser test uses `spawnHybridUri`, to run at the same time the `TestServer` in VM.
+  - The VM test run normally, running `TestServer` in the same VM of tests.
+- `.github/workflows`: Now supports tests in FireFox. 
+- Added dev_dependencies:
+  - stream_channel: ^2.0.0
+  - async: ^2.4.2
+
 ## 1.1.17
 
 - Added parameter `queryString`.
