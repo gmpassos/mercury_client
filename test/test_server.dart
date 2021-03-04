@@ -13,12 +13,12 @@ class TestServer {
 
   bool get isOpen => _serverOpen != null ? _serverOpen.isCompleted : false;
 
-  void waitOpen() async {
+  Future<void> waitOpen() async {
     if (isOpen) return;
     await _serverOpen.future;
   }
 
-  void start() async {
+  Future<void> start() async {
     print('[SERVER] STARTING...');
 
     _serverOpen = Completer();
@@ -145,7 +145,7 @@ class TestServer {
     return latin1.decoder.bind(r).join();
   }
 
-  void close() async {
+  Future<void> close() async {
     print('[SERVER] CLOSE>>> $server');
     await server.close(force: true);
 
@@ -199,6 +199,6 @@ void hybridMain(StreamChannel channel) async {
 
   if (testServer != null) {
     print('[VM:CHANNEL] closing...');
-    testServer.close();
+    await testServer.close();
   }
 }

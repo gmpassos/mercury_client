@@ -2,6 +2,7 @@
 
 - Better handling of body for responses of status from 400 to 599.
 - Fix `_jsonDecode`: better handling of null json. 
+- Dart 2.12.0+ compliant: `dartfmt` and `dartanalyzer`.
 - swiss_knife: ^2.5.26
 
 ## 1.1.18
