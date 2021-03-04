@@ -93,21 +93,30 @@ class HttpClientRequesterIO extends HttpClientRequester {
       ProgressListener progressListener) async {
     var mimeType =
         contentType != null ? MimeType.parse(contentType.toString()) : null;
+    var statusCode = response.statusCode;
 
-    if (mimeType != null) {
-      if (mimeType.isStringType || mimeType.charset != null) {
-        var s = await _decodeBodyAsString(
-            request, response, mimeType, progressListener);
-        return HttpBody(s, mimeType);
-      } else {
-        var bytes =
-            await _decodeBodyAsBytes(request, response, progressListener);
-        return HttpBody(bytes, mimeType);
+    var irrelevantContent = (statusCode >= 300 && statusCode < 600);
+
+    if (mimeType != null &&
+        (mimeType.isStringType || mimeType.charset != null)) {
+      var s = await _decodeBodyAsString(
+          request, response, mimeType, progressListener);
+
+      if (statusCode == 204 || (irrelevantContent && s != null && s.isEmpty)) {
+        s = null;
       }
-    } else {
-      var bytes = await _decodeBodyAsBytes(request, response, progressListener);
-      return HttpBody(bytes);
+
+      return HttpBody(s, mimeType);
     }
+
+    var bytes = await _decodeBodyAsBytes(request, response, progressListener);
+
+    if (statusCode == 204 ||
+        (irrelevantContent && bytes != null && bytes.isEmpty)) {
+      bytes = null;
+    }
+
+    return HttpBody(bytes, mimeType);
   }
 
   Future<List<int>> _decodeBodyAsBytes(HttpRequest request,

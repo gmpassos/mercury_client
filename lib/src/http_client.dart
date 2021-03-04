@@ -1856,8 +1856,7 @@ class HttpClient {
 
   dynamic _jsonDecode(String s) {
     if (logJSON) _logJSON(s);
-
-    return jsonDecode(s);
+    return s == null || s.isEmpty ? null : jsonDecode(s);
   }
 
   void _logJSON(String json) {

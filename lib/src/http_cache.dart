@@ -529,6 +529,6 @@ class HttpCache {
   }
 
   dynamic _jsonDecode(String s) {
-    return jsonDecode(s);
+    return s == null || s.isEmpty ? null : jsonDecode(s);
   }
 }

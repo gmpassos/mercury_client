@@ -82,15 +82,17 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
         }
       }
 
-      var accepted = xhr.status >= 200 && xhr.status < 300;
-      var fileUri = xhr.status == 0; // file:// URIs have status of 0.
-      var notModified = xhr.status == 304;
+      var status = xhr.status;
+
+      var accepted = status >= 200 && status < 300;
+      var fileUri = status == 0; // file:// URIs have status of 0.
+      var notModified = status == 304;
       // Redirect status is specified up to 307, but others have been used in
       // practice. Notably Google Drive uses 308 Resume Incomplete for
       // resumable uploads, and it's also been used as a redirect. The
       // redirect case will be handled by the browser before it gets to us,
       // so if we see it we should pass it through to the user.
-      var unknownRedirect = xhr.status > 307 && xhr.status < 400;
+      var unknownRedirect = status > 307 && status < 400;
 
       if (accepted || fileUri || notModified || unknownRedirect) {
         var response =
@@ -98,7 +100,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
         completer.complete(response);
       } else {
         _completeOnError(completer, client, request, progressListener, log,
-            xhr.status, xhr.responseText, e);
+            status, xhr.responseText, e);
       }
     });
 
@@ -134,7 +136,10 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
         client, request, progressListener, log, status, httpError);
 
     if (!requestCompleted) {
-      originalRequestCompleter.completeError(httpError);
+      var bodyError = error != null ? HttpBody(error) : null;
+      var response = HttpResponse(
+          request.method, request.url, request.requestURL, status, bodyError);
+      originalRequestCompleter.complete(response);
     }
   }
 
@@ -208,7 +213,14 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
         return _retryRequest(
             originalRequestCompleter, client, request2, progressListener, log);
       } else {
-        originalRequestCompleter.completeError(httpError);
+        var bodyError =
+            httpError.error != null ? HttpBody(httpError.error) : null;
+        var status = httpError.status;
+        if (status == 0) status = 401;
+
+        var response = HttpResponse(
+            request.method, request.url, request.requestURL, status, bodyError);
+        originalRequestCompleter.complete(response);
         return true;
       }
     }
@@ -242,10 +254,23 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
   HttpResponse _processResponse(HttpClient client, HttpRequest request,
       HttpMethod method, String url, browser.HttpRequest xhr) {
     var contentType = xhr.getResponseHeader('Content-Type');
+    var status = xhr.status;
+    var body = xhr.response;
+    var irrelevantContent = (status >= 300 && status < 600);
 
-    var body = HttpBody(xhr.response, MimeType.parse(contentType));
+    if (status == 204) {
+      body = null;
+    }
 
-    var response = HttpResponse(method, url, xhr.responseUrl, xhr.status, body,
+    var httpBody = HttpBody(body, MimeType.parse(contentType));
+
+    if (irrelevantContent &&
+        (httpBody.isString || httpBody.isBytesArray) &&
+        httpBody.size == 0) {
+      httpBody = HttpBody(null, MimeType.parse(contentType));
+    }
+
+    var response = HttpResponse(method, url, xhr.responseUrl, status, httpBody,
         (key) => xhr.getResponseHeader(key), xhr);
 
     var responseHeaderWithToken = client.responseHeaderWithToken;

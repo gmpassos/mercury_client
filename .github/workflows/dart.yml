@@ -29,6 +29,8 @@ jobs:
           rm -rf .dart_tool .packages pubspec.lock
           chown -R tester:tester .
           ls -al
+      - name: Dart version
+        run: dart --version
       - name: Pub Get
         run: su -c 'cd $(< /tmp/test-dir.txt) && pub get' tester
       - name: dartfmt
@@ -39,3 +41,5 @@ jobs:
         run: su -c 'DISPLAY=:0 cd $(< /tmp/test-dir.txt) && pub run test -p firefox' tester
       - name: Run VM tests
         run: su -c 'DISPLAY=:0 cd $(< /tmp/test-dir.txt) && pub run test -p vm' tester
+      - name: publish --dry-run
+        run: su -c 'DISPLAY=:0 cd $(< /tmp/test-dir.txt) && pub publish --dry-run' tester
