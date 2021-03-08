@@ -10,7 +10,7 @@ import 'http_client.dart';
 class HttpClientRequesterBrowser extends HttpClientRequester {
   @override
   Future<HttpResponse> doHttpRequest(HttpClient client, HttpRequest request,
-      ProgressListener progressListener, bool log) {
+      ProgressListener? progressListener, bool log) {
     if (log) {
       print('<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<');
       print(client);
@@ -22,7 +22,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
 
     var xhr = browser.HttpRequest();
 
-    var methodName = getHttpMethodName(request.method, HttpMethod.GET);
+    var methodName = getHttpMethodName(request.method, HttpMethod.GET)!;
 
     assert(RegExp(r'^(?:GET|OPTIONS|POST|PUT|DELETE|PATCH|HEAD)$')
         .hasMatch(methodName));
@@ -31,20 +31,18 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
 
     xhr.open(methodName, url, async: true);
 
-    if (request.withCredentials != null) {
-      xhr.withCredentials = request.withCredentials;
-    }
+    xhr.withCredentials = request.withCredentials;
 
     if (request.responseType != null) {
-      xhr.responseType = request.responseType;
+      xhr.responseType = request.responseType!;
     }
 
     if (request.mimeType != null) {
-      xhr.overrideMimeType(request.mimeType);
+      xhr.overrideMimeType(request.mimeType!);
     }
 
     if (request.requestHeaders != null) {
-      request.requestHeaders.forEach((header, value) {
+      request.requestHeaders!.forEach((header, value) {
         xhr.setRequestHeader(header, value);
       });
     }
@@ -117,17 +115,17 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     return completer.future;
   }
 
-  double /*?*/ _calcLoadRatio(browser.ProgressEvent e) =>
-      e.loaded == null || e.total == null ? null : e.loaded / e.total;
+  double? _calcLoadRatio(browser.ProgressEvent e) =>
+      e.loaded == null || e.total == null ? null : e.loaded! / e.total!;
 
   void _completeOnError(
       Completer<HttpResponse> originalRequestCompleter,
       HttpClient client,
       HttpRequest request,
-      ProgressListener progressListener,
+      ProgressListener? progressListener,
       bool log,
-      int /*!*/ status,
-      String responseBody,
+      int status,
+      String? responseBody,
       dynamic error) async {
     var message = responseBody ?? _errorToString(error);
 
@@ -158,9 +156,9 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       Completer<HttpResponse> originalRequestCompleter,
       HttpClient client,
       HttpRequest request,
-      ProgressListener progressListener,
+      ProgressListener? progressListener,
       bool log,
-      int /*!*/ status,
+      int status,
       HttpError httpError) async {
     if (request.retries >= 3) {
       return false;
@@ -181,9 +179,9 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       Completer<HttpResponse> originalRequestCompleter,
       HttpClient client,
       HttpRequest request,
-      ProgressListener progressListener,
+      ProgressListener? progressListener,
       bool log,
-      int /*!*/ status,
+      int status,
       HttpError httpError) async {
     if (status == 0 || status == 504) {
       request.incrementRetries();
@@ -198,7 +196,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       Completer<HttpResponse> originalRequestCompleter,
       HttpClient client,
       HttpRequest request,
-      ProgressListener progressListener,
+      ProgressListener? progressListener,
       bool log,
       HttpError httpError) async {
     var authorization = request.authorization;
@@ -234,7 +232,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       Completer<HttpResponse> originalRequestCompleter,
       HttpClient client,
       HttpRequest request,
-      ProgressListener progressListener,
+      ProgressListener? progressListener,
       bool log) async {
     try {
       if (log) {
@@ -267,7 +265,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     var httpBody = HttpBody.from(body, MimeType.parse(contentType));
 
     if (irrelevantContent &&
-        (httpBody.isString || httpBody.isBytesArray) &&
+        (httpBody!.isString || httpBody.isBytesArray) &&
         httpBody.size == 0) {
       httpBody = HttpBody.from(null, MimeType.parse(contentType));
     }
@@ -309,7 +307,8 @@ Uri getHttpClientRuntimeUriImpl() {
 }
 
 class HttpBlobBrowser extends HttpBlob<browser.Blob> {
-  HttpBlobBrowser(browser.Blob blob, MimeType mimeType) : super(blob, mimeType);
+  HttpBlobBrowser(browser.Blob blob, MimeType? mimeType)
+      : super(blob, mimeType);
 
   @override
   int size() => blob.size;
@@ -323,7 +322,7 @@ class HttpBlobBrowser extends HttpBlob<browser.Blob> {
     reader.onLoadEnd.listen((e) {
       var result = reader.result;
 
-      ByteBuffer data;
+      ByteBuffer? data;
       if (result is ByteBuffer) {
         data = result;
       } else if (result is String) {
@@ -344,12 +343,12 @@ class HttpBlobBrowser extends HttpBlob<browser.Blob> {
   }
 }
 
-HttpBlob createHttpBlobImpl(Object /*?*/ content, MimeType mimeType) {
+HttpBlob? createHttpBlobImpl(Object? content, MimeType? mimeType) {
   if (content == null) return null;
   if (content is HttpBlob) return content;
   if (content is browser.Blob) return HttpBlobBrowser(content, mimeType);
-  var blob = browser.Blob([content], mimeType?.toString());
+  var blob = browser.Blob([content], mimeType.toString());
   return HttpBlobBrowser(blob, mimeType);
 }
 
-bool isHttpBlobImpl(Object /*?*/ o) => o is HttpBlob || o is browser.Blob;
+bool isHttpBlobImpl(Object? o) => o is HttpBlob || o is browser.Blob;

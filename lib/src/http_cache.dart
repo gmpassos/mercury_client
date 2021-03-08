@@ -7,21 +7,21 @@ import 'package:swiss_knife/swiss_knife.dart';
 import '../mercury_client.dart';
 
 class _CacheRequest implements Comparable<_CacheRequest> {
-  final HttpMethod /*!*/ _method;
+  final HttpMethod _method;
 
-  final String /*!*/ _url;
+  final String _url;
 
-  final Map<String, String> _queryParameters;
+  final Map<String, String>? _queryParameters;
 
   final dynamic _body;
 
-  final String _contentType;
+  final String? _contentType;
 
-  final String _accept;
+  final String? _accept;
 
   final int instanceTime = DateTime.now().millisecondsSinceEpoch;
 
-  int /*!*/ _accessTime;
+  late int _accessTime;
 
   _CacheRequest(this._method, this._url, this._queryParameters, this._body,
       this._contentType, this._accept) {
@@ -30,15 +30,15 @@ class _CacheRequest implements Comparable<_CacheRequest> {
 
   int get accessTime => _accessTime;
 
-  bool isExpired(int /*!*/ timeout) {
-    if (timeout == null || timeout <= 0) return false;
+  bool isExpired(int timeout) {
+    if (timeout <= 0) return false;
 
     var expireTime = accessTime + timeout;
     var now = DateTime.now().millisecondsSinceEpoch;
     return now > expireTime;
   }
 
-  bool isValid(int /*!*/ timeout) {
+  bool isValid(int timeout) {
     return !isExpired(timeout);
   }
 
@@ -50,7 +50,7 @@ class _CacheRequest implements Comparable<_CacheRequest> {
     return _CacheRequest(
         _method,
         _url,
-        _queryParameters != null ? Map.from(_queryParameters) : null,
+        _queryParameters != null ? Map.from(_queryParameters!) : null,
         _body,
         _contentType,
         _accept);
@@ -59,19 +59,19 @@ class _CacheRequest implements Comparable<_CacheRequest> {
   int memorySize() {
     var memory = 1 +
         4 +
-        (_url != null ? _url.length : 0) +
+        _url.length +
         (_body != null ? _body.length : 0) +
-        (_contentType != null ? _contentType.length : 0) +
-        (_accept != null ? _accept.length : 0);
+        (_contentType != null ? _contentType!.length : 0) +
+        (_accept != null ? _accept!.length : 0);
 
     if (_queryParameters != null) {
-      for (var entry in _queryParameters.entries) {
-        memory += (entry.key != null ? entry.key.length : 0);
-        memory += (entry.value != null ? entry.value.length : 0);
+      for (var entry in _queryParameters!.entries) {
+        memory += entry.key.length;
+        memory += entry.value.length;
       }
     }
 
-    return memory;
+    return memory as int;
   }
 
   @override
@@ -89,7 +89,7 @@ class _CacheRequest implements Comparable<_CacheRequest> {
   @override
   int get hashCode =>
       _method.hashCode ^
-      (_url != null ? _url.hashCode : 0) ^
+      _url.hashCode ^
       deepHashCode(_queryParameters) ^
       deepHashCode(_body) ^
       (_contentType != null ? _contentType.hashCode : 0) ^
@@ -107,28 +107,25 @@ class _CacheRequest implements Comparable<_CacheRequest> {
 /// stored in memory.
 class HttpCache {
   /// Max memory that the cache can use.
-  int /*!*/ _maxCacheMemory;
+  late int _maxCacheMemory;
 
   /// Timeout of stored requests.
-  Duration /*!*/ _timeout;
+  late Duration _timeout;
 
-  /// If [true] shows in console cached requests.
-  bool /*!*/ verbose;
+  /// If [true] shows cached requests in console.
+  late bool verbose;
 
   HttpCache(
-      {int /*!*/ maxCacheMemory = 0,
-      Duration /*!*/ timeout = _NO_DURATION,
+      {int maxCacheMemory = 0,
+      Duration timeout = _NO_DURATION,
       bool verbose = true}) {
     this.maxCacheMemory = maxCacheMemory;
     this.timeout = timeout;
     this.verbose = verbose;
   }
 
-  /// Returns [true] if [verbose] is [true].
-  bool get isVerbose => verbose != null && verbose;
-
   void _log(String msg) {
-    if (isVerbose) {
+    if (verbose) {
       print('[HttpCache] $msg');
     }
   }
@@ -136,8 +133,8 @@ class HttpCache {
   /// The maximum memory usage.
   int get maxCacheMemory => _maxCacheMemory;
 
-  set maxCacheMemory(int /*!*/ value) {
-    if (value == null || value <= 0) {
+  set maxCacheMemory(int value) {
+    if (value <= 0) {
       _maxCacheMemory = 0;
     } else {
       if (value < 1024 * 4) value = 1024 * 4;
@@ -146,7 +143,7 @@ class HttpCache {
   }
 
   /// Returns [true] if the cache has a memory limit.
-  bool get hasMaxCacheMemory => _maxCacheMemory != null && _maxCacheMemory > 0;
+  bool get hasMaxCacheMemory => _maxCacheMemory > 0;
 
   /// The timeout of stored requests.
   Duration get timeout => _timeout;
@@ -154,7 +151,7 @@ class HttpCache {
   static const Duration _NO_DURATION = Duration(milliseconds: 0);
 
   set timeout(Duration value) {
-    if (value == null || value.inMilliseconds <= 0) {
+    if (value.inMilliseconds <= 0) {
       _timeout = _NO_DURATION;
     } else {
       if (value.inSeconds < 1) value = Duration(seconds: 1);
@@ -163,13 +160,11 @@ class HttpCache {
   }
 
   /// Returns [true] if the cached request have timeout.
-  bool get hasTimeout => _timeout != null && _timeout.inMilliseconds > 0;
+  bool get hasTimeout => _timeout.inMilliseconds > 0;
 
   final Map<_CacheRequest, HttpResponse> _cache = {};
 
-  MapEntry<_CacheRequest, HttpResponse> _getCacheEntry(_CacheRequest key) {
-    if (key == null) return null;
-
+  MapEntry<_CacheRequest, HttpResponse>? _getCacheEntry(_CacheRequest key) {
     if (!_cache.containsKey(key)) return null;
 
     for (var entry in _cache.entries) {
@@ -196,10 +191,10 @@ class HttpCache {
     return usedMemory;
   }
 
-  int ensureCacheBelowMaxMemory([int /*!*/ extraMemoryNeeded = 0]) {
+  int ensureCacheBelowMaxMemory([int extraMemoryNeeded = 0]) {
     if (!hasMaxCacheMemory) return 0;
 
-    if (extraMemoryNeeded != null && extraMemoryNeeded > 0) {
+    if (extraMemoryNeeded > 0) {
       var maxMem2 = maxCacheMemory - extraMemoryNeeded;
       if (maxMem2 < 10) {
         clearCache();
@@ -214,8 +209,8 @@ class HttpCache {
     return 0;
   }
 
-  int cleanCache(int /*!*/ maxMemory) {
-    if (maxMemory == null || maxMemory <= 0) return -1;
+  int cleanCache(int maxMemory) {
+    if (maxMemory <= 0) return -1;
 
     if (hasTimeout) {
       cleanCacheTimedOut();
@@ -251,16 +246,16 @@ class HttpCache {
     return removed;
   }
 
-  int cleanCacheTimedOut([Duration timeout]) {
+  int cleanCacheTimedOut([Duration? timeout]) {
     timeout ??= this.timeout;
-    if (timeout == null || timeout.inMilliseconds <= 0) return 0;
+    if (timeout.inMilliseconds <= 0) return 0;
 
     var entries =
         List<MapEntry<_CacheRequest, HttpResponse>>.from(_cache.entries);
 
     entries.sort((e1, e2) {
-      var t1 = max(e1.key.accessTime, e1.value.accessTime);
-      var t2 = max(e2.key.accessTime, e2.value.accessTime);
+      var t1 = max(e1.key.accessTime, e1.value.accessTime!);
+      var t2 = max(e2.key.accessTime, e2.value.accessTime!);
       return t1 < t2 ? -1 : (t1 == t2 ? 0 : 1);
     });
 
@@ -268,7 +263,7 @@ class HttpCache {
 
     var removed = 0;
     for (var entry in entries) {
-      var accessTime = max(entry.key.accessTime, entry.value.accessTime);
+      var accessTime = max(entry.key.accessTime, entry.value.accessTime!);
       var elapsedTime = now - accessTime;
       if (elapsedTime <= timeout.inMilliseconds) break;
 
@@ -287,13 +282,13 @@ class HttpCache {
 
   /// Does a cached request using [httpClient].
   Future<HttpResponse> request(
-      HttpClient /*!*/ httpClient, HttpMethod /*!*/ method, String path,
-      {bool /*!*/ fullPath = false,
-      Credential authorization,
-      Map<String, String> queryParameters,
-      Object /*?*/ body,
-      String contentType,
-      String accept}) async {
+      HttpClient httpClient, HttpMethod method, String? path,
+      {bool fullPath = false,
+      Credential? authorization,
+      Map<String, String>? queryParameters,
+      Object? body,
+      String? contentType,
+      String? accept}) async {
     var requestURL = httpClient.buildMethodRequestURL(
         method, path, fullPath, queryParameters);
     return this.requestURL(httpClient, method, requestURL,
@@ -305,13 +300,13 @@ class HttpCache {
   }
 
   /// Does a cached request using [httpClient] and [requestURL].
-  Future<HttpResponse> requestURL(HttpClient /*?*/ httpClient,
-      HttpMethod /*!*/ method, String /*!*/ requestURL,
-      {Credential authorization,
-      Map<String, String> queryParameters,
-      Object /*?*/ body,
-      String contentType,
-      String accept}) async {
+  Future<HttpResponse> requestURL(
+      HttpClient? httpClient, HttpMethod method, String requestURL,
+      {Credential? authorization,
+      Map<String, String>? queryParameters,
+      Object? body,
+      String? contentType,
+      String? accept}) async {
     httpClient ??= HttpClient(requestURL);
 
     var cacheRequest = _CacheRequest(
@@ -322,8 +317,7 @@ class HttpCache {
     if (cachedEntry != null) {
       var cachedRequest = cachedEntry.key;
 
-      if (cachedRequest
-          .isValid(timeout != null ? timeout.inMilliseconds : null)) {
+      if (cachedRequest.isValid(timeout.inMilliseconds)) {
         cachedRequest.updateAccessTime();
 
         var cachedResponse = cachedEntry.value;
@@ -342,7 +336,6 @@ class HttpCache {
         body: body,
         contentType: contentType,
         accept: accept);
-    if (response == null) return null;
 
     ensureCacheBelowMaxMemory(response.memorySize());
 
@@ -356,14 +349,14 @@ class HttpCache {
   }
 
   /// Gets a request already in cache using [httpClient].
-  HttpResponse getCachedRequest(
+  HttpResponse? getCachedRequest(
       HttpClient httpClient, HttpMethod method, String path,
-      {bool /*!*/ fullPath = false,
-      Credential authorization,
-      Map<String, String> queryParameters,
-      Object /*?*/ body,
-      String contentType,
-      String accept}) {
+      {bool fullPath = false,
+      Credential? authorization,
+      Map<String, String>? queryParameters,
+      Object? body,
+      String? contentType,
+      String? accept}) {
     var requestURL = httpClient.buildMethodRequestURL(
         method, path, fullPath, queryParameters);
     return getCachedRequestURL(method, requestURL,
@@ -375,12 +368,12 @@ class HttpCache {
   }
 
   /// Gets a request already in cache using [httpClient] and [requestURL].
-  HttpResponse getCachedRequestURL(HttpMethod method, String requestURL,
-      {Credential authorization,
-      Map<String, String> queryParameters,
-      Object /*?*/ body,
-      String contentType,
-      String accept}) {
+  HttpResponse? getCachedRequestURL(HttpMethod method, String requestURL,
+      {Credential? authorization,
+      Map<String, String>? queryParameters,
+      Object? body,
+      String? contentType,
+      String? accept}) {
     var cacheRequest = _CacheRequest(
         method, requestURL, queryParameters, body, contentType, accept);
     var cachedResponse = _cache[cacheRequest];
@@ -395,18 +388,18 @@ class HttpCache {
 
   /// Does a GET request using [url].
   Future<HttpResponse> getURL(String url,
-      {bool /*!*/ fullPath = false,
-      Credential authorization,
-      Map<String, String> parameters}) async {
+      {bool fullPath = false,
+      Credential? authorization,
+      Map<String, String>? parameters}) async {
     return get(HttpClient(url), null,
         fullPath: fullPath, parameters: parameters);
   }
 
   /// Does a GET request.
-  Future<HttpResponse> get(HttpClient httpClient, String path,
-      {bool /*!*/ fullPath = false,
-      Credential authorization,
-      Map<String, String> parameters}) async {
+  Future<HttpResponse> get(HttpClient httpClient, String? path,
+      {bool fullPath = false,
+      Credential? authorization,
+      Map<String, String>? parameters}) async {
     return request(httpClient, HttpMethod.GET, path,
         fullPath: fullPath,
         authorization: authorization,
@@ -415,9 +408,9 @@ class HttpCache {
 
   /// Does an OPTIONS request.
   Future<HttpResponse> options(HttpClient httpClient, String path,
-      {bool /*!*/ fullPath = false,
-      Credential authorization,
-      Map<String, String> parameters}) async {
+      {bool fullPath = false,
+      Credential? authorization,
+      Map<String, String>? parameters}) async {
     return request(httpClient, HttpMethod.OPTIONS, path,
         fullPath: fullPath,
         authorization: authorization,
@@ -426,12 +419,12 @@ class HttpCache {
 
   /// Does a POST request.
   Future<HttpResponse> post(HttpClient httpClient, String path,
-      {bool /*!*/ fullPath = false,
-      Credential authorization,
-      Map<String, String> parameters,
-      Object /*?*/ body,
-      String contentType,
-      String accept}) async {
+      {bool fullPath = false,
+      Credential? authorization,
+      Map<String, String>? parameters,
+      Object? body,
+      String? contentType,
+      String? accept}) async {
     return request(httpClient, HttpMethod.POST, path,
         fullPath: fullPath,
         authorization: authorization,
@@ -443,11 +436,11 @@ class HttpCache {
 
   /// Does a PUT request.
   Future<HttpResponse> put(HttpClient httpClient, String path,
-      {bool /*!*/ fullPath = false,
-      Credential authorization,
-      Object /*?*/ body,
-      String contentType,
-      String accept}) async {
+      {bool fullPath = false,
+      Credential? authorization,
+      Object? body,
+      String? contentType,
+      String? accept}) async {
     return request(httpClient, HttpMethod.PUT, path,
         fullPath: fullPath,
         authorization: authorization,
@@ -459,12 +452,12 @@ class HttpCache {
   /// Does a request and decodes response to JSON.
   Future<dynamic> requestJSON(
       HttpClient httpClient, HttpMethod method, String path,
-      {bool /*!*/ fullPath = false,
-      Credential authorization,
-      Map<String, String> queryParameters,
-      Object /*?*/ body,
-      String contentType,
-      String accept}) async {
+      {bool fullPath = false,
+      Credential? authorization,
+      Map<String, String>? queryParameters,
+      Object? body,
+      String? contentType,
+      String? accept}) async {
     return request(httpClient, method, path,
             fullPath: fullPath,
             authorization: authorization,
@@ -477,9 +470,9 @@ class HttpCache {
 
   /// Does a GET request and decodes response to JSON.
   Future<dynamic> getJSON(HttpClient httpClient, String path,
-      {bool /*!*/ fullPath = false,
-      Credential authorization,
-      Map<String, String> parameters}) async {
+      {bool fullPath = false,
+      Credential? authorization,
+      Map<String, String>? parameters}) async {
     return get(httpClient, path,
             fullPath: fullPath,
             authorization: authorization,
@@ -489,9 +482,9 @@ class HttpCache {
 
   /// Does an OPTIONS request and decodes response to JSON.
   Future<dynamic> optionsJSON(HttpClient httpClient, String path,
-      {bool /*!*/ fullPath = false,
-      Credential authorization,
-      Map<String, String> parameters}) async {
+      {bool fullPath = false,
+      Credential? authorization,
+      Map<String, String>? parameters}) async {
     return options(httpClient, path,
             fullPath: fullPath,
             authorization: authorization,
@@ -501,11 +494,11 @@ class HttpCache {
 
   /// Does a POST request and decodes response to JSON.
   Future<dynamic> postJSON(HttpClient httpClient, String path,
-      {bool /*!*/ fullPath = false,
-      Credential authorization,
-      Map<String, String> parameters,
-      Object /*?*/ body,
-      String contentType}) async {
+      {bool fullPath = false,
+      Credential? authorization,
+      Map<String, String>? parameters,
+      Object? body,
+      String? contentType}) async {
     return post(httpClient, path,
             fullPath: fullPath,
             authorization: authorization,
@@ -517,10 +510,10 @@ class HttpCache {
 
   /// Does a PUT request and decodes response to JSON.
   Future<dynamic> putJSON(HttpClient httpClient, String path,
-      {bool /*!*/ fullPath = false,
-      Credential authorization,
-      Object /*?*/ body,
-      String contentType}) async {
+      {bool fullPath = false,
+      Credential? authorization,
+      Object? body,
+      String? contentType}) async {
     return put(httpClient, path,
             fullPath: fullPath,
             authorization: authorization,
@@ -529,7 +522,7 @@ class HttpCache {
         .then((r) => _jsonDecode(r.bodyAsString));
   }
 
-  dynamic _jsonDecode(String s) {
+  dynamic _jsonDecode(String? s) {
     return s == null || s.isEmpty ? null : jsonDecode(s);
   }
 }

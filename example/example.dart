@@ -10,7 +10,7 @@ void main() async {
       await client.get('search', parameters: {'q': 'mercury_client'});
 
   if (response.isOK) {
-    var body = response.bodyAsString;
+    var body = response.bodyAsString!;
     var ok = body.contains('<html');
     print('Request OK: $ok');
     print(response);

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io' as io;
 import 'dart:typed_data';
 
@@ -9,7 +8,7 @@ import 'http_client.dart';
 
 /// HttpClientRequester implementation for VM [dart:io].
 class HttpClientRequesterIO extends HttpClientRequester {
-  io.HttpClient /*!*/ _ioClient;
+  late io.HttpClient _ioClient;
 
   HttpClientRequesterIO() {
     _ioClient = io.HttpClient();
@@ -30,7 +29,7 @@ class HttpClientRequesterIO extends HttpClientRequester {
 
   @override
   Future<HttpResponse> doHttpRequest(HttpClient client, HttpRequest request,
-      ProgressListener progressListener, bool log) async {
+      ProgressListener? progressListener, bool log) async {
     var uri = Uri.parse(request.requestURL);
 
     var req = await _request(client, request, uri);
@@ -44,7 +43,7 @@ class HttpClientRequesterIO extends HttpClientRequester {
       HttpRequest request,
       Uri requestURI,
       io.HttpClientResponse response,
-      ProgressListener progressListener) async {
+      ProgressListener? progressListener) async {
     var contentType = response.headers.contentType;
 
     var body =
@@ -86,11 +85,11 @@ class HttpClientRequesterIO extends HttpClientRequester {
 
   ////////////////////////////////
 
-  Future<HttpBody> _decodeBody(
+  Future<HttpBody?> _decodeBody(
       HttpRequest request,
       io.HttpClientResponse response,
-      io.ContentType contentType,
-      ProgressListener progressListener) async {
+      io.ContentType? contentType,
+      ProgressListener? progressListener) async {
     var mimeType =
         contentType != null ? MimeType.parse(contentType.toString()) : null;
     var statusCode = response.statusCode;
@@ -99,28 +98,30 @@ class HttpClientRequesterIO extends HttpClientRequester {
 
     if (mimeType != null &&
         (mimeType.isStringType || mimeType.charset != null)) {
-      var s = await _decodeBodyAsString(
+      String? s = await _decodeBodyAsString(
           request, response, mimeType, progressListener);
 
-      if (statusCode == 204 || (irrelevantContent && s != null && s.isEmpty)) {
+      if (statusCode == 204 || (irrelevantContent && s.isEmpty)) {
         s = null;
       }
 
       return HttpBody.from(s, mimeType);
     }
 
-    var bytes = await _decodeBodyAsBytes(request, response, progressListener);
+    List<int>? bytes =
+        await _decodeBodyAsBytes(request, response, progressListener);
 
-    if (statusCode == 204 ||
-        (irrelevantContent && bytes != null && bytes.isEmpty)) {
+    if (statusCode == 204 || (irrelevantContent && bytes.isEmpty)) {
       bytes = null;
     }
 
     return HttpBody.from(bytes, mimeType);
   }
 
-  Future<List<int>> _decodeBodyAsBytes(HttpRequest request,
-      io.HttpClientResponse response, ProgressListener progressListener) async {
+  Future<List<int>> _decodeBodyAsBytes(
+      HttpRequest request,
+      io.HttpClientResponse response,
+      ProgressListener? progressListener) async {
     if (progressListener != null) {
       var total = response.contentLength;
       var loaded = 0;
@@ -144,9 +145,8 @@ class HttpClientRequesterIO extends HttpClientRequester {
       HttpRequest request,
       io.HttpClientResponse response,
       MimeType mimeType,
-      ProgressListener progressListener) async {
-    var decoder =
-        mimeType != null ? contentTypeToDecoder(mimeType) : latin1.decoder;
+      ProgressListener? progressListener) async {
+    var decoder = contentTypeToDecoder(mimeType);
 
     if (progressListener != null) {
       var total = response.contentLength;
@@ -167,12 +167,11 @@ class HttpClientRequesterIO extends HttpClientRequester {
     }
   }
 
-  Future<Map<String, String /*!*/ > /*!*/ > /*!*/ _decodeHeaders(
-      io.HttpClientResponse r) async {
+  Future<Map<String, String>> _decodeHeaders(io.HttpClientResponse r) async {
     var headers = <String, String>{};
 
-    r.headers.forEach((key, vals) {
-      headers[key] = vals != null && vals.isNotEmpty ? vals[0] : '';
+    r.headers.forEach((key, values) {
+      headers[key] = values.isNotEmpty ? values[0] : '';
     });
 
     return headers;
@@ -183,8 +182,6 @@ class HttpClientRequesterIO extends HttpClientRequester {
   Future<io.HttpClientRequest> _request(
       HttpClient client, HttpRequest request, Uri uri) async {
     var method = request.method;
-
-    method ??= HttpMethod.GET;
 
     switch (method) {
       case HttpMethod.GET:
@@ -262,7 +259,7 @@ class HttpClientRequesterIO extends HttpClientRequester {
     var requestHeaders = request.requestHeaders;
     if (requestHeaders != null && requestHeaders.isNotEmpty) {
       for (var header in requestHeaders.keys) {
-        var val = requestHeaders[header];
+        var val = requestHeaders[header]!;
         req.headers.add(header, val);
       }
     }
@@ -278,7 +275,7 @@ Uri getHttpClientRuntimeUriImpl() {
 }
 
 class HttpBlobIO extends HttpBlob<TypedData> {
-  HttpBlobIO(TypedData blob, MimeType mimeType) : super(blob, mimeType);
+  HttpBlobIO(TypedData blob, MimeType? mimeType) : super(blob, mimeType);
 
   @override
   int size() => blob.lengthInBytes;
@@ -289,10 +286,10 @@ class HttpBlobIO extends HttpBlob<TypedData> {
   }
 }
 
-HttpBlob createHttpBlobImpl(Object /*?*/ content, MimeType mimeType) {
+HttpBlob? createHttpBlobImpl(Object? content, MimeType? mimeType) {
   if (content == null) return null;
   if (content is HttpBlob) return content;
-  return HttpBlobIO(content, mimeType);
+  return HttpBlobIO(content as TypedData, mimeType);
 }
 
-bool isHttpBlobImpl(Object /*?*/ o) => o is HttpBlob;
+bool isHttpBlobImpl(Object? o) => o is HttpBlob;

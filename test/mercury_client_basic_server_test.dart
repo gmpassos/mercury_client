@@ -11,18 +11,18 @@ class VMTestServerChannel implements TestServerChannel {
     return true;
   }
 
-  TestServer testServer;
+  TestServer? testServer;
 
   @override
   Future<bool> start() async {
-    if (testServer != null && testServer.isOpen) {
+    if (testServer != null && testServer!.isOpen) {
       throw StateError('Previous server still open: $testServer');
     }
 
     print('[VM] START');
 
     testServer = TestServer();
-    await testServer.start();
+    await testServer!.start();
     return true;
   }
 
@@ -30,7 +30,7 @@ class VMTestServerChannel implements TestServerChannel {
   Future<bool> waitOpen() async {
     print('[VM] WAIT OPEN');
 
-    await testServer.waitOpen();
+    await testServer!.waitOpen();
     return true;
   }
 
@@ -38,12 +38,12 @@ class VMTestServerChannel implements TestServerChannel {
   Future<bool> close() async {
     print('[VM] CLOSE');
 
-    await testServer.close();
+    await testServer!.close();
     return true;
   }
 
   @override
-  int get serverPort => testServer.port;
+  int get serverPort => testServer!.port;
 }
 
 void main() {

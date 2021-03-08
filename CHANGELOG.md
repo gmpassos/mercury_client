@@ -1,3 +1,13 @@
+## 2.0.0-nullsafety.1
+
+- Dart 2.12.0:
+  - Sound null safety compatibility.
+  - Update CI dart commands.
+  - sdk: '>=2.12.0 <3.0.0'
+- enum_to_string: ^2.0.0-nullsafety.1
+- swiss_knife: ^3.0.1
+- collection: ^1.15.0-nullsafety.4
+  
 ## 1.1.19
 
 - Better handling of body for responses of status from 400 to 599.

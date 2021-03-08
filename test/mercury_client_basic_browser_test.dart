@@ -11,12 +11,12 @@ import 'mercury_client_basic.dart';
 class BrowserTestServerChannel implements TestServerChannel {
   BrowserTestServerChannel();
 
-  StreamChannel _channel;
-  StreamQueue _channelQueue;
+  StreamChannel? _channel;
+  late StreamQueue _channelQueue;
 
   void setChannel(StreamChannel channel) {
     _channel = channel;
-    var stream = _channel.stream;
+    var stream = _channel!.stream;
     _channelQueue = StreamQueue(stream);
   }
 
@@ -36,7 +36,6 @@ class BrowserTestServerChannel implements TestServerChannel {
     print('[BROWSER] INITIALIZE>>> spawnHybridUri: $vmCodeUri');
 
     var channel = spawnHybridUri(vmCodeUri, stayAlive: true);
-    if (channel == null) return false;
 
     setChannel(channel);
 
@@ -45,10 +44,10 @@ class BrowserTestServerChannel implements TestServerChannel {
 
   void send(String cmd) {
     print('[BROWSER] SEND>>> $cmd');
-    _channel.sink.add(cmd);
+    _channel!.sink.add(cmd);
   }
 
-  Future<T> receive<T>([T def]) async {
+  Future<T> receive<T>([T? def]) async {
     var val = (await _consumeMessage()) as T;
     print('[BROWSER] RECEIVE>>> $val');
 
@@ -67,10 +66,10 @@ class BrowserTestServerChannel implements TestServerChannel {
     return ok;
   }
 
-  int _serverPort;
+  int? _serverPort;
 
   @override
-  int get serverPort => _serverPort;
+  int? get serverPort => _serverPort;
 
   @override
   Future<bool> waitOpen() async {

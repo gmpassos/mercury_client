@@ -5,17 +5,17 @@ import 'dart:io' as io;
 import 'package:stream_channel/stream_channel.dart';
 
 class TestServer {
-  io.HttpServer server;
+  io.HttpServer? server;
 
-  Completer _serverOpen;
+  Completer? _serverOpen;
 
-  int get port => server != null ? server.port : -1;
+  int get port => server != null ? server!.port : -1;
 
-  bool get isOpen => _serverOpen != null ? _serverOpen.isCompleted : false;
+  bool get isOpen => _serverOpen != null ? _serverOpen!.isCompleted : false;
 
   Future<void> waitOpen() async {
     if (isOpen) return;
-    await _serverOpen.future;
+    await _serverOpen!.future;
   }
 
   Future<void> start() async {
@@ -30,13 +30,13 @@ class TestServer {
 
     print('[SERVER] STARTED>>> port: $port ; server: $server');
 
-    _serverOpen.complete(true);
+    _serverOpen!.complete(true);
 
     _processRequests();
   }
 
   void _processRequests() async {
-    await for (io.HttpRequest request in server) {
+    await for (io.HttpRequest request in server!) {
       if (request.method == 'OPTION') {
         await _processOptionRequest(request);
       } else {
@@ -76,7 +76,7 @@ class TestServer {
 
     var body = await _decodeBody(contentType, request);
 
-    if (body != null && body.isNotEmpty) {
+    if (body.isNotEmpty) {
       response += ' <$body>';
     }
 
@@ -125,7 +125,7 @@ class TestServer {
   }
 
   Future<String> _decodeBody(
-      io.ContentType contentType, io.HttpRequest r) async {
+      io.ContentType? contentType, io.HttpRequest r) async {
     if (contentType != null) {
       var charset = contentType.charset;
 
@@ -147,7 +147,7 @@ class TestServer {
 
   Future<void> close() async {
     print('[SERVER] CLOSE>>> $server');
-    await server.close(force: true);
+    await server!.close(force: true);
 
     server = null;
     _serverOpen = null;
@@ -157,7 +157,7 @@ class TestServer {
 void hybridMain(StreamChannel channel) async {
   print('[VM:CHANNEL] hybridMain...');
 
-  TestServer testServer;
+  TestServer? testServer;
 
   var allMessages = [];
 
@@ -178,13 +178,13 @@ void hybridMain(StreamChannel channel) async {
         }
       case 'wait':
         {
-          await testServer.waitOpen();
+          await testServer!.waitOpen();
           channel.sink.add(testServer.port);
           break;
         }
       case 'close':
         {
-          await testServer.close();
+          await testServer!.close();
           testServer = null;
           channel.sink.add(true);
           break;

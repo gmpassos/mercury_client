@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:collection/collection.dart' show IterableExtension;
 import 'package:enum_to_string/enum_to_string.dart';
 import 'package:swiss_knife/swiss_knife.dart';
 
@@ -9,15 +10,15 @@ import 'http_client_none.dart'
     if (dart.library.html) 'http_client_browser.dart'
     if (dart.library.io) 'http_client_io.dart';
 
-typedef ResponseHeaderGetter = String Function(String headerKey);
+typedef ResponseHeaderGetter = String? Function(String headerKey);
 
 /// Represents a HTTP Status with helpers. Base for [HttpResponse] and [HttpError].
 class HttpStatus {
-  final String /*!*/ url;
+  final String url;
 
-  final String /*!*/ requestedURL;
+  final String requestedURL;
 
-  final int /*!*/ status;
+  final int status;
 
   HttpStatus(this.url, this.requestedURL, this.status);
 
@@ -43,7 +44,7 @@ class HttpStatus {
   bool get isStatusForbidden => isStatus(403);
 
   /// Returns [true] if any network error happens.
-  bool get isStatusNetworkError => status == null || status <= 0;
+  bool get isStatusNetworkError => status <= 0;
 
   /// Returns [true] if is a server error status: from range 500 to 599.
   bool get isStatusServerError => isStatusInRange(500, 599);
@@ -58,19 +59,17 @@ class HttpStatus {
 
   /// Returns [true] if this status is equals parameter [status].
   bool isStatus(int status) {
-    return this.status != null && this.status == status;
+    return this.status == status;
   }
 
   /// Returns [true] if this status is in range of parameters [statusInit] and [statusEnd].
   bool isStatusInRange(int statusInit, int statusEnd) {
-    return status != null && status >= statusInit && status <= statusEnd;
+    return status >= statusInit && status <= statusEnd;
   }
 
   /// Returns [true] if this status is in [statusList].
   bool isStatusInList(List<int> statusList) {
-    return status != null &&
-        (statusList.firstWhere((id) => id == status, orElse: () => null) !=
-            null);
+    return (statusList.firstWhereOrNull((id) => id == status) != null);
   }
 }
 
@@ -80,14 +79,14 @@ class HttpError extends HttpStatus {
   final String message;
 
   /// The actual error thrown by the client.
-  final Object error;
+  final Object? error;
 
   HttpError(
       String url, String requestedURL, int status, this.message, this.error)
       : super(url, requestedURL, status);
 
   /// If has the field [message]
-  bool get hasMessage => message != null && message.isNotEmpty;
+  bool get hasMessage => message.isNotEmpty;
 
   /// If is an OAuth Authorization Error. Only if response contains a JSON
   /// with matching entries and status is: 0, 400 or 401.
@@ -105,11 +104,7 @@ class HttpError extends HttpStatus {
   }
 
   bool matchesAnyJSONEntry(String key, List<String> values, bool text) {
-    if (key == null ||
-        values == null ||
-        key.isEmpty ||
-        values.isEmpty ||
-        !hasMessage) return false;
+    if (key.isEmpty || values.isEmpty || !hasMessage) return false;
 
     for (var value in values) {
       if (matchesJSONEntry(key, value, text)) return true;
@@ -133,9 +128,9 @@ class HttpError extends HttpStatus {
 }
 
 abstract class HttpBlob<B /*!*/ > {
-  final B /*!*/ blob;
+  final B blob;
 
-  final MimeType mimeType;
+  final MimeType? mimeType;
 
   HttpBlob(
     this.blob,
@@ -147,7 +142,7 @@ abstract class HttpBlob<B /*!*/ > {
   Future<ByteBuffer> readByteBuffer();
 }
 
-HttpBlob createHttpBlob(List content, MimeType mimeType) {
+HttpBlob? createHttpBlob(List content, MimeType? mimeType) {
   return createHttpBlobImpl(content, mimeType);
 }
 
@@ -157,18 +152,16 @@ bool isHttpBlob(Object o) {
 
 /// A wrapper for multiple types of data body.
 class HttpBody {
-  final MimeType mimeType;
-  final Object /*!*/ _body;
+  final MimeType? mimeType;
+  final Object _body;
 
-  static HttpBody /*?*/ from(Object /*?*/ body, [MimeType mimeType]) {
+  static HttpBody? from(Object? body, [MimeType? mimeType]) {
     if (body == null) return null;
     if (body is HttpBody) return body;
     return HttpBody._(body, mimeType);
   }
 
   HttpBody._(this._body, [this.mimeType]);
-
-  bool get isNull => _body == null;
 
   bool get isString => _body is String;
 
@@ -181,12 +174,10 @@ class HttpBody {
   bool get isBytesArray => _body is List<int>;
 
   int get size {
-    if (isNull) return 0;
-
     if (isString) {
       return (_body as String).length;
     } else if (isMap) {
-      return asString.length;
+      return asString!.length;
     } else if (isByteBuffer) {
       var bytes = _body as ByteBuffer;
       return bytes.lengthInBytes;
@@ -194,20 +185,18 @@ class HttpBody {
       var a = _body as List<int>;
       return a.length;
     } else if (isBlob) {
-      return asBlob.size();
+      return asBlob!.size();
     } else {
       return 0;
     }
   }
 
-  String get asString {
-    if (isNull) return null;
-
+  String? get asString {
     if (isString) {
       return _body as String;
     } else if (isByteBuffer) {
       var bytes = _body as ByteBuffer;
-      var bits16 = mimeType != null && mimeType.isCharsetUTF16;
+      var bits16 = mimeType != null && mimeType!.isCharsetUTF16;
       var bytesLists = bits16 ? bytes.asUint16List() : bytes.asUint8List();
       return String.fromCharCodes(bytesLists);
     } else if (isBytesArray) {
@@ -220,9 +209,7 @@ class HttpBody {
     }
   }
 
-  ByteBuffer get asByteBuffer {
-    if (isNull) return null;
-
+  ByteBuffer? get asByteBuffer {
     if (isByteBuffer) {
       return _body as ByteBuffer;
     } else if (isBytesArray) {
@@ -236,16 +223,14 @@ class HttpBody {
       var s = _body as String;
       return Uint8List.fromList(s.codeUnits).buffer;
     } else if (isMap) {
-      var s = asString;
+      var s = asString!;
       return Uint8List.fromList(s.codeUnits).buffer;
     }
 
     return null;
   }
 
-  List<int> get asByteArray {
-    if (isNull) return null;
-
+  List<int>? get asByteArray {
     if (isByteBuffer) {
       return (_body as ByteBuffer).asUint8List();
     } else if (isBytesArray) {
@@ -254,19 +239,17 @@ class HttpBody {
       var s = _body as String;
       return s.codeUnits;
     } else if (isMap) {
-      var s = asString;
+      var s = asString!;
       return s.codeUnits;
     }
 
     return null;
   }
 
-  HttpBlob get asBlob {
-    if (isNull) return null;
-
+  HttpBlob? get asBlob {
     if (isBlob) {
       if (_body is HttpBlob) return _body as HttpBlob;
-      return createHttpBlob(_body, mimeType);
+      return createHttpBlob(_body as List<dynamic>, mimeType);
     } else if (isByteBuffer) {
       return createHttpBlob([_body], mimeType);
     } else if (isBytesArray) {
@@ -280,7 +263,7 @@ class HttpBody {
     return null;
   }
 
-  Future<ByteBuffer> get asByteBufferAsync async {
+  Future<ByteBuffer?> get asByteBufferAsync async {
     var byteBuffer = asByteBuffer;
     if (byteBuffer != null) return byteBuffer;
 
@@ -292,21 +275,22 @@ class HttpBody {
     return null;
   }
 
-  Future<List<int>> get asByteArrayAsync async {
+  Future<List<int>?> get asByteArrayAsync async {
     var a = asByteArray;
     if (a != null) return a;
     var bytes = await asByteBufferAsync;
-    return bytes.asUint8List();
+    return bytes == null ? null : bytes.asUint8List();
   }
 
-  Future<String> get asStringAsync async {
+  Future<String?> get asStringAsync async {
     var s = asString;
     if (s != null) return s;
 
     var bytes = await asByteBufferAsync;
-    var bits16 = mimeType != null && mimeType.isCharsetUTF16;
+    if (bytes == null) return null;
+    var bits16 = mimeType != null && mimeType!.isCharsetUTF16;
     var bytesLists = bits16 ? bytes.asUint16List() : bytes.asUint8List();
-    return bytes != null ? String.fromCharCodes(bytesLists) : null;
+    return String.fromCharCodes(bytesLists);
   }
 
   /// Alias to [asString].
@@ -317,24 +301,24 @@ class HttpBody {
 /// The response of a [HttpRequest].
 class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
   /// Response Method
-  final HttpMethod /*!*/ method;
+  final HttpMethod method;
 
   /// Response body.
-  final HttpBody /*?*/ _body;
+  final HttpBody? _body;
 
   /// A getter capable to get a header entry value.
-  final ResponseHeaderGetter _responseHeaderGetter;
+  final ResponseHeaderGetter? _responseHeaderGetter;
 
   /// Actual request of the client.
-  final Object request;
+  final Object? request;
 
   /// Time of instantiation.
   final int instanceTime = DateTime.now().millisecondsSinceEpoch;
 
-  int _accessTime;
+  int? _accessTime;
 
   HttpResponse(
-      this.method, String url, String requestedURL, int status, HttpBody body,
+      this.method, String url, String requestedURL, int status, HttpBody? body,
       [this._responseHeaderGetter, this.request])
       : _body = body,
         super(url, requestedURL, status) {
@@ -342,7 +326,7 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
   }
 
   /// Last access time of this request. Used for caches timeout.
-  int get accessTime => _accessTime;
+  int? get accessTime => _accessTime;
 
   void updateAccessTime() {
     _accessTime = DateTime.now().millisecondsSinceEpoch;
@@ -353,29 +337,29 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
     var memory = 1 +
         8 +
         8 +
-        (method != null ? 4 : 0) +
-        (_body != null ? _body.size : 0) +
+        4 +
+        (_body != null ? _body!.size : 0) +
         (url == requestedURL ? url.length : url.length + requestedURL.length);
     return memory;
   }
 
   /// Returns the response [HttpBody].
-  HttpBody get body => _body;
+  HttpBody? get body => _body;
 
   /// Returns the [body] as [String].
-  String get bodyAsString => _body?.asString;
+  String? get bodyAsString => _body?.asString;
 
   /// Returns the [body] as JSON.
-  dynamic get json => hasBody ? jsonDecode(bodyAsString) : null;
+  dynamic get json => hasBody ? jsonDecode(bodyAsString!) : null;
 
   /// Returns [true] if has [body].
-  bool get hasBody => _body != null && _body.size > 0;
+  bool get hasBody => _body != null && _body!.size > 0;
 
   /// The [body] type (Content-Type).
-  String get bodyType => getResponseHeader('Content-Type');
+  String? get bodyType => getResponseHeader('Content-Type');
 
   /// Same as [bodyType], but returns as [MimeType].
-  MimeType get bodyMimeType {
+  MimeType? get bodyMimeType {
     return MimeType.parse(bodyType);
   }
 
@@ -387,7 +371,7 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
   }
 
   /// Returns [body] as a [JSONPaging].
-  JSONPaging get asJSONPaging {
+  JSONPaging? get asJSONPaging {
     if (isBodyTypeJSON) {
       return JSONPaging.from(json);
     }
@@ -395,11 +379,11 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
   }
 
   /// Returns the header value for the parameter [headerKey].
-  String getResponseHeader(String headerKey) {
+  String? getResponseHeader(String headerKey) {
     if (_responseHeaderGetter == null) return null;
 
     try {
-      return _responseHeaderGetter(headerKey);
+      return _responseHeaderGetter!(headerKey);
     } catch (e, s) {
       print("[HttpResponse] Can't access response header: $headerKey");
       print(e);
@@ -409,7 +393,7 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
   }
 
   @override
-  String toString([bool withBody]) {
+  String toString([bool? withBody]) {
     withBody ??= false;
     var infos = 'method: $method, requestedURL: $requestedURL, status: $status';
     if (withBody) infos += ', body: $bodyAsString';
@@ -428,35 +412,35 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
 /// Function to dynamically build a HTTP body.
 typedef HttpBodyBuilder = dynamic Function(Map<String, String> parameters);
 typedef HttpBodyBuilderTyped = dynamic Function(
-    Map<String, String> parameters, String type);
+    Map<String, String> parameters, String? type);
 
 /// Represents a body content, used by [HttpRequest].
 class HttpRequestBody {
   static final HttpRequestBody NULL = HttpRequestBody(null, null);
 
   /// Normalizes a Content-Type, allowing aliases like: json, png, jpeg and javascript.
-  static String normalizeType(String bodyType) {
+  static String? normalizeType(String? bodyType) {
     return MimeType.parseAsString(bodyType);
   }
 
   ////////
 
-  HttpBody _content;
+  HttpBody? _content;
 
-  String _contentType;
+  String? _contentType;
 
-  HttpRequestBody(Object content, String type,
-      [Map<String, String> parameters]) {
+  HttpRequestBody(Object? content, String? type,
+      [Map<String, String>? parameters]) {
     _contentType = normalizeType(type);
 
     if (content is HttpBodyBuilder) {
-      var f = content as HttpBodyBuilder;
+      var f = content;
       content = f(parameters ?? {});
     } else if (content is HttpBodyBuilderTyped) {
-      var f = content as HttpBodyBuilderTyped;
+      var f = content;
       content = f(parameters ?? {}, _contentType);
     } else if (content is Function) {
-      var f = content as Function;
+      var f = content;
       content = f();
     }
 
@@ -478,21 +462,21 @@ class HttpRequestBody {
   }
 
   /// Content of the body.
-  String get contentAsString {
+  String? get contentAsString {
     return _content?.asString;
   }
 
   dynamic get contentAsSendData {
     if (_content == null) return null;
-    if (_content.isString) return _content.asString;
-    if (_content.isByteBuffer) return _content.asByteBuffer;
-    if (_content.isBytesArray) return _content.asByteArray;
-    if (_content.isBlob) return _content.asBlob.blob;
-    return _content.asString;
+    if (_content!.isString) return _content!.asString;
+    if (_content!.isByteBuffer) return _content!.asByteBuffer;
+    if (_content!.isBytesArray) return _content!.asByteArray;
+    if (_content!.isBlob) return _content!.asBlob!.blob;
+    return _content!.asString;
   }
 
   /// Type of the body (Content-Type header).
-  String get contentType => _contentType;
+  String? get contentType => _contentType;
 
   /// Returns [true] if has content.
   bool get hasContent => _content != null;
@@ -504,7 +488,8 @@ class HttpRequestBody {
   bool get hasNoContentType => _contentType == null;
 
   /// Returns [true] if [contentType] is a JSON (application/json).
-  bool get isJSONType => _contentType != null && _contentType.endsWith('/json');
+  bool get isJSONType =>
+      _contentType != null && _contentType!.endsWith('/json');
 
   /// Returns [true] if [hasNoContent] and [hasNoContentType].
   bool get isNull => hasNoContent && hasNoContentType;
@@ -517,7 +502,7 @@ typedef ResponseProcessor = void Function(
     HttpClient client, Object request, HttpResponse response);
 
 typedef AuthorizationProvider = Future<Credential> Function(
-    HttpClient client, HttpError lastError);
+    HttpClient client, HttpError? lastError);
 
 /// Represents a kind of HTTP Authorization.
 abstract class Authorization {
@@ -529,19 +514,19 @@ abstract class Authorization {
 
   /// Returns [true] if resolved [Credential] uses `Authorization` HTTP header.
   bool get usesAuthorizationHeader =>
-      isCredentialResolved && resolvedCredential.usesAuthorizationHeader;
+      isCredentialResolved && resolvedCredential!.usesAuthorizationHeader;
 
   /// Returns the resolved [Credential].
   ///
   /// Throws [StateError] if not resolved.
-  Credential get resolvedCredential;
+  Credential? get resolvedCredential;
 
   /// Returns [true] if the [Credential] is static
   /// (future calls to [resolveCredential] will return the same instance).
   bool get isStaticCredential;
 
   /// Returns the resolved [Credential] or [null] if not resolved.
-  Credential get tryResolvedCredential;
+  Credential? get tryResolvedCredential;
 
   /// Returns [true] if is in the process of [Credential] resolution.
   bool get isResolvingCredential => false;
@@ -549,7 +534,8 @@ abstract class Authorization {
   /// Resolves the actual [Credential] for the [HttpRequest].
   /// This method should cache the last resolved [Credential]
   /// and avoid unnecessary resolving procedures.
-  Future<Credential> resolveCredential(HttpClient client, HttpError lastError);
+  Future<Credential?> resolveCredential(
+      HttpClient client, HttpError? lastError);
 
   Authorization._();
 
@@ -569,15 +555,13 @@ class _AuthorizationStatic extends Authorization {
   /// The resolved [Credential].
   final Credential credential;
 
-  _AuthorizationStatic(this.credential) : super._() {
-    if (credential == null) throw ArgumentError.notNull('credential');
-  }
+  _AuthorizationStatic(this.credential) : super._();
 
   @override
   Authorization copy() => _AuthorizationStatic(credential);
 
   @override
-  bool get isCredentialResolved => credential != null;
+  bool get isCredentialResolved => true;
 
   @override
   bool get isStaticCredential => true;
@@ -593,7 +577,7 @@ class _AuthorizationStatic extends Authorization {
 
   @override
   Future<Credential> resolveCredential(
-          HttpClient client, HttpError lastError) async =>
+          HttpClient client, HttpError? lastError) async =>
       credential;
 
   @override
@@ -607,11 +591,7 @@ class _AuthorizationResolvable extends Authorization {
   /// a function.
   final AuthorizationProvider authorizationProvider;
 
-  _AuthorizationResolvable(this.authorizationProvider) : super._() {
-    if (authorizationProvider == null) {
-      throw ArgumentError.notNull('authorizationProvider');
-    }
-  }
+  _AuthorizationResolvable(this.authorizationProvider) : super._();
 
   /// Copies this instance.
   @override
@@ -621,7 +601,7 @@ class _AuthorizationResolvable extends Authorization {
     return authorization;
   }
 
-  Credential _resolvedCredential;
+  Credential? _resolvedCredential;
 
   /// Returns [true] if the [Credential] is already resolved.
   @override
@@ -631,28 +611,28 @@ class _AuthorizationResolvable extends Authorization {
   bool get isStaticCredential => false;
 
   @override
-  Credential get resolvedCredential {
+  Credential? get resolvedCredential {
     if (!isCredentialResolved) throw StateError('Credential not resolved');
     return _resolvedCredential;
   }
 
   @override
-  Credential get tryResolvedCredential => _resolvedCredential;
+  Credential? get tryResolvedCredential => _resolvedCredential;
 
-  Future<Credential> _resolveFuture;
+  Future<Credential>? _resolveFuture;
 
   @override
   bool get isResolvingCredential => _resolveFuture != null;
 
   /// Resolve the actual [Credential] for the [HttpRequest].
   @override
-  Future<Credential> resolveCredential(
-      HttpClient client, HttpError lastError) async {
+  Future<Credential?> resolveCredential(
+      HttpClient client, HttpError? lastError) async {
     if (_resolvedCredential != null) return _resolvedCredential;
 
     if (_resolveFuture != null) {
       try {
-        var credential = await _resolveFuture;
+        var credential = await _resolveFuture!;
         return _resolvedCredential ?? credential;
       } catch (e) {
         return _resolvedCredential;
@@ -661,7 +641,7 @@ class _AuthorizationResolvable extends Authorization {
 
     _resolveFuture = authorizationProvider(client, lastError);
 
-    Credential credential;
+    Credential? credential;
     try {
       credential = await _resolveFuture;
     } catch (e, s) {
@@ -690,17 +670,17 @@ abstract class Credential {
   bool get usesAuthorizationHeader;
 
   /// Builds the header `Authorization`.
-  String buildAuthorizationHeaderLine() {
+  String? buildAuthorizationHeaderLine() {
     return null;
   }
 
   /// Builds the [HttpRequest] URL. Used by credentials that injects tokens/credentials in the URL.
-  String buildURL(String url) {
+  String? buildURL(String url) {
     return null;
   }
 
   /// Builds the [HttpRequest] body. Used by credentials that injects tokens/credentials in the body.
-  HttpRequestBody buildBody(HttpRequestBody body) {
+  HttpRequestBody? buildBody(HttpRequestBody body) {
     return null;
   }
 }
@@ -708,14 +688,14 @@ abstract class Credential {
 /// A HTTP Basic Credential for the `Authorization` header.
 class BasicCredential extends Credential {
   /// Plain username of the credential.
-  final String /*!*/ username;
+  final String username;
 
   /// Plain password of the credential.
-  final String /*!*/ password;
+  final String password;
 
   BasicCredential(this.username, this.password);
 
-  factory BasicCredential.fromJSON(dynamic json) {
+  static BasicCredential? fromJSON(dynamic json) {
     if (json == null) return null;
 
     if (json is List) {
@@ -776,7 +756,7 @@ class BearerCredential extends Credential {
   /// Finds the token inside a [json] map using the [tokenKey].
   /// [tokenKey] can be a tree path using `/` as node delimiter.
   static dynamic findToken(Map json, String tokenKey) {
-    if (json.isEmpty || tokenKey == null || tokenKey.isEmpty) return null;
+    if (json.isEmpty || tokenKey.isEmpty) return null;
 
     var tokenKeys = tokenKey.split('/');
 
@@ -788,7 +768,7 @@ class BearerCredential extends Credential {
         token = findKeyValue(token, [k], true);
       } else if (token is List && isInt(k)) {
         var idx = parseInt(k);
-        token = token[idx];
+        token = token[idx!];
       } else {
         token = null;
       }
@@ -817,14 +797,14 @@ class BearerCredential extends Credential {
   ///
   /// [mainTokenKey] default: `access_token`.
   /// [extraTokenKeys]: `accessToken`, `accessToken/token`.
-  static BearerCredential /*?*/ fromJSONToken(dynamic json,
+  static BearerCredential? fromJSONToken(dynamic json,
       [String mainTokenKey = 'access_token',
       List<String> extraTokenKeys = _DEFAULT_EXTRA_TOKEN_KEYS]) {
     if (json is Map) {
       var token =
           findKeyPathValue(json, mainTokenKey, isValidValue: isValidTokenValue);
 
-      if (token == null && extraTokenKeys != null) {
+      if (token == null) {
         for (var key in extraTokenKeys) {
           token = findKeyPathValue(json, key, isValidValue: isValidTokenValue);
           if (token != null) break;
@@ -833,9 +813,7 @@ class BearerCredential extends Credential {
 
       if (token != null) {
         var tokenStr = token.toString().trim();
-        return tokenStr != null && tokenStr.isNotEmpty
-            ? BearerCredential(tokenStr)
-            : null;
+        return tokenStr.isNotEmpty ? BearerCredential(tokenStr) : null;
       }
     }
 
@@ -885,20 +863,18 @@ class QueryStringCredential extends Credential {
 /// A [Credential] that injects a JSON in the [HttpRequest] body.
 class JSONBodyCredential extends Credential {
   /// JSON field with [authorization] value.
-  String /*?*/ _field;
+  String? _field;
 
   /// Authorization JSON tree.
   final dynamic authorization;
 
   JSONBodyCredential(String field, this.authorization) {
-    if (field != null) {
-      field = field.trim();
-      _field = field.isNotEmpty ? field : null;
-    }
+    field = field.trim();
+    _field = field.isNotEmpty ? field : null;
   }
 
   /// JSON field name.
-  String get field => _field;
+  String? get field => _field;
 
   /// Returns `jsonbody`.
   @override
@@ -909,7 +885,7 @@ class JSONBodyCredential extends Credential {
   bool get usesAuthorizationHeader => false;
 
   @override
-  String buildAuthorizationHeaderLine() {
+  String? buildAuthorizationHeaderLine() {
     return null;
   }
 
@@ -922,7 +898,7 @@ class JSONBodyCredential extends Credential {
   /// Builds the [HttpRequest] body with the [Credential].
   @override
   HttpRequestBody buildBody(HttpRequestBody body) {
-    if (body == null || body.isNull) {
+    if (body.isNull) {
       return buildJSONAuthorizationBody(null);
     } else if (body.isJSONType) {
       return buildJSONAuthorizationBody(body);
@@ -931,23 +907,23 @@ class JSONBodyCredential extends Credential {
     }
   }
 
-  HttpRequestBody buildJSONAuthorizationBody(HttpRequestBody body) {
+  HttpRequestBody buildJSONAuthorizationBody(HttpRequestBody? body) {
     return HttpRequestBody(
         buildJSONAuthorizationBodyJSON(body), 'application/json');
   }
 
-  String buildJSONAuthorizationBodyJSON(HttpRequestBody body) {
+  String buildJSONAuthorizationBodyJSON(HttpRequestBody? body) {
     if (body == null || body.hasNoContent) {
-      if (field == null || field.isEmpty) {
+      if (field == null || field!.isEmpty) {
         return encodeJSON(authorization);
       } else {
         return encodeJSON({'$field': authorization});
       }
     }
 
-    var bodyJson = json.decode(body.contentAsString);
+    var bodyJson = json.decode(body.contentAsString!);
 
-    if (field == null || field.isEmpty) {
+    if (field == null || field!.isEmpty) {
       if (authorization is Map) {
         if (bodyJson is Map) {
           bodyJson.addAll(authorization);
@@ -980,22 +956,22 @@ class JSONBodyCredential extends Credential {
 /// [removeFragment] If [true] will remove URL fragment.
 String buildURLWithQueryParameters(String url, Map<String, String> parameters,
     {bool removeFragment = false}) {
-  if (parameters == null || parameters.isEmpty) return url;
+  if (parameters.isEmpty) return url;
 
   var uri = Uri.parse(url);
 
   Map<String, String> queryParameters;
 
-  if (uri.query == null || uri.query.isEmpty) {
+  if (uri.query.isEmpty) {
     queryParameters = Map.from(parameters);
   } else {
-    queryParameters = uri.queryParameters ?? {};
+    queryParameters = uri.queryParameters;
     queryParameters = Map.from(queryParameters);
     queryParameters.addAll(parameters);
   }
 
-  var fragment = uri.fragment;
-  if ((removeFragment ?? false) || (fragment != null && fragment.isEmpty)) {
+  String? fragment = uri.fragment;
+  if (removeFragment || fragment.isEmpty) {
     fragment = null;
   }
 
@@ -1018,7 +994,7 @@ bool methodAcceptsQueryString(HttpMethod method) {
 }
 
 /// Returns [HttpMethod] instance for [method] parameter.
-HttpMethod getHttpMethod(String method, [HttpMethod def]) {
+HttpMethod? getHttpMethod(String? method, [HttpMethod? def]) {
   if (method == null) return def;
   method = method.trim().toUpperCase();
   if (method.isEmpty) return def;
@@ -1044,8 +1020,6 @@ HttpMethod getHttpMethod(String method, [HttpMethod def]) {
 }
 
 bool canHttpMethodHaveBody(HttpMethod method) {
-  if (method == null) return false;
-
   switch (method) {
     case HttpMethod.POST:
     case HttpMethod.PUT:
@@ -1057,8 +1031,8 @@ bool canHttpMethodHaveBody(HttpMethod method) {
 }
 
 /// Returns [method] name.
-String getHttpMethodName(HttpMethod method, [HttpMethod def]) {
-  method ??= def;
+String? getHttpMethodName(HttpMethod? method, [HttpMethod? def]) {
+  method ??= def!;
 
   switch (method) {
     case HttpMethod.GET:
@@ -1083,38 +1057,38 @@ String getHttpMethodName(HttpMethod method, [HttpMethod def]) {
 /// Represents the HTTP request.
 class HttpRequest {
   /// HTTP Method.
-  final HttpMethod /*!*/ method;
+  final HttpMethod method;
 
   /// Requested URL.
-  final String /*!*/ url;
+  final String url;
 
   /// Actual requested URL.
-  final String /*!*/ requestURL;
+  final String requestURL;
 
   /// The query parameters of the request.
-  final Map<String, String> queryParameters;
+  final Map<String, String>? queryParameters;
 
   /// If [true] avoid a request URL with a `queryString`.
-  final bool /*!*/ noQueryString;
+  final bool noQueryString;
 
   /// Authorization instance for the request.
-  final Authorization authorization;
+  final Authorization? authorization;
 
-  final bool /*!*/ withCredentials;
+  final bool withCredentials;
 
   /// Tells the server the desired response format.
-  final String responseType;
+  final String? responseType;
 
   /// MimeType of request sent data (body).
-  final String mimeType;
+  final String? mimeType;
 
   /// Headers of the request.
-  final Map<String, String> requestHeaders;
+  final Map<String, String>? requestHeaders;
 
   /// Data/body to send with the request.
   final dynamic sendData;
 
-  int /*!*/ _retries = 0;
+  int _retries = 0;
 
   HttpRequest(this.method, this.url, this.requestURL,
       {this.queryParameters,
@@ -1127,7 +1101,7 @@ class HttpRequest {
       this.sendData});
 
   /// Copies this instance with a different [client] and [authorization] if provided.
-  HttpRequest copy([HttpClient /*!*/ client, Authorization authorization]) {
+  HttpRequest copy(HttpClient client, [Authorization? authorization]) {
     if (authorization == null || authorization == this.authorization) {
       return this;
     }
@@ -1136,8 +1110,8 @@ class HttpRequest {
         client, url, authorization, headerContentType, headerAccept);
 
     // ignore: omit_local_variable_types
-    Map<String, String> queryParameters = this.queryParameters != null
-        ? Map<String, String>.from(this.queryParameters)
+    Map<String, String>? queryParameters = this.queryParameters != null
+        ? Map<String, String>.from(this.queryParameters!)
         : null;
 
     var requestURL = client.clientRequester.buildRequestURL(client, url,
@@ -1165,12 +1139,12 @@ class HttpRequest {
   }
 
   /// Returns the header: Accept
-  String get headerAccept =>
-      requestHeaders != null ? requestHeaders['Accept'] : null;
+  String? get headerAccept =>
+      requestHeaders != null ? requestHeaders!['Accept'] : null;
 
   /// Returns the header: Content-Type
-  String get headerContentType =>
-      requestHeaders != null ? requestHeaders['Content-Type'] : null;
+  String? get headerContentType =>
+      requestHeaders != null ? requestHeaders!['Content-Type'] : null;
 
   /// Number of retries for this request.
   int get retries => _retries;
@@ -1186,20 +1160,19 @@ class HttpRequest {
 }
 
 typedef ProgressListener = void Function(
-    HttpRequest request, int loaded, int total, double ratio, bool upload);
+    HttpRequest request, int? loaded, int? total, double? ratio, bool upload);
 
 /// Abstract [HttpClient] requester. This should implement the actual
 /// request process.
 abstract class HttpClientRequester {
-  Future<HttpResponse> request(
-      HttpClient client, HttpMethod /*!*/ method, String url,
-      {Authorization authorization,
-      Map<String, String> queryParameters,
+  Future<HttpResponse> request(HttpClient client, HttpMethod method, String url,
+      {Authorization? authorization,
+      Map<String, String>? queryParameters,
       bool noQueryString = false,
-      Object /*?*/ body,
-      String contentType,
-      String accept,
-      ProgressListener progressListener}) {
+      Object? body,
+      String? contentType,
+      String? accept,
+      ProgressListener? progressListener}) {
     switch (method) {
       case HttpMethod.GET:
         return requestGET(client, url,
@@ -1256,9 +1229,9 @@ abstract class HttpClientRequester {
     }
   }
 
-  bool /*!*/ _withCredentials(HttpClient client, Authorization authorization) {
+  bool _withCredentials(HttpClient client, Authorization? authorization) {
     if (client.crossSiteWithCredentials != null) {
-      return client.crossSiteWithCredentials;
+      return client.crossSiteWithCredentials!;
     }
 
     if (authorization != null && authorization.usesAuthorizationHeader) {
@@ -1269,10 +1242,10 @@ abstract class HttpClientRequester {
   }
 
   Future<HttpResponse> requestGET(HttpClient client, String url,
-      {Authorization authorization,
-      Map<String, String> queryParameters,
+      {Authorization? authorization,
+      Map<String, String>? queryParameters,
       bool noQueryString = false,
-      ProgressListener progressListener}) {
+      ProgressListener? progressListener}) {
     return doHttpRequest(
         client,
         HttpRequest(
@@ -1291,10 +1264,10 @@ abstract class HttpClientRequester {
   }
 
   Future<HttpResponse> requestOPTIONS(HttpClient client, String url,
-      {Authorization authorization,
-      Map<String, String> queryParameters,
+      {Authorization? authorization,
+      Map<String, String>? queryParameters,
       bool noQueryString = false,
-      ProgressListener progressListener}) {
+      ProgressListener? progressListener}) {
     return doHttpRequest(
         client,
         HttpRequest(
@@ -1314,13 +1287,13 @@ abstract class HttpClientRequester {
   }
 
   Future<HttpResponse> requestPOST(HttpClient client, String url,
-      {Authorization authorization,
-      Map<String, String> queryParameters,
+      {Authorization? authorization,
+      Map<String, String>? queryParameters,
       bool noQueryString = false,
-      Object /*?*/ body,
-      String contentType,
-      String accept,
-      ProgressListener progressListener}) {
+      Object? body,
+      String? contentType,
+      String? accept,
+      ProgressListener? progressListener}) {
     var httpBody = HttpRequestBody(body, contentType, queryParameters);
     var requestBody = buildRequestBody(client, httpBody, authorization);
 
@@ -1372,13 +1345,13 @@ abstract class HttpClientRequester {
   }
 
   Future<HttpResponse> requestPUT(HttpClient client, String url,
-      {Authorization authorization,
-      Map<String, String> queryParameters,
+      {Authorization? authorization,
+      Map<String, String>? queryParameters,
       bool noQueryString = false,
-      Object /*?*/ body,
-      String contentType,
-      String accept,
-      ProgressListener progressListener}) {
+      Object? body,
+      String? contentType,
+      String? accept,
+      ProgressListener? progressListener}) {
     var httpBody = HttpRequestBody(body, contentType, queryParameters);
     var requestBody = buildRequestBody(client, httpBody, authorization);
 
@@ -1401,13 +1374,13 @@ abstract class HttpClientRequester {
   }
 
   Future<HttpResponse> requestPATCH(HttpClient client, String url,
-      {Authorization authorization,
-      Map<String, String> queryParameters,
+      {Authorization? authorization,
+      Map<String, String>? queryParameters,
       bool noQueryString = false,
-      Object /*?*/ body,
-      String contentType,
-      String accept,
-      ProgressListener progressListener}) {
+      Object? body,
+      String? contentType,
+      String? accept,
+      ProgressListener? progressListener}) {
     var httpBody = HttpRequestBody(body, contentType, queryParameters);
     var requestBody = buildRequestBody(client, httpBody, authorization);
 
@@ -1439,13 +1412,13 @@ abstract class HttpClientRequester {
   }
 
   Future<HttpResponse> requestDELETE(HttpClient client, String url,
-      {Authorization authorization,
-      Map<String, String> queryParameters,
+      {Authorization? authorization,
+      Map<String, String>? queryParameters,
       bool noQueryString = false,
-      Object /*?*/ body,
-      String contentType,
-      String accept,
-      ProgressListener progressListener}) {
+      Object? body,
+      String? contentType,
+      String? accept,
+      ProgressListener? progressListener}) {
     var httpBody = HttpRequestBody(body, contentType, queryParameters);
     var requestBody = buildRequestBody(client, httpBody, authorization);
 
@@ -1469,10 +1442,10 @@ abstract class HttpClientRequester {
 
   /// Implements teh actual HTTP request for imported platform.
   Future<HttpResponse> doHttpRequest(HttpClient client, HttpRequest request,
-      ProgressListener progressListener, bool log);
+      ProgressListener? progressListener, bool log);
 
   String buildPOSTFormData(Map<String, String> data,
-      [Map<String, String> requestHeaders]) {
+      [Map<String, String>? requestHeaders]) {
     var formData = buildQueryString(data);
 
     if (requestHeaders != null) {
@@ -1497,8 +1470,8 @@ abstract class HttpClientRequester {
   }
 
   /// Helper to build the request headers.
-  Map<String, String> buildRequestHeaders(HttpClient client, String url,
-      [Authorization authorization, String contentType, String accept]) {
+  Map<String, String>? buildRequestHeaders(HttpClient client, String url,
+      [Authorization? authorization, String? contentType, String? accept]) {
     var header = client.buildRequestHeaders(url);
 
     if (contentType != null) {
@@ -1514,7 +1487,7 @@ abstract class HttpClientRequester {
     if (authorization != null && authorization.usesAuthorizationHeader) {
       header ??= {};
 
-      var credential = authorization.resolvedCredential;
+      var credential = authorization.resolvedCredential!;
       var authorizationHeaderLine = credential.buildAuthorizationHeaderLine();
       if (authorizationHeaderLine != null) {
         header['Authorization'] = authorizationHeaderLine;
@@ -1526,8 +1499,8 @@ abstract class HttpClientRequester {
 
   /// Helper to build the request URL.
   String buildRequestURL(HttpClient client, String url,
-      {Authorization authorization,
-      Map<String, String> queryParameters,
+      {Authorization? authorization,
+      Map<String, String>? queryParameters,
       bool noQueryString = false}) {
     if (queryParameters != null && queryParameters.isNotEmpty) {
       url = buildURLWithQueryParameters(url, queryParameters,
@@ -1535,11 +1508,11 @@ abstract class HttpClientRequester {
     }
 
     if (authorization != null && authorization.isCredentialResolved) {
-      var authorizationURL = authorization.resolvedCredential.buildURL(url);
+      var authorizationURL = authorization.resolvedCredential!.buildURL(url);
       if (authorizationURL != null) return authorizationURL;
     }
 
-    if (noQueryString ?? false) {
+    if (noQueryString) {
       url = removeUriQueryString(url).toString();
     }
 
@@ -1548,13 +1521,13 @@ abstract class HttpClientRequester {
 
   /// Helper to build the request body.
   HttpRequestBody buildRequestBody(HttpClient client, HttpRequestBody httpBody,
-      Authorization authorization) {
+      Authorization? authorization) {
     if (authorization != null && authorization.isCredentialResolved) {
-      var jsonBody = authorization.resolvedCredential.buildBody(httpBody);
+      var jsonBody = authorization.resolvedCredential!.buildBody(httpBody);
       if (jsonBody != null) return jsonBody;
     }
 
-    return httpBody ?? HttpRequestBody.NULL;
+    return httpBody;
   }
 
   /// Closes the [HttpClientRequester] and internal instances.
@@ -1562,36 +1535,36 @@ abstract class HttpClientRequester {
 }
 
 typedef HttpClientURLFilter = String Function(
-    String url, Map<String, String> queryParameters);
+    String url, Map<String, String>? queryParameters);
 
-typedef AuthorizationInterceptor = void Function(Authorization authorization);
+typedef AuthorizationInterceptor = void Function(Authorization? authorization);
 
 /// Represents a simple HTTP call that can be called many times.
 class HttpCall<R> {
-  final HttpClient /*!*/ client;
-  final HttpMethod /*!*/ method;
+  final HttpClient client;
+  final HttpMethod method;
   final String path;
-  final bool /*!*/ fullPath;
-  final Object /*?*/ body;
+  final bool fullPath;
+  final Object? body;
   final int maxRetries;
 
   HttpCall(
-      {String baseURL,
-      HttpClient client,
-      HttpMethod method,
-      String path,
-      bool /*!*/ fullPath = false,
+      {String? baseURL,
+      HttpClient? client,
+      HttpMethod? method,
+      String? path,
+      bool fullPath = false,
       this.body,
-      int maxRetries})
+      int? maxRetries})
       : client = client ?? HttpClient(baseURL ?? getUriBase().toString()),
         method = method ?? HttpMethod.GET,
         path = path ?? '',
-        fullPath = fullPath ?? false,
+        fullPath = fullPath,
         maxRetries = maxRetries ?? 0;
 
   /// Performs a call, making the HTTP request.
-  Future<HttpResponse> call(Map<String, dynamic> parameters,
-      {Object /*?*/ body, int maxRetries}) async {
+  Future<HttpResponse?> call(Map<String, dynamic> parameters,
+      {Object? body, int? maxRetries}) async {
     maxRetries ??= this.maxRetries;
 
     var limit = Math.max(1, 1 + maxRetries);
@@ -1609,14 +1582,15 @@ class HttpCall<R> {
   }
 
   /// Performs a call, making the HTTP request, than resolves the response.
-  Future<R> callAndResolve(Map<String, dynamic> parameters,
-      {Object /*?*/ body, int maxRetries}) async {
-    var response = await call(parameters, body: body, maxRetries: maxRetries);
+  Future<R?> callAndResolve(Map<String, dynamic> parameters,
+      {Object? body, int? maxRetries}) async {
+    var response = await (call(parameters, body: body, maxRetries: maxRetries)
+        as FutureOr<HttpResponse>);
     return resolveResponse(response);
   }
 
   Future<HttpResponse> _doRequestImp(
-      Map<String, dynamic> parameters, Object body) async {
+      Map<String, dynamic> parameters, Object? body) async {
     if (canHttpMethodHaveBody(method)) {
       body ??= this.body;
     } else {
@@ -1628,17 +1602,14 @@ class HttpCall<R> {
     return response;
   }
 
-  static Map<String, String> toQueryParameters(Map parameters) {
-    Map<String, String> queryParameters;
-    if (parameters != null) {
-      queryParameters = parameters
-          .map((key, value) => MapEntry('$key', toQueryParameterValue(value)));
-    }
+  static Map<String, String>? toQueryParameters(Map parameters) {
+    Map<String, String>? queryParameters;
+    queryParameters = parameters
+        .map((key, value) => MapEntry('$key', toQueryParameterValue(value)));
     return queryParameters;
   }
 
   static String toQueryParameterValue(Object value) {
-    if (value == null) return '';
     if (value is List) return value.join(',');
     if (value is Map) {
       return value.entries.map((e) => '${e.key}:${e.value}').join(',');
@@ -1650,7 +1621,7 @@ class HttpCall<R> {
   ///
   /// Can be overwritten by other implementations.
   Future<HttpResponse> requestHttpClient(HttpClient client, HttpMethod method,
-      String path, bool /*!*/ fullPath, Map parameters, Object /*?*/ body) {
+      String path, bool fullPath, Map parameters, Object? body) {
     var queryParameters = toQueryParameters(parameters);
     return client.request(method, path,
         fullPath: fullPath, parameters: queryParameters, body: body);
@@ -1659,14 +1630,14 @@ class HttpCall<R> {
   /// Method responsible to resolve the [response] to a [R] value.
   ///
   /// Can be overwritten by other implementations.
-  R resolveResponse(HttpResponse response) {
+  R? resolveResponse(HttpResponse response) {
     if (!response.isOK) {
       throw StateError(
           "Can't perform request. Response{ status: ${response.status} ; body: ${response.bodyAsString}} > $this");
     } else if (response.isBodyTypeJSON) {
-      return response.json as R;
+      return response.json as R?;
     } else {
-      return response.bodyAsString as R;
+      return response.bodyAsString as R?;
     }
   }
 
@@ -1679,19 +1650,19 @@ class HttpCall<R> {
 /// Mercury HTTP Client.
 class HttpClient {
   /// The base URL for the client requests.
-  String /*!*/ baseURL;
+  late String baseURL;
 
   /// Requester implementation.
-  HttpClientRequester /*!*/ _clientRequester;
+  late HttpClientRequester _clientRequester;
 
   /// Returns the [HttpClientRequester] instance.
   HttpClientRequester get clientRequester => _clientRequester;
 
   static int _idCounter = 0;
 
-  int /*!*/ _id;
+  late int _id;
 
-  HttpClient(String baseURL, [HttpClientRequester clientRequester]) {
+  HttpClient(String baseURL, [HttpClientRequester? clientRequester]) {
     _id = ++_idCounter;
 
     baseURL = baseURL.trimLeft();
@@ -1700,7 +1671,7 @@ class HttpClient {
       baseURL = baseURL.substring(0, baseURL.length - 1);
     }
 
-    if (baseURL == null || baseURL.isEmpty) {
+    if (baseURL.isEmpty) {
       throw ArgumentError('Invalid baseURL');
     }
 
@@ -1719,7 +1690,7 @@ class HttpClient {
     }
     var httpClient = HttpClient(baseURL, clientRequester);
 
-    if (preserveAuthorization ?? false) {
+    if (preserveAuthorization) {
       httpClient._authorization = _authorization;
     }
 
@@ -1743,7 +1714,7 @@ class HttpClient {
   }
 
   /// The URL filter, if present.
-  HttpClientURLFilter /*?*/ urlFilter;
+  HttpClientURLFilter? urlFilter;
 
   @override
   String toString() {
@@ -1761,11 +1732,11 @@ class HttpClient {
 
   /// Requests using [method] and [path] and returns a decoded JSON.
   Future<dynamic> requestJSON(HttpMethod method, String path,
-      {Credential authorization,
-      Map<String, String> queryParameters,
-      Object /*?*/ body,
-      String contentType,
-      String accept}) async {
+      {Credential? authorization,
+      Map<String, String>? queryParameters,
+      Object? body,
+      String? contentType,
+      String? accept}) async {
     return request(method, path,
             authorization: authorization,
             parameters: queryParameters,
@@ -1777,24 +1748,24 @@ class HttpClient {
 
   /// Does a GET request and returns a decoded JSON.
   Future<dynamic> getJSON(String path,
-      {Credential authorization, Map<String, String> parameters}) async {
+      {Credential? authorization, Map<String, String>? parameters}) async {
     return get(path, authorization: authorization, parameters: parameters)
         .then((r) => _jsonDecode(r.bodyAsString));
   }
 
   /// Does an OPTION request and returns a decoded JSON.
   Future<dynamic> optionsJSON(String path,
-      {Credential authorization, Map<String, String> parameters}) async {
+      {Credential? authorization, Map<String, String>? parameters}) async {
     return options(path, authorization: authorization, parameters: parameters)
         .then((r) => _jsonDecode(r.bodyAsString));
   }
 
   /// Does a POST request and returns a decoded JSON.
   Future<dynamic> postJSON(String path,
-      {Credential authorization,
-      Map<String, String> parameters,
-      Object /*?*/ body,
-      String contentType}) async {
+      {Credential? authorization,
+      Map<String, String>? parameters,
+      Object? body,
+      String? contentType}) async {
     return post(path,
             authorization: authorization,
             parameters: parameters,
@@ -1805,21 +1776,21 @@ class HttpClient {
 
   /// Does a PUT request and returns a decoded JSON.
   Future<dynamic> putJSON(String path,
-      {Credential authorization, Object /*?*/ body, String contentType}) async {
+      {Credential? authorization, Object? body, String? contentType}) async {
     return put(path,
             authorization: authorization, body: body, contentType: contentType)
         .then((r) => _jsonDecode(r.bodyAsString));
   }
 
   /// If set to true, sends credential to cross sites.
-  bool /*?*/ crossSiteWithCredentials;
+  bool? crossSiteWithCredentials;
 
-  Authorization _authorization;
+  Authorization? _authorization;
 
   /// The [Authorization] (that resolves [Credential]) for requests.
-  Authorization get authorization => _authorization;
+  Authorization? get authorization => _authorization;
 
-  set authorization(Authorization authorization) {
+  set authorization(Authorization? authorization) {
     _authorization = authorization;
     _notifyResolvedAuthorization();
   }
@@ -1827,9 +1798,9 @@ class HttpClient {
   void _notifyResolvedAuthorization() {
     if (_authorization != null &&
         authorizationResolutionInterceptor != null &&
-        _authorization.isCredentialResolved) {
+        _authorization!.isCredentialResolved) {
       try {
-        authorizationResolutionInterceptor(_authorization);
+        authorizationResolutionInterceptor!(_authorization);
       } catch (e, s) {
         print(e);
         print(s);
@@ -1837,12 +1808,12 @@ class HttpClient {
     }
   }
 
-  AuthorizationInterceptor authorizationResolutionInterceptor;
+  AuthorizationInterceptor? authorizationResolutionInterceptor;
 
-  String _responseHeaderWithToken;
+  String? _responseHeaderWithToken;
 
   /// The response header with a token to use as [authorization] [Credential].
-  String get responseHeaderWithToken => _responseHeaderWithToken;
+  String? get responseHeaderWithToken => _responseHeaderWithToken;
 
   /// If set, will automatically use a token in the
   /// header [responseHeaderWithToken], when found in any request.
@@ -1856,18 +1827,18 @@ class HttpClient {
 
   bool logJSON = false;
 
-  dynamic _jsonDecode(String s) {
+  dynamic _jsonDecode(String? s) {
     if (logJSON) _logJSON(s);
     return s == null || s.isEmpty ? null : jsonDecode(s);
   }
 
-  void _logJSON(String json) {
+  void _logJSON(String? json) {
     var now = DateTime.now();
     print('$now> HttpClient> $json');
   }
 
-  Future<Authorization> _buildRequestAuthorization(
-      Credential credential) async {
+  Future<Authorization?> _buildRequestAuthorization(
+      Credential? credential) async {
     if (credential != null) {
       return Authorization.fromCredential(credential);
     }
@@ -1877,37 +1848,37 @@ class HttpClient {
 
   /// Returns [true] if [authorization] is resolved.
   bool get isAuthorizationResolved =>
-      authorization != null && authorization.isCredentialResolved;
+      authorization != null && authorization!.isCredentialResolved;
 
   /// Returns the [authorization] if is resolved.
-  Authorization get resolvedAuthorization =>
+  Authorization? get resolvedAuthorization =>
       isAuthorizationResolved ? authorization : null;
 
-  Future<Authorization> _resolveAuthorization() async {
+  Future<Authorization?> _resolveAuthorization() async {
     if (_authorization == null) return Future.value(null);
 
-    if (_authorization.isResolvingCredential) {
+    if (_authorization!.isResolvingCredential) {
       print('WARNING: '
           'Authorization[${_authorization.runtimeType}] is already resolving a credential! '
           '(NOTE: Do not use this client instance for network resolution while resolving a Credential)');
     }
 
-    await _authorization.resolveCredential(this, null);
+    await _authorization!.resolveCredential(this, null);
     _notifyResolvedAuthorization();
     return _authorization;
   }
 
   /// Does a request using [method].
-  Future<HttpResponse> request(HttpMethod /*!*/ method, String path,
-      {bool /*!*/ fullPath = false,
-      Credential authorization,
-      Map<String, String> parameters,
-      String queryString,
-      Object /*?*/ body,
-      String contentType,
-      String accept,
+  Future<HttpResponse> request(HttpMethod method, String path,
+      {bool fullPath = false,
+      Credential? authorization,
+      Map<String, String>? parameters,
+      String? queryString,
+      Object? body,
+      String? contentType,
+      String? accept,
       bool noQueryString = false,
-      ProgressListener progressListener}) async {
+      ProgressListener? progressListener}) async {
     var url = buildMethodRequestURL(method, path, fullPath, parameters);
 
     var ret_url_parameters =
@@ -1926,18 +1897,18 @@ class HttpClient {
   }
 
   /// Builds the URL for [method] using [path] or [fullPath].
-  String buildMethodRequestURL(HttpMethod method, String path,
-          bool /*!*/ fullPath, Map<String, String> parameters) =>
+  String buildMethodRequestURL(HttpMethod method, String? path, bool fullPath,
+          Map<String, String>? parameters) =>
       _buildURL(path, fullPath, parameters, methodAcceptsQueryString(method));
 
   Future<HttpResponse> requestURL(HttpMethod method, String url,
-      {Credential authorization,
-      Map<String, String> queryParameters,
+      {Credential? authorization,
+      Map<String, String>? queryParameters,
       noQueryString = false,
-      Object /*?*/ body,
-      String contentType,
-      String accept,
-      ProgressListener progressListener}) async {
+      Object? body,
+      String? contentType,
+      String? accept,
+      ProgressListener? progressListener}) async {
     var requestAuthorization = await _buildRequestAuthorization(authorization);
     return _clientRequester.request(this, method, url,
         authorization: requestAuthorization,
@@ -1953,10 +1924,10 @@ class HttpClient {
 
   /// Does a GET request.
   Future<HttpResponse> get(String path,
-      {bool /*!*/ fullPath = false,
-      Credential authorization,
-      Map<String, String> parameters,
-      ProgressListener progressListener}) async {
+      {bool fullPath = false,
+      Credential? authorization,
+      Map<String, String>? parameters,
+      ProgressListener? progressListener}) async {
     var url = _buildURL(path, fullPath, parameters, true);
     var requestAuthorization = await _buildRequestAuthorization(authorization);
     return _clientRequester.requestGET(this, url,
@@ -1966,10 +1937,10 @@ class HttpClient {
 
   /// Does an OPTIONS request.
   Future<HttpResponse> options(String path,
-      {bool /*!*/ fullPath = false,
-      Credential authorization,
-      Map<String, String> parameters,
-      ProgressListener progressListener}) async {
+      {bool fullPath = false,
+      Credential? authorization,
+      Map<String, String>? parameters,
+      ProgressListener? progressListener}) async {
     var url = _buildURL(path, fullPath, parameters, true);
     var requestAuthorization = await _buildRequestAuthorization(authorization);
     return _clientRequester.requestOPTIONS(this, url,
@@ -1979,14 +1950,14 @@ class HttpClient {
 
   /// Does a POST request.
   Future<HttpResponse> post(String path,
-      {bool /*!*/ fullPath = false,
-      Credential authorization,
-      Map<String, String> parameters,
-      String queryString,
-      Object /*?*/ body,
-      String contentType,
-      String accept,
-      ProgressListener progressListener}) async {
+      {bool fullPath = false,
+      Credential? authorization,
+      Map<String, String>? parameters,
+      String? queryString,
+      Object? body,
+      String? contentType,
+      String? accept,
+      ProgressListener? progressListener}) async {
     var url = _buildURL(path, fullPath, parameters);
 
     var ret_url_parameters =
@@ -2006,14 +1977,14 @@ class HttpClient {
 
   /// Does a PUT request.
   Future<HttpResponse> put(String path,
-      {bool /*!*/ fullPath = false,
-      Credential authorization,
-      Map<String, String> parameters,
-      String queryString,
-      Object /*?*/ body,
-      String contentType,
-      String accept,
-      ProgressListener progressListener}) async {
+      {bool fullPath = false,
+      Credential? authorization,
+      Map<String, String>? parameters,
+      String? queryString,
+      Object? body,
+      String? contentType,
+      String? accept,
+      ProgressListener? progressListener}) async {
     var url = _buildURL(path, fullPath, parameters);
 
     var ret_url_parameters =
@@ -2033,14 +2004,14 @@ class HttpClient {
 
   /// Does a PATCH request.
   Future<HttpResponse> patch(String path,
-      {bool /*!*/ fullPath = false,
-      Credential authorization,
-      Map<String, String> parameters,
-      String queryString,
-      Object /*?*/ body,
-      String contentType,
-      String accept,
-      ProgressListener progressListener}) async {
+      {bool fullPath = false,
+      Credential? authorization,
+      Map<String, String>? parameters,
+      String? queryString,
+      Object? body,
+      String? contentType,
+      String? accept,
+      ProgressListener? progressListener}) async {
     var url = _buildURL(path, fullPath, parameters);
 
     var ret_url_parameters =
@@ -2060,14 +2031,14 @@ class HttpClient {
 
   /// Does a DELETE request.
   Future<HttpResponse> delete(String path,
-      {bool /*!*/ fullPath = false,
-      Credential authorization,
-      Map<String, String> parameters,
-      String queryString,
-      Object /*?*/ body,
-      String contentType,
-      String accept,
-      ProgressListener progressListener}) async {
+      {bool fullPath = false,
+      Credential? authorization,
+      Map<String, String>? parameters,
+      String? queryString,
+      Object? body,
+      String? contentType,
+      String? accept,
+      ProgressListener? progressListener}) async {
     var url = _buildURL(path, fullPath, parameters);
 
     var ret_url_parameters =
@@ -2095,8 +2066,8 @@ class HttpClient {
     }
   }
 
-  Uri _setURIQueryString(Uri uri, String queryString) {
-    var port = uri.port;
+  Uri _setURIQueryString(Uri uri, String? queryString) {
+    int? port = uri.port;
 
     if (uri.scheme == 'https' && uri.port == 443) {
       port = null;
@@ -2113,14 +2084,14 @@ class HttpClient {
         query: queryString);
   }
 
-  MapEntry<String, Map<String, String>> _build_URL_and_Parameters(
-      String url, Map<String, String> parameters, String queryString) {
+  MapEntry<String, Map<String, String>?> _build_URL_and_Parameters(
+      String url, Map<String, String>? parameters, String? queryString) {
     var uri = Uri.parse(url);
 
-    if (uri.queryParameters != null && uri.queryParameters.isNotEmpty) {
+    if (uri.queryParameters.isNotEmpty) {
       if (parameters != null && parameters.isNotEmpty) {
         uri.queryParameters
-            .forEach((k, v) => parameters.putIfAbsent(k, () => v));
+            .forEach((k, v) => parameters!.putIfAbsent(k, () => v));
       } else {
         parameters = uri.queryParameters;
       }
@@ -2130,7 +2101,7 @@ class HttpClient {
     }
 
     if (isNotEmptyString(queryString)) {
-      if (queryString.contains('{{')) {
+      if (queryString!.contains('{{')) {
         queryString = buildStringPattern(queryString, parameters ?? {});
       }
 
@@ -2145,10 +2116,10 @@ class HttpClient {
 
   /// Builds a Request URL, with the same rules of [requestURL].
   String buildRequestURL(HttpMethod method, String path,
-      {bool /*!*/ fullPath = false,
-      Authorization authorization,
-      Map<String, String> parameters,
-      String queryString,
+      {bool fullPath = false,
+      Authorization? authorization,
+      Map<String, String>? parameters,
+      String? queryString,
       bool noQueryString = false}) {
     var url = buildMethodRequestURL(method, path, fullPath, parameters);
 
@@ -2164,13 +2135,12 @@ class HttpClient {
   }
 
   /// Builds a URL, using [baseURL] with [path] or [fullPath].
-  String buildURL(String path, bool /*!*/ fullPath,
-      [Map<String, String> queryParameters, bool allowURLQueryString = true]) {
+  String buildURL(String path, bool fullPath,
+      [Map<String, String>? queryParameters, bool allowURLQueryString = true]) {
     return _buildURL(path, fullPath, queryParameters, allowURLQueryString);
   }
 
-  String _buildURL(
-      String path, bool /*!*/ fullPath, Map<String, String> parameters,
+  String _buildURL(String? path, bool fullPath, Map<String, String>? parameters,
       [bool allowURLQueryString = false]) {
     var queryParameters = allowURLQueryString ? parameters : null;
 
@@ -2183,14 +2153,14 @@ class HttpClient {
     }
 
     if (path.contains('{{')) {
-      path = buildStringPattern(path, parameters ?? {}) /*!*/;
+      path = buildStringPattern(path, parameters ?? {})!;
     }
 
     if (!path.startsWith('/')) path = '/$path';
 
     var url;
 
-    if (fullPath != null && fullPath) {
+    if (fullPath) {
       var uri = Uri.parse(baseURL);
 
       var uri2;
@@ -2206,8 +2176,8 @@ class HttpClient {
     }
 
     if (urlFilter != null) {
-      var url2 = urlFilter(url, queryParameters);
-      if (url2 != null && url2.isNotEmpty && url2 != url) {
+      var url2 = urlFilter!(url, queryParameters);
+      if (url2.isNotEmpty && url2 != url) {
         url = url2;
       }
     }
@@ -2216,17 +2186,17 @@ class HttpClient {
   }
 
   String _buildURLWithParameters(
-      String url, Map<String, String> queryParameters) {
+      String url, Map<String, String>? queryParameters) {
     var uri = Uri.parse(url);
 
     var uriParameters = uri.queryParameters;
 
-    if (uriParameters != null && uriParameters.isNotEmpty) {
+    if (uriParameters.isNotEmpty) {
       if (queryParameters == null || queryParameters.isEmpty) {
         queryParameters = uriParameters;
       } else {
         uriParameters
-            .forEach((k, v) => queryParameters.putIfAbsent(k, () => v));
+            .forEach((k, v) => queryParameters!.putIfAbsent(k, () => v));
       }
     }
 
@@ -2250,19 +2220,19 @@ class HttpClient {
   }
 
   /// Function that processes any request response.
-  ResponseProcessor responseProcessor;
+  ResponseProcessor? responseProcessor;
 
   /// Builds initial headers for each request.
-  RequestHeadersBuilder requestHeadersBuilder;
+  RequestHeadersBuilder? requestHeadersBuilder;
 
-  Map<String, String> buildRequestHeaders(String url) {
+  Map<String, String>? buildRequestHeaders(String url) {
     if (requestHeadersBuilder == null) return null;
-    return requestHeadersBuilder(this, url);
+    return requestHeadersBuilder!(this, url);
   }
 }
 
 typedef SimulateResponse = dynamic Function(
-    String url, Map<String, String> queryParameters);
+    String url, Map<String, String>? queryParameters);
 
 /// A Simulated [HttpClientRequester]. Usefull for tests and mocks.
 class HttpClientRequesterSimulation extends HttpClientRequester {
@@ -2333,21 +2303,21 @@ class HttpClientRequesterSimulation extends HttpClientRequester {
       HttpMethod method) {
     switch (method) {
       case HttpMethod.GET:
-        return _getPatterns ?? _anyPatterns;
+        return _getPatterns;
       case HttpMethod.OPTIONS:
-        return _optionsPatterns ?? _anyPatterns;
+        return _optionsPatterns;
       case HttpMethod.PUT:
-        return _putPatterns ?? _anyPatterns;
+        return _putPatterns;
       case HttpMethod.POST:
-        return _postPatterns ?? _anyPatterns;
+        return _postPatterns;
       default:
         return _anyPatterns;
     }
   }
 
-  SimulateResponse _findResponse(
+  SimulateResponse? _findResponse(
       String url, Map<RegExp, SimulateResponse> patterns) {
-    if (patterns == null || patterns.isEmpty) return null;
+    if (patterns.isEmpty) return null;
 
     for (var p in patterns.keys) {
       if (p.hasMatch(url)) {
@@ -2360,7 +2330,7 @@ class HttpClientRequesterSimulation extends HttpClientRequester {
   /// Implementation for simulated requests.
   @override
   Future<HttpResponse> doHttpRequest(HttpClient client, HttpRequest request,
-      ProgressListener progressListener, bool log) {
+      ProgressListener? progressListener, bool log) {
     var methodPatterns = getSimulationPatternsByMethod(request.method);
     return _requestSimulated(client, request.method, request.requestURL,
         methodPatterns, request.queryParameters);
@@ -2371,7 +2341,7 @@ class HttpClientRequesterSimulation extends HttpClientRequester {
       HttpMethod method,
       String url,
       Map<RegExp, SimulateResponse> methodPatterns,
-      Map<String, String> queryParameters) {
+      Map<String, String>? queryParameters) {
     var resp =
         _findResponse(url, methodPatterns) ?? _findResponse(url, _anyPatterns);
 
@@ -2390,15 +2360,13 @@ class HttpClientRequesterSimulation extends HttpClientRequester {
 
 /// Returns de decoder for a Content-Type at parameter [mimeType] and [charset].
 Converter<List<int>, String> contentTypeToDecoder(MimeType mimeType) {
-  if (mimeType != null) {
-    if (mimeType.isJSON || mimeType.isCharsetUTF8) {
-      return utf8.decoder;
-    } else if (mimeType.isFormURLEncoded || mimeType.isCharsetLATIN1) {
-      return latin1.decoder;
-    }
+  if (mimeType.isJSON || mimeType.isCharsetUTF8) {
+    return utf8.decoder;
+  } else if (mimeType.isFormURLEncoded || mimeType.isCharsetLATIN1) {
+    return latin1.decoder;
+  } else {
+    return latin1.decoder;
   }
-
-  return latin1.decoder;
 }
 
 /// Creates a HttpClientRequester based in imported platform.

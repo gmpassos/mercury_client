@@ -8,7 +8,7 @@ import 'http_client.dart';
 class HttpClientRequesterNone extends HttpClientRequester {
   @override
   Future<HttpResponse> doHttpRequest(HttpClient client, HttpRequest request,
-      ProgressListener progressListener, bool log) {
+      ProgressListener? progressListener, bool log) {
     return Future.error(HttpError(
         request.url,
         request.requestURL,
@@ -27,7 +27,7 @@ Uri getHttpClientRuntimeUriImpl() {
 }
 
 class HttpBlobNone extends HttpBlob {
-  HttpBlobNone(dynamic blob, MimeType mimeType) : super(blob, mimeType);
+  HttpBlobNone(Object blob, MimeType? mimeType) : super(blob, mimeType);
 
   @override
   int size() => 0;
@@ -38,10 +38,10 @@ class HttpBlobNone extends HttpBlob {
   }
 }
 
-HttpBlob createHttpBlobImpl(Object /*?*/ content, MimeType mimeType) {
+HttpBlob? createHttpBlobImpl(Object? content, MimeType? mimeType) {
   if (content == null) return null;
   if (content is HttpBlob) return content;
   return HttpBlobNone(content, mimeType);
 }
 
-bool isHttpBlobImpl(Object /*?*/ o) => o is HttpBlob;
+bool isHttpBlobImpl(Object? o) => o is HttpBlob;

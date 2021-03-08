@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart' show IterableExtension;
 import 'package:mercury_client/mercury_client.dart';
 import 'package:test/test.dart';
 
@@ -10,7 +11,7 @@ abstract class TestServerChannel {
 
   Future<bool> close();
 
-  int get serverPort;
+  int? get serverPort;
 }
 
 void doBasicTests(TestServerChannel testServerChannel) {
@@ -52,9 +53,8 @@ void doBasicTests(TestServerChannel testServerChannel) {
       print('PROGRESS: $progress');
 
       expect(
-          progress.firstWhere(
-                  (e) => e.contains('download[') && e.contains('/50]'),
-                  orElse: () => null) !=
+          progress.firstWhereOrNull(
+                  (e) => e.contains('download[') && e.contains('/50]')) !=
               null,
           isTrue);
     });
