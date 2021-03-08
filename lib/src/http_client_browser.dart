@@ -52,8 +52,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     if (progressListener != null) {
       xhr.upload.onProgress.listen((e) {
         try {
-          progressListener(
-              request, e.loaded, e.total, e.loaded / e.total, true);
+          progressListener(request, e.loaded, e.total, _calcLoadRatio(e), true);
         } catch (e, s) {
           print(e);
           print(s);
@@ -63,7 +62,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       xhr.onProgress.listen((e) {
         try {
           progressListener(
-              request, e.loaded, e.total, e.loaded / e.total, false);
+              request, e.loaded, e.total, _calcLoadRatio(e), false);
         } catch (e, s) {
           print(e);
           print(s);
@@ -75,14 +74,14 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       if (progressListener != null) {
         try {
           progressListener(
-              request, e.loaded, e.total, e.loaded / e.total, false);
+              request, e.loaded, e.total, _calcLoadRatio(e), false);
         } catch (e, s) {
           print(e);
           print(s);
         }
       }
 
-      var status = xhr.status;
+      var status = xhr.status ?? 0;
 
       var accepted = status >= 200 && status < 300;
       var fileUri = status == 0; // file:// URIs have status of 0.
@@ -106,7 +105,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
 
     xhr.onError.listen((e) {
       _completeOnError(completer, client, request, progressListener, log,
-          xhr.status, xhr.responseText, e);
+          xhr.status ?? 0, xhr.responseText, e);
     });
 
     if (request.sendData != null) {
@@ -118,13 +117,16 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     return completer.future;
   }
 
+  double /*?*/ _calcLoadRatio(browser.ProgressEvent e) =>
+      e.loaded == null || e.total == null ? null : e.loaded / e.total;
+
   void _completeOnError(
       Completer<HttpResponse> originalRequestCompleter,
       HttpClient client,
       HttpRequest request,
       ProgressListener progressListener,
       bool log,
-      int status,
+      int /*!*/ status,
       String responseBody,
       dynamic error) async {
     var message = responseBody ?? _errorToString(error);
@@ -136,7 +138,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
         client, request, progressListener, log, status, httpError);
 
     if (!requestCompleted) {
-      var bodyError = error != null ? HttpBody(error) : null;
+      var bodyError = error != null ? HttpBody.from(error) : null;
       var response = HttpResponse(
           request.method, request.url, request.requestURL, status, bodyError);
       originalRequestCompleter.complete(response);
@@ -158,7 +160,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       HttpRequest request,
       ProgressListener progressListener,
       bool log,
-      int status,
+      int /*!*/ status,
       HttpError httpError) async {
     if (request.retries >= 3) {
       return false;
@@ -181,7 +183,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       HttpRequest request,
       ProgressListener progressListener,
       bool log,
-      int status,
+      int /*!*/ status,
       HttpError httpError) async {
     if (status == 0 || status == 504) {
       request.incrementRetries();
@@ -214,7 +216,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
             originalRequestCompleter, client, request2, progressListener, log);
       } else {
         var bodyError =
-            httpError.error != null ? HttpBody(httpError.error) : null;
+            httpError.error != null ? HttpBody.from(httpError.error) : null;
         var status = httpError.status;
         if (status == 0) status = 401;
 
@@ -254,7 +256,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
   HttpResponse _processResponse(HttpClient client, HttpRequest request,
       HttpMethod method, String url, browser.HttpRequest xhr) {
     var contentType = xhr.getResponseHeader('Content-Type');
-    var status = xhr.status;
+    var status = xhr.status ?? 0;
     var body = xhr.response;
     var irrelevantContent = (status >= 300 && status < 600);
 
@@ -262,16 +264,16 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       body = null;
     }
 
-    var httpBody = HttpBody(body, MimeType.parse(contentType));
+    var httpBody = HttpBody.from(body, MimeType.parse(contentType));
 
     if (irrelevantContent &&
         (httpBody.isString || httpBody.isBytesArray) &&
         httpBody.size == 0) {
-      httpBody = HttpBody(null, MimeType.parse(contentType));
+      httpBody = HttpBody.from(null, MimeType.parse(contentType));
     }
 
-    var response = HttpResponse(method, url, xhr.responseUrl, status, httpBody,
-        (key) => xhr.getResponseHeader(key), xhr);
+    var response = HttpResponse(method, url, xhr.responseUrl ?? url, status,
+        httpBody, (key) => xhr.getResponseHeader(key), xhr);
 
     var responseHeaderWithToken = client.responseHeaderWithToken;
 
@@ -342,7 +344,7 @@ class HttpBlobBrowser extends HttpBlob<browser.Blob> {
   }
 }
 
-HttpBlob createHttpBlobImpl(dynamic content, MimeType mimeType) {
+HttpBlob createHttpBlobImpl(Object /*?*/ content, MimeType mimeType) {
   if (content == null) return null;
   if (content is HttpBlob) return content;
   if (content is browser.Blob) return HttpBlobBrowser(content, mimeType);
@@ -350,4 +352,4 @@ HttpBlob createHttpBlobImpl(dynamic content, MimeType mimeType) {
   return HttpBlobBrowser(blob, mimeType);
 }
 
-bool isHttpBlobImpl(dynamic o) => o is HttpBlob || o is browser.Blob;
+bool isHttpBlobImpl(Object /*?*/ o) => o is HttpBlob || o is browser.Blob;

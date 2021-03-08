@@ -9,7 +9,7 @@ import 'http_client.dart';
 
 /// HttpClientRequester implementation for VM [dart:io].
 class HttpClientRequesterIO extends HttpClientRequester {
-  io.HttpClient _ioClient;
+  io.HttpClient /*!*/ _ioClient;
 
   HttpClientRequesterIO() {
     _ioClient = io.HttpClient();
@@ -106,7 +106,7 @@ class HttpClientRequesterIO extends HttpClientRequester {
         s = null;
       }
 
-      return HttpBody(s, mimeType);
+      return HttpBody.from(s, mimeType);
     }
 
     var bytes = await _decodeBodyAsBytes(request, response, progressListener);
@@ -116,7 +116,7 @@ class HttpClientRequesterIO extends HttpClientRequester {
       bytes = null;
     }
 
-    return HttpBody(bytes, mimeType);
+    return HttpBody.from(bytes, mimeType);
   }
 
   Future<List<int>> _decodeBodyAsBytes(HttpRequest request,
@@ -167,11 +167,12 @@ class HttpClientRequesterIO extends HttpClientRequester {
     }
   }
 
-  Future<Map<String, String>> _decodeHeaders(io.HttpClientResponse r) async {
+  Future<Map<String, String /*!*/ > /*!*/ > /*!*/ _decodeHeaders(
+      io.HttpClientResponse r) async {
     var headers = <String, String>{};
 
     r.headers.forEach((key, vals) {
-      headers[key] = vals != null && vals.isNotEmpty ? vals[0] : null;
+      headers[key] = vals != null && vals.isNotEmpty ? vals[0] : '';
     });
 
     return headers;
@@ -258,9 +259,10 @@ class HttpClientRequesterIO extends HttpClientRequester {
   }
 
   void _putRequestHeaders(HttpRequest request, io.HttpClientRequest req) {
-    if (request.requestHeaders != null && request.requestHeaders.isNotEmpty) {
-      for (var header in request.requestHeaders.keys) {
-        var val = request.requestHeaders[header];
+    var requestHeaders = request.requestHeaders;
+    if (requestHeaders != null && requestHeaders.isNotEmpty) {
+      for (var header in requestHeaders.keys) {
+        var val = requestHeaders[header];
         req.headers.add(header, val);
       }
     }
@@ -287,10 +289,10 @@ class HttpBlobIO extends HttpBlob<TypedData> {
   }
 }
 
-HttpBlob createHttpBlobImpl(dynamic content, MimeType mimeType) {
+HttpBlob createHttpBlobImpl(Object /*?*/ content, MimeType mimeType) {
   if (content == null) return null;
   if (content is HttpBlob) return content;
   return HttpBlobIO(content, mimeType);
 }
 
-bool isHttpBlobImpl(dynamic o) => o is HttpBlob;
+bool isHttpBlobImpl(Object /*?*/ o) => o is HttpBlob;

@@ -38,10 +38,10 @@ class HttpBlobNone extends HttpBlob {
   }
 }
 
-HttpBlob createHttpBlobImpl(dynamic content, MimeType mimeType) {
+HttpBlob createHttpBlobImpl(Object /*?*/ content, MimeType mimeType) {
   if (content == null) return null;
   if (content is HttpBlob) return content;
   return HttpBlobNone(content, mimeType);
 }
 
-bool isHttpBlobImpl(dynamic o) => o is HttpBlob;
+bool isHttpBlobImpl(Object /*?*/ o) => o is HttpBlob;

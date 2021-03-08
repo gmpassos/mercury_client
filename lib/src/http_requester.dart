@@ -16,15 +16,15 @@ class HttpRequester {
 
   final MapProperties properties;
 
-  HttpCache httpCache;
+  HttpCache /*?*/ httpCache;
 
-  String _scheme;
+  String /*!*/ _scheme;
 
-  String _host;
+  String /*!*/ _host;
 
-  HttpMethod _httpMethod;
+  HttpMethod /*!*/ _httpMethod;
 
-  String _path;
+  String /*!*/ _path;
 
   String _bodyType;
 
@@ -33,12 +33,11 @@ class HttpRequester {
   String _responseType;
 
   HttpRequester(this.config, [MapProperties properties, this.httpCache])
-      : properties = properties ?? {} {
-    var runtimeUri = getHttpClientRuntimeUri();
-
-    var schemeType = config
-        .findPropertyAsStringTrimLC(['scheme', 'protocol', 'type'], 'http');
-    var secure = config.findPropertyAsBool(['secure', 'ssl', 'https'], false);
+      : properties = properties ?? MapProperties() {
+    var schemeType = config.findPropertyAsStringTrimLC(
+        ['scheme', 'protocol', 'type'], 'http') /*!*/;
+    var secure =
+        config.findPropertyAsBool(['secure', 'ssl', 'https'], false) /*!*/;
 
     var host = config.getPropertyAsStringTrimLC('host');
     var method = config
@@ -62,6 +61,8 @@ class HttpRequester {
     if (responseType != null) responseType = responseType.toLowerCase();
 
     /////
+
+    var runtimeUri = getHttpClientRuntimeUri();
 
     var scheme = schemeType == 'https'
         ? 'https'
@@ -89,7 +90,8 @@ class HttpRequester {
 
     if (path != null) {
       pathBuilt = path.contains('{{')
-          ? buildStringPattern(path, properties.toStringProperties())
+          ? buildStringPattern(path, this.properties.toStringProperties()) ??
+              path
           : path;
     }
 
@@ -99,7 +101,7 @@ class HttpRequester {
 
     if (body != null) {
       bodyBuilt = body.contains('{{')
-          ? buildStringPattern(body, properties.toStringProperties())
+          ? buildStringPattern(body, this.properties.toStringProperties())
           : body;
     }
 
@@ -144,7 +146,7 @@ class HttpRequester {
   }
 
   /// Does the request using parameter [httpClient].
-  Future<dynamic> doRequestWithClient(HttpClient httpClient) async {
+  Future<dynamic> doRequestWithClient(HttpClient /*!*/ httpClient) async {
     HttpResponse httpResponse;
     if (httpCache != null) {
       httpResponse = await httpCache.request(httpClient, httpMethod, path,
@@ -158,7 +160,7 @@ class HttpRequester {
   }
 
   /// Process the response and handles JSON and JSONPaging.
-  dynamic _processResponse(HttpResponse httpResponse, HttpClient client) {
+  dynamic _processResponse(HttpResponse httpResponse, HttpClient /*!*/ client) {
     if (!httpResponse.isOK) return null;
 
     if (_responseType == 'json') {
@@ -176,15 +178,22 @@ class HttpRequester {
     return httpResponse.bodyAsString;
   }
 
-  JSONPaging _asJSONPaging(HttpClient client, HttpResponse httpResponse) {
+  JSONPaging _asJSONPaging(HttpClient /*!*/ client, HttpResponse httpResponse) {
     var paging = httpResponse.asJSONPaging;
     if (paging == null) return null;
 
     paging.pagingRequester = (page) async {
       var method = httpResponse.method;
       var url = paging.pagingRequestURL(httpResponse.requestedURL, page);
-      var httpResponse2 = await client.requestURL(method, url.toString());
-      return _asJSONPaging(client, httpResponse2);
+
+      if (httpCache != null) {
+        var httpResponse2 =
+            await httpCache.requestURL(client, method, url.toString());
+        return _asJSONPaging(client, httpResponse2);
+      } else {
+        var httpResponse2 = await client.requestURL(method, url.toString());
+        return _asJSONPaging(client, httpResponse2);
+      }
     };
 
     return paging;
