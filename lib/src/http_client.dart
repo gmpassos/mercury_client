@@ -1457,16 +1457,23 @@ abstract class HttpClientRequester {
   }
 
   /// Helper to build a Query String.
-  String buildQueryString(Map<String, String> data) {
-    var parts = [];
+  String buildQueryString(Map<String, String?>? data) {
+    if (data == null || data.isEmpty) return '';
+
+    var query = StringBuffer();
+
     data.forEach((key, value) {
-      var keyValue =
-          '${Uri.encodeQueryComponent(key)}=${Uri.encodeQueryComponent(value)}';
-      parts.add(keyValue);
+      var keyEncoded = Uri.encodeQueryComponent(key);
+      var valueEncoded = value != null ? Uri.encodeQueryComponent(value) : '';
+      var keyValue = '$keyEncoded=$valueEncoded';
+
+      if (query.isNotEmpty) {
+        query.write('&');
+      }
+      query.write(keyValue);
     });
 
-    var queryString = parts.join('&');
-    return queryString;
+    return query.toString();
   }
 
   /// Helper to build the request headers.
@@ -1551,19 +1558,15 @@ class HttpCall<R> {
   HttpCall(
       {String? baseURL,
       HttpClient? client,
-      HttpMethod? method,
-      String? path,
-      bool fullPath = false,
+      this.method = HttpMethod.GET,
+      this.path = '',
+      this.fullPath = false,
       this.body,
-      int? maxRetries})
-      : client = client ?? HttpClient(baseURL ?? getUriBase().toString()),
-        method = method ?? HttpMethod.GET,
-        path = path ?? '',
-        fullPath = fullPath,
-        maxRetries = maxRetries ?? 0;
+      this.maxRetries = 0})
+      : client = client ?? HttpClient(baseURL ?? getUriBase().toString());
 
   /// Performs a call, making the HTTP request.
-  Future<HttpResponse?> call(Map<String, dynamic> parameters,
+  Future<HttpResponse?> call(Map<String, dynamic>? parameters,
       {Object? body, int? maxRetries}) async {
     maxRetries ??= this.maxRetries;
 
@@ -1582,15 +1585,14 @@ class HttpCall<R> {
   }
 
   /// Performs a call, making the HTTP request, than resolves the response.
-  Future<R?> callAndResolve(Map<String, dynamic> parameters,
+  Future<R?> callAndResolve(Map<String, dynamic>? parameters,
       {Object? body, int? maxRetries}) async {
-    var response = await (call(parameters, body: body, maxRetries: maxRetries)
-        as FutureOr<HttpResponse>);
+    var response = (await call(parameters, body: body, maxRetries: maxRetries));
     return resolveResponse(response);
   }
 
   Future<HttpResponse> _doRequestImp(
-      Map<String, dynamic> parameters, Object? body) async {
+      Map<String, dynamic>? parameters, Object? body) async {
     if (canHttpMethodHaveBody(method)) {
       body ??= this.body;
     } else {
@@ -1602,14 +1604,20 @@ class HttpCall<R> {
     return response;
   }
 
-  static Map<String, String>? toQueryParameters(Map parameters) {
-    Map<String, String>? queryParameters;
-    queryParameters = parameters
+  static Map<String, String>? toQueryParameters(Map? parameters) {
+    if (parameters == null) return null;
+
+    if (parameters is Map<String, String>) {
+      return parameters;
+    }
+
+    var queryParameters = parameters
         .map((key, value) => MapEntry('$key', toQueryParameterValue(value)));
     return queryParameters;
   }
 
-  static String toQueryParameterValue(Object value) {
+  static String toQueryParameterValue(Object? value) {
+    if (value == null) return '';
     if (value is List) return value.join(',');
     if (value is Map) {
       return value.entries.map((e) => '${e.key}:${e.value}').join(',');
@@ -1621,7 +1629,7 @@ class HttpCall<R> {
   ///
   /// Can be overwritten by other implementations.
   Future<HttpResponse> requestHttpClient(HttpClient client, HttpMethod method,
-      String path, bool fullPath, Map parameters, Object? body) {
+      String path, bool fullPath, Map? parameters, Object? body) {
     var queryParameters = toQueryParameters(parameters);
     return client.request(method, path,
         fullPath: fullPath, parameters: queryParameters, body: body);
@@ -1630,8 +1638,10 @@ class HttpCall<R> {
   /// Method responsible to resolve the [response] to a [R] value.
   ///
   /// Can be overwritten by other implementations.
-  R? resolveResponse(HttpResponse response) {
-    if (!response.isOK) {
+  R? resolveResponse(HttpResponse? response) {
+    if (response == null) {
+      return null;
+    } else if (!response.isOK) {
       throw StateError(
           "Can't perform request. Response{ status: ${response.status} ; body: ${response.bodyAsString}} > $this");
     } else if (response.isBodyTypeJSON) {

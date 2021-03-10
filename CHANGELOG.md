@@ -1,3 +1,7 @@
+## 2.0.0-nullsafety.2
+
+- Null Safety adjustments.
+
 ## 2.0.0-nullsafety.1
 
 - Dart 2.12.0:
