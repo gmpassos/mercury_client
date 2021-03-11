@@ -700,14 +700,19 @@ class BasicCredential extends Credential {
 
     if (json is List) {
       if (json.length < 2) return null;
-      return BasicCredential(json[0], json[1]);
+      var user = json[0];
+      var pass = json[1];
+      if (user is! String || pass is! String) return null;
+      return BasicCredential(user, pass);
     } else if (json is Map) {
       if (json.length < 2) return null;
 
-      var user = findKeyValue(
+      var user = findKeyValue<dynamic, dynamic>(
           json, ['username', 'user', 'login', 'email', 'account'], true);
-      var pass =
-          findKeyValue(json, ['password', 'pass', 'secret', 'token'], true);
+      var pass = findKeyValue<dynamic, dynamic>(
+          json, ['password', 'pass', 'secret', 'token'], true);
+
+      if (user is! String || pass is! String) return null;
 
       return BasicCredential(user, pass);
     } else if (json is String) {
