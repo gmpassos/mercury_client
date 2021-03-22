@@ -1,3 +1,9 @@
+## 2.0.1
+
+- Sound null safety compatibility.
+- enum_to_string: ^2.0.1
+- swiss_knife: ^3.0.6
+  
 ## 2.0.0-nullsafety.3
 
 - Null safety adjustments.
