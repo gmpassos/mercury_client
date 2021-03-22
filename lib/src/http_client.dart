@@ -501,7 +501,7 @@ typedef RequestHeadersBuilder = Map<String, String> Function(
 typedef ResponseProcessor = void Function(
     HttpClient client, Object request, HttpResponse response);
 
-typedef AuthorizationProvider = Future<Credential> Function(
+typedef AuthorizationProvider = Future<Credential?> Function(
     HttpClient client, HttpError? lastError);
 
 /// Represents a kind of HTTP Authorization.
@@ -619,7 +619,7 @@ class _AuthorizationResolvable extends Authorization {
   @override
   Credential? get tryResolvedCredential => _resolvedCredential;
 
-  Future<Credential>? _resolveFuture;
+  Future<Credential?>? _resolveFuture;
 
   @override
   bool get isResolvingCredential => _resolveFuture != null;
@@ -640,6 +640,8 @@ class _AuthorizationResolvable extends Authorization {
     }
 
     _resolveFuture = authorizationProvider(client, lastError);
+
+    if (_resolveFuture == null) return null;
 
     Credential? credential;
     try {

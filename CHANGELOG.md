@@ -1,3 +1,7 @@
+## 2.0.2
+
+- Null Safety adjustments.
+
 ## 2.0.1
 
 - Sound null safety compatibility.
