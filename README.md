@@ -32,19 +32,28 @@ import 'dart:async';
 
 main() async {
   
-  var client = HttpClient('http://gateway.your.domain/api-1') ;
-
-  // Calling with POST method:
-  // URL: http://gateway.your.domain/api-1/call-foo?var=123
-  // Content-Type: application/json
-  // Body:
-  // { 'content': 'any' }}
-  var response = await client.post("call-foo", parameters: {'var': '123'}, body: "{ 'content': 'any' }}", contentType: 'application/json') ;
+  var client = HttpClient('http://gateway.your.domain/api-1');
   
-  if ( response.isOK ) {
-    print( response.body ) ;
-  }
+  try {
+    // Request with POST method:
+    // URL: http://gateway.your.domain/api-1/call-foo?var=123
+    // Content-Type: application/json
+    // Body: { 'content': 'any' }
+    var response = await client.post(
+      'call-foo',
+      parameters: {'var': '123'},
+      body: "{ 'content': 'any' }",
+      contentType: 'application/json',
+    );
 
+    if (response.isOK) {
+      print(response.body);
+    }
+    
+  } catch (e) {
+    print('Error requesting URL: $e');
+  }
+  
 }
 ```
 
@@ -62,10 +71,15 @@ main() async {
   // HTTP Cache with max memory of 16M and timeout of 5min:
   var cache = HttpCache(1024*1024*16, 1000*60*5) ;
 
-  var response = cache.getURL( 'http://host/path/to/base64/image.jpeg') ;
+  try {
+    var response = cache.getURL('http://host/path/to/base64/image.jpeg');
 
-  if ( response.isOK ) {
-    img.src = 'data:image/jpeg;base64,'+ response.body ;
+    if (response.isOK) {
+      img.src = 'data:image/jpeg;base64,' + response.body;
+    }
+  }
+  catch (e) {
+    print('Error requesting URL: $e');
   }
 
 }

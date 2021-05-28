@@ -1,3 +1,9 @@
+## 2.0.3
+
+- Add `header` parameter to request methods.
+- `HttpCache`: fix `parameter` issue to identify already cached request.
+- swiss_knife: ^3.0.7
+
 ## 2.0.2
 
 - Null Safety adjustments.

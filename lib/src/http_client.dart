@@ -1113,8 +1113,10 @@ class HttpRequest {
       return this;
     }
 
-    var requestHeaders = client.clientRequester.buildRequestHeaders(
-        client, url, authorization, headerContentType, headerAccept);
+    var requestHeaders = client.clientRequester.buildRequestHeaders(client, url,
+        authorization: authorization,
+        contentType: headerContentType,
+        accept: headerAccept);
 
     // ignore: omit_local_variable_types
     Map<String, String>? queryParameters = this.queryParameters != null
@@ -1173,7 +1175,8 @@ typedef ProgressListener = void Function(
 /// request process.
 abstract class HttpClientRequester {
   Future<HttpResponse> request(HttpClient client, HttpMethod method, String url,
-      {Authorization? authorization,
+      {Map<String, String>? headers,
+      Authorization? authorization,
       Map<String, String>? queryParameters,
       bool noQueryString = false,
       Object? body,
@@ -1183,18 +1186,21 @@ abstract class HttpClientRequester {
     switch (method) {
       case HttpMethod.GET:
         return requestGET(client, url,
+            headers: headers,
             authorization: authorization,
             queryParameters: queryParameters,
             noQueryString: noQueryString,
             progressListener: progressListener);
       case HttpMethod.OPTIONS:
         return requestOPTIONS(client, url,
+            headers: headers,
             authorization: authorization,
             queryParameters: queryParameters,
             noQueryString: noQueryString,
             progressListener: progressListener);
       case HttpMethod.POST:
         return requestPOST(client, url,
+            headers: headers,
             authorization: authorization,
             queryParameters: queryParameters,
             noQueryString: noQueryString,
@@ -1204,6 +1210,7 @@ abstract class HttpClientRequester {
             progressListener: progressListener);
       case HttpMethod.PUT:
         return requestPUT(client, url,
+            headers: headers,
             authorization: authorization,
             queryParameters: queryParameters,
             noQueryString: noQueryString,
@@ -1213,6 +1220,7 @@ abstract class HttpClientRequester {
             progressListener: progressListener);
       case HttpMethod.PATCH:
         return requestPATCH(client, url,
+            headers: headers,
             authorization: authorization,
             queryParameters: queryParameters,
             noQueryString: noQueryString,
@@ -1222,6 +1230,7 @@ abstract class HttpClientRequester {
             progressListener: progressListener);
       case HttpMethod.DELETE:
         return requestDELETE(client, url,
+            headers: headers,
             authorization: authorization,
             queryParameters: queryParameters,
             noQueryString: noQueryString,
@@ -1249,7 +1258,8 @@ abstract class HttpClientRequester {
   }
 
   Future<HttpResponse> requestGET(HttpClient client, String url,
-      {Authorization? authorization,
+      {Map<String, String>? headers,
+      Authorization? authorization,
       Map<String, String>? queryParameters,
       bool noQueryString = false,
       ProgressListener? progressListener}) {
@@ -1265,13 +1275,15 @@ abstract class HttpClientRequester {
             authorization: authorization,
             queryParameters: queryParameters,
             withCredentials: _withCredentials(client, authorization),
-            requestHeaders: buildRequestHeaders(client, url, authorization)),
+            requestHeaders: buildRequestHeaders(client, url,
+                headers: headers, authorization: authorization)),
         progressListener,
         client.logRequests);
   }
 
   Future<HttpResponse> requestOPTIONS(HttpClient client, String url,
-      {Authorization? authorization,
+      {Map<String, String>? headers,
+      Authorization? authorization,
       Map<String, String>? queryParameters,
       bool noQueryString = false,
       ProgressListener? progressListener}) {
@@ -1287,14 +1299,16 @@ abstract class HttpClientRequester {
           authorization: authorization,
           queryParameters: queryParameters,
           withCredentials: _withCredentials(client, authorization),
-          requestHeaders: buildRequestHeaders(client, url, authorization),
+          requestHeaders: buildRequestHeaders(client, url,
+              headers: headers, authorization: authorization),
         ),
         progressListener,
         client.logRequests);
   }
 
   Future<HttpResponse> requestPOST(HttpClient client, String url,
-      {Authorization? authorization,
+      {Map<String, String>? headers,
+      Authorization? authorization,
       Map<String, String>? queryParameters,
       bool noQueryString = false,
       Object? body,
@@ -1307,8 +1321,11 @@ abstract class HttpClientRequester {
     if (queryParameters != null &&
         queryParameters.isNotEmpty &&
         requestBody.isNull) {
-      var requestHeaders = buildRequestHeaders(
-          client, url, authorization, requestBody.contentType, accept);
+      var requestHeaders = buildRequestHeaders(client, url,
+          headers: headers,
+          authorization: authorization,
+          contentType: requestBody.contentType,
+          accept: accept);
       requestHeaders ??= {};
 
       var formData = buildPOSTFormData(queryParameters, requestHeaders);
@@ -1342,8 +1359,11 @@ abstract class HttpClientRequester {
             authorization: authorization,
             queryParameters: queryParameters,
             withCredentials: _withCredentials(client, authorization),
-            requestHeaders: buildRequestHeaders(
-                client, url, authorization, requestBody.contentType, accept),
+            requestHeaders: buildRequestHeaders(client, url,
+                headers: headers,
+                authorization: authorization,
+                contentType: requestBody.contentType,
+                accept: accept),
             sendData: requestBody.contentAsSendData,
           ),
           progressListener,
@@ -1352,7 +1372,8 @@ abstract class HttpClientRequester {
   }
 
   Future<HttpResponse> requestPUT(HttpClient client, String url,
-      {Authorization? authorization,
+      {Map<String, String>? headers,
+      Authorization? authorization,
       Map<String, String>? queryParameters,
       bool noQueryString = false,
       Object? body,
@@ -1372,8 +1393,11 @@ abstract class HttpClientRequester {
           authorization: authorization,
           queryParameters: queryParameters,
           withCredentials: _withCredentials(client, authorization),
-          requestHeaders: buildRequestHeaders(
-              client, url, authorization, requestBody.contentType, accept),
+          requestHeaders: buildRequestHeaders(client, url,
+              headers: headers,
+              authorization: authorization,
+              contentType: requestBody.contentType,
+              accept: accept),
           sendData: requestBody.contentAsSendData,
         ),
         progressListener,
@@ -1381,7 +1405,8 @@ abstract class HttpClientRequester {
   }
 
   Future<HttpResponse> requestPATCH(HttpClient client, String url,
-      {Authorization? authorization,
+      {Map<String, String>? headers,
+      Authorization? authorization,
       Map<String, String>? queryParameters,
       bool noQueryString = false,
       Object? body,
@@ -1410,8 +1435,11 @@ abstract class HttpClientRequester {
           authorization: authorization,
           queryParameters: queryParameters,
           withCredentials: _withCredentials(client, authorization),
-          requestHeaders: buildRequestHeaders(
-              client, url, authorization, requestBody.contentType, accept),
+          requestHeaders: buildRequestHeaders(client, url,
+              headers: headers,
+              authorization: authorization,
+              contentType: requestBody.contentType,
+              accept: accept),
           sendData: requestBody.contentAsSendData,
         ),
         progressListener,
@@ -1419,7 +1447,8 @@ abstract class HttpClientRequester {
   }
 
   Future<HttpResponse> requestDELETE(HttpClient client, String url,
-      {Authorization? authorization,
+      {Map<String, String>? headers,
+      Authorization? authorization,
       Map<String, String>? queryParameters,
       bool noQueryString = false,
       Object? body,
@@ -1439,8 +1468,11 @@ abstract class HttpClientRequester {
           authorization: authorization,
           queryParameters: queryParameters,
           withCredentials: _withCredentials(client, authorization),
-          requestHeaders: buildRequestHeaders(
-              client, url, authorization, requestBody.contentType, accept),
+          requestHeaders: buildRequestHeaders(client, url,
+              headers: headers,
+              authorization: authorization,
+              contentType: requestBody.contentType,
+              accept: accept),
           sendData: requestBody.contentAsSendData,
         ),
         progressListener,
@@ -1484,31 +1516,42 @@ abstract class HttpClientRequester {
   }
 
   /// Helper to build the request headers.
-  Map<String, String>? buildRequestHeaders(HttpClient client, String url,
-      [Authorization? authorization, String? contentType, String? accept]) {
-    var header = client.buildRequestHeaders(url);
+  Map<String, String>? buildRequestHeaders(
+    HttpClient client,
+    String url, {
+    Map<String, String>? headers,
+    Authorization? authorization,
+    String? contentType,
+    String? accept,
+  }) {
+    var requestHeaders = client.buildRequestHeaders(url);
 
     if (contentType != null) {
-      header ??= {};
-      header['Content-Type'] = contentType;
+      requestHeaders ??= {};
+      requestHeaders['Content-Type'] = contentType;
     }
 
     if (accept != null) {
-      header ??= {};
-      header['Accept'] = accept;
+      requestHeaders ??= {};
+      requestHeaders['Accept'] = accept;
     }
 
     if (authorization != null && authorization.usesAuthorizationHeader) {
-      header ??= {};
+      requestHeaders ??= {};
 
       var credential = authorization.resolvedCredential!;
       var authorizationHeaderLine = credential.buildAuthorizationHeaderLine();
       if (authorizationHeaderLine != null) {
-        header['Authorization'] = authorizationHeaderLine;
+        requestHeaders['Authorization'] = authorizationHeaderLine;
       }
     }
 
-    return header;
+    if (headers != null) {
+      requestHeaders ??= {};
+      requestHeaders.addAll(headers);
+    }
+
+    return requestHeaders;
   }
 
   /// Helper to build the request URL.
@@ -1941,33 +1984,38 @@ class HttpClient {
 
   /// Does a GET request.
   Future<HttpResponse> get(String path,
-      {bool fullPath = false,
+      {Map<String, String>? headers,
+      bool fullPath = false,
       Credential? authorization,
       Map<String, String>? parameters,
       ProgressListener? progressListener}) async {
     var url = _buildURL(path, fullPath, parameters, true);
     var requestAuthorization = await _buildRequestAuthorization(authorization);
     return _clientRequester.requestGET(this, url,
+        headers: headers,
         authorization: requestAuthorization,
         progressListener: progressListener);
   }
 
   /// Does an OPTIONS request.
   Future<HttpResponse> options(String path,
-      {bool fullPath = false,
+      {Map<String, String>? headers,
+      bool fullPath = false,
       Credential? authorization,
       Map<String, String>? parameters,
       ProgressListener? progressListener}) async {
     var url = _buildURL(path, fullPath, parameters, true);
     var requestAuthorization = await _buildRequestAuthorization(authorization);
     return _clientRequester.requestOPTIONS(this, url,
+        headers: headers,
         authorization: requestAuthorization,
         progressListener: progressListener);
   }
 
   /// Does a POST request.
   Future<HttpResponse> post(String path,
-      {bool fullPath = false,
+      {Map<String, String>? headers,
+      bool fullPath = false,
       Credential? authorization,
       Map<String, String>? parameters,
       String? queryString,
@@ -1984,6 +2032,7 @@ class HttpClient {
 
     var requestAuthorization = await _buildRequestAuthorization(authorization);
     return _clientRequester.requestPOST(this, url,
+        headers: headers,
         authorization: requestAuthorization,
         queryParameters: parameters,
         body: body,
@@ -1994,7 +2043,8 @@ class HttpClient {
 
   /// Does a PUT request.
   Future<HttpResponse> put(String path,
-      {bool fullPath = false,
+      {Map<String, String>? headers,
+      bool fullPath = false,
       Credential? authorization,
       Map<String, String>? parameters,
       String? queryString,
@@ -2011,6 +2061,7 @@ class HttpClient {
 
     var requestAuthorization = await _buildRequestAuthorization(authorization);
     return _clientRequester.requestPUT(this, url,
+        headers: headers,
         authorization: requestAuthorization,
         queryParameters: parameters,
         body: body,
@@ -2021,7 +2072,8 @@ class HttpClient {
 
   /// Does a PATCH request.
   Future<HttpResponse> patch(String path,
-      {bool fullPath = false,
+      {Map<String, String>? headers,
+      bool fullPath = false,
       Credential? authorization,
       Map<String, String>? parameters,
       String? queryString,
@@ -2038,6 +2090,7 @@ class HttpClient {
 
     var requestAuthorization = await _buildRequestAuthorization(authorization);
     return _clientRequester.requestPATCH(this, url,
+        headers: headers,
         authorization: requestAuthorization,
         queryParameters: parameters,
         body: body,
@@ -2048,7 +2101,8 @@ class HttpClient {
 
   /// Does a DELETE request.
   Future<HttpResponse> delete(String path,
-      {bool fullPath = false,
+      {Map<String, String>? headers,
+      bool fullPath = false,
       Credential? authorization,
       Map<String, String>? parameters,
       String? queryString,
@@ -2065,6 +2119,7 @@ class HttpClient {
 
     var requestAuthorization = await _buildRequestAuthorization(authorization);
     return _clientRequester.requestDELETE(this, url,
+        headers: headers,
         authorization: requestAuthorization,
         queryParameters: parameters,
         body: body,

@@ -81,7 +81,7 @@ class _CacheRequest implements Comparable<_CacheRequest> {
           runtimeType == other.runtimeType &&
           _method == other._method &&
           _url == other._url &&
-          _queryParameters == other._queryParameters &&
+          isEqualsDeep(_queryParameters, other._queryParameters) &&
           isEqualsDeep(_body, other._body) &&
           _contentType == other._contentType &&
           _accept == other._accept;
@@ -118,7 +118,7 @@ class HttpCache {
   HttpCache(
       {int maxCacheMemory = 0,
       Duration timeout = _NO_DURATION,
-      bool verbose = true}) {
+      bool verbose = false}) {
     this.maxCacheMemory = maxCacheMemory;
     this.timeout = timeout;
     this.verbose = verbose;
@@ -524,5 +524,10 @@ class HttpCache {
 
   dynamic _jsonDecode(String? s) {
     return s == null || s.isEmpty ? null : jsonDecode(s);
+  }
+
+  @override
+  String toString() {
+    return 'HttpCache{cache: ${_cache.length}: maxCacheMemory: $_maxCacheMemory, timeout: $_timeout, verbose: $verbose}';
   }
 }

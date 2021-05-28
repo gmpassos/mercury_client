@@ -32,7 +32,48 @@ void main() async {
   print('Google rejects POST requests!');
   print(responsePost);
 
+  print('------------------------------------------------');
+
+  var cache = HttpCache(verbose: true);
+
+  {
+    var response =
+        await cache.get(client, 'search', parameters: {'q': 'mercury_client'});
+
+    var status = response.status;
+    var title = _catchTitle(response);
+
+    print('Cached Request 1> status: $status ; title: $title > $cache');
+  }
+
+  {
+    var response =
+        await cache.get(client, 'search', parameters: {'q': 'mercury_client'});
+
+    var status = response.status;
+    var title = _catchTitle(response);
+
+    print('Cached Request 2> status: $status ; title: $title > $cache');
+  }
+
+  {
+    var client = HttpClient('https://www.google.com/');
+
+    var response =
+        await cache.get(client, 'searchX', parameters: {'q': 'mercury_client'});
+
+    var status = response.status;
+
+    print('Cached Request 3> status: $status > $cache');
+  }
+
   print('------------------------------------------------\n');
 
   print('By!');
+}
+
+String? _catchTitle(HttpResponse response) {
+  return RegExp(r'<title>\s*(.*?)\s*<')
+      .firstMatch(response.bodyAsString!)!
+      .group(1);
 }
