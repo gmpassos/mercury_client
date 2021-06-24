@@ -105,7 +105,7 @@ Mercury is known to the Romans as Mercurius.
 
 He is the god of financial gain, commerce, eloquence, **messages, communication** (including divination), travelers, boundaries, luck, trickery and thieves.
 
-- See: [Mercury@Wikipedia](https://en.wikipedia.org/wiki/Mercury_(mythology)
+- See: [Mercury@Wikipedia](https://en.wikipedia.org/wiki/Mercury_(mythology))
 
 ## Features and bugs
 
