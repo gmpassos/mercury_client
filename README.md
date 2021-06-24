@@ -29,12 +29,11 @@ A simple usage example:
 
 ```dart
 import 'package:mercury_client/mercury_client.dart';
-import 'dart:async';
 
 main() async {
   
   var client = HttpClient('http://gateway.your.domain/api-1');
-  
+
   try {
     // Request with POST method:
     // URL: http://gateway.your.domain/api-1/call-foo?var=123
@@ -50,7 +49,6 @@ main() async {
     if (response.isOK) {
       print(response.body);
     }
-    
   } catch (e) {
     print('Error requesting URL: $e');
   }
@@ -67,32 +65,34 @@ You can pass the parameter `onStaleResponse` for the notification of a stale ver
 
 ```dart
 import 'package:mercury_client/mercury_client.dart';
-import 'dart:async';
 
 main() async {
-  
-  var client = HttpClient('http://gateway.your.domain/api-1') ;
-  
+
   // HTTP Cache with max memory of 16M and timeout of 5min:
-  var cache = HttpCache(1024*1024*16, 1000*60*5) ;
+  var cache = HttpCache(
+          maxCacheMemory: 1024 * 1024 * 16, timeout: Duration(minutes: 5));
+
+  // The image element that will received the loaded data:
+  var img = ImageElement();
 
   try {
     // Request an image URL, that can be cached.
     // If a stale version (already cached instance with timeout) exits,
     // `onStaleResponse` will be called to indicate the existence
     // of a cached response to be used while requesting the URL.
-    var response = cache.getURL('http://host/path/to/base64/image.jpeg',
+    var response = await cache.getURL(
+      'http://host/path/to/base64/image.jpeg',
       onStaleResponse: (staleResponse) {
         var staleTime = staleResponse.instanceDateTime;
         print('Stale image available: $staleTime');
-        img.src = 'data:image/jpeg;base64,' + staleResponse.body;
-      },);
+        img.src = 'data:image/jpeg;base64,${staleResponse.bodyAsString}';
+      },
+    );
 
     if (response.isOK) {
-      img.src = 'data:image/jpeg;base64,' + response.body;
+      img.src = 'data:image/jpeg;base64,${response.bodyAsString}';
     }
-  }
-  catch (e) {
+  } catch (e) {
     print('Error requesting URL: $e');
   }
 
