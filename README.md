@@ -63,7 +63,7 @@ main() async {
 Using `HttpCache` you can perform in-memory cached requests.
 
 You can pass the parameter `onStaleResponse` for the notification of a stale version
-(a cached request that can be used while a new request is being performed):
+(a cached response that can be used while a new request is being performed):
 
 ```dart
 import 'package:mercury_client/mercury_client.dart';
