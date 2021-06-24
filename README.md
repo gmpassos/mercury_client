@@ -16,6 +16,7 @@ Portable HTTP client (Browser and Native support) with memory cache.
 ## Methods:
 
   - GET
+  - HEAD
   - POST
   - PUT
   - DELETE
@@ -57,8 +58,12 @@ main() async {
 }
 ```
 
-HttpCache usage:
+### HttpCache Usage
 
+Using `HttpCache` you can perform in-memory cached requests.
+
+You can pass the parameter `onStaleResponse` for the notification of a stale version
+(a cached request that can be used while a new request is being performed):
 
 ```dart
 import 'package:mercury_client/mercury_client.dart';
@@ -72,7 +77,16 @@ main() async {
   var cache = HttpCache(1024*1024*16, 1000*60*5) ;
 
   try {
-    var response = cache.getURL('http://host/path/to/base64/image.jpeg');
+    // Request an image URL, that can be cached.
+    // If a stale version (already cached instance with timeout) exits,
+    // `onStaleResponse` will be called to indicate the existence
+    // of a cached response to be used while requesting the URL.
+    var response = cache.getURL('http://host/path/to/base64/image.jpeg',
+      onStaleResponse: (staleResponse) {
+        var staleTime = staleResponse.instanceDateTime;
+        print('Stale image available: $staleTime');
+        img.src = 'data:image/jpeg;base64,' + staleResponse.body;
+      },);
 
     if (response.isOK) {
       img.src = 'data:image/jpeg;base64,' + response.body;
@@ -97,7 +111,37 @@ He is the god of financial gain, commerce, eloquence, **messages, communication*
 
 Please file feature requests and bugs at the [issue tracker][tracker].
 
+## Source
+
+The official source code is [hosted @ GitHub][github_mercury_client]:
+
+- https://github.com/gmpassos/mercury_client
+
+[github_mercury_client]: https://github.com/gmpassos/mercury_client
+
+# Features and bugs
+
+Please file feature requests and bugs at the [issue tracker][tracker].
+
+# Contribution
+
+Any help from the open-source community is always welcome and needed:
+- Found an issue?
+    - Please [fill a bug report][tracker] with details.
+- Wish a feature?
+    - Open a feature request with use cases.
+- Are you using and liking the project?
+    - Promote the project: create an article, do a post or make a donation.
+- Are you a developer?
+    - Fix a bug and send a [pull request][pull_request].
+    - Implement a new feature.
+    - Improve the Unit Tests.
+- Have you already helped in any way?
+    - **Many thanks from me, the contributors and everybody that uses this project!**
+
+
 [tracker]: https://github.com/gmpassos/mercury_client/issues
+[pull_request]: https://github.com/gmpassos/mercury_client/pulls
 
 ## Author
 

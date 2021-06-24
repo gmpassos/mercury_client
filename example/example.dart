@@ -67,6 +67,29 @@ void main() async {
     print('Cached Request 3> status: $status > $cache');
   }
 
+  {
+    // Set the cache timeout to 100ms:
+    cache.timeout = Duration(milliseconds: 100);
+
+    // Ensure a delay of 1s for cached entries:
+    await Future.delayed(Duration(seconds: 1));
+
+    var response = await cache.get(
+      client,
+      'search',
+      parameters: {'q': 'mercury_client'},
+      onStaleResponse: (staleResponse) {
+        var staleTime = staleResponse.instanceDateTime;
+        print('Stale Response Available> $staleResponse > $staleTime');
+      },
+    );
+
+    var status = response.status;
+    var title = _catchTitle(response);
+
+    print('Cached Request 4> status: $status ; title: $title > $cache');
+  }
+
   print('------------------------------------------------\n');
 
   print('By!');

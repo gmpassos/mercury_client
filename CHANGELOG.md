@@ -1,3 +1,10 @@
+## 2.1.0
+
+- Added `HttpClientInterceptor`.
+- Added missing `HttpClient.requestHEAD` implementation.
+- `HttpCache`: added `onStaleResponse` and `staleResponseDelay`, to allow
+  use of already cached response while requesting a new response.
+
 ## 2.0.3
 
 - Add `header` parameter to request methods.

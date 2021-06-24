@@ -315,6 +315,10 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
   /// Time of instantiation.
   final int instanceTime = DateTime.now().millisecondsSinceEpoch;
 
+  /// The [instanceTime] as [DateTime].
+  DateTime get instanceDateTime =>
+      DateTime.fromMillisecondsSinceEpoch(instanceTime);
+
   int? _accessTime;
 
   HttpResponse(
@@ -347,13 +351,23 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
   HttpBody? get body => _body;
 
   /// Returns the [body] as [String].
-  String? get bodyAsString => _body?.asString;
+  String? get bodyAsString {
+    var body = _body;
+    return body != null && body.size > 0 ? body.asString : null;
+  }
 
   /// Returns the [body] as JSON.
-  dynamic get json => hasBody ? jsonDecode(bodyAsString!) : null;
+  dynamic get json => _jsonDecode(bodyAsString!);
+
+  dynamic _jsonDecode(String? s) {
+    return s == null || s.isEmpty ? null : jsonDecode(s);
+  }
 
   /// Returns [true] if has [body].
-  bool get hasBody => _body != null && _body!.size > 0;
+  bool get hasBody {
+    var body = _body;
+    return body != null && body.size > 0;
+  }
 
   /// The [body] type (Content-Type).
   String? get bodyType => getResponseHeader('Content-Type');
@@ -1113,7 +1127,8 @@ class HttpRequest {
       return this;
     }
 
-    var requestHeaders = client.clientRequester.buildRequestHeaders(client, url,
+    var requestHeaders = client.clientRequester.buildRequestHeaders(
+        client, method, url,
         authorization: authorization,
         contentType: headerContentType,
         accept: headerAccept);
@@ -1191,6 +1206,13 @@ abstract class HttpClientRequester {
             queryParameters: queryParameters,
             noQueryString: noQueryString,
             progressListener: progressListener);
+      case HttpMethod.HEAD:
+        return requestHEAD(client, url,
+            headers: headers,
+            authorization: authorization,
+            queryParameters: queryParameters,
+            noQueryString: noQueryString,
+            progressListener: progressListener);
       case HttpMethod.OPTIONS:
         return requestOPTIONS(client, url,
             headers: headers,
@@ -1262,21 +1284,53 @@ abstract class HttpClientRequester {
       Authorization? authorization,
       Map<String, String>? queryParameters,
       bool noQueryString = false,
-      ProgressListener? progressListener}) {
-    return doHttpRequest(
+      ProgressListener? progressListener}) async {
+    var requestURL = buildRequestURL(client, url,
+        authorization: authorization,
+        queryParameters: queryParameters,
+        noQueryString: noQueryString);
+
+    var requestHeaders = buildRequestHeaders(client, HttpMethod.GET, url,
+        headers: headers, authorization: authorization);
+
+    requestURL = await client._interceptRequest(
+        HttpMethod.GET, requestURL, requestHeaders);
+
+    return submitHttpRequest(
         client,
-        HttpRequest(
-            HttpMethod.GET,
-            url,
-            buildRequestURL(client, url,
-                authorization: authorization,
-                queryParameters: queryParameters,
-                noQueryString: noQueryString),
+        HttpRequest(HttpMethod.GET, url, requestURL,
             authorization: authorization,
             queryParameters: queryParameters,
             withCredentials: _withCredentials(client, authorization),
-            requestHeaders: buildRequestHeaders(client, url,
-                headers: headers, authorization: authorization)),
+            requestHeaders: requestHeaders),
+        progressListener,
+        client.logRequests);
+  }
+
+  Future<HttpResponse> requestHEAD(HttpClient client, String url,
+      {Map<String, String>? headers,
+      Authorization? authorization,
+      Map<String, String>? queryParameters,
+      bool noQueryString = false,
+      ProgressListener? progressListener}) async {
+    var requestURL = buildRequestURL(client, url,
+        authorization: authorization,
+        queryParameters: queryParameters,
+        noQueryString: noQueryString);
+
+    var requestHeaders = buildRequestHeaders(client, HttpMethod.HEAD, url,
+        headers: headers, authorization: authorization);
+
+    requestURL = await client._interceptRequest(
+        HttpMethod.HEAD, requestURL, requestHeaders);
+
+    return submitHttpRequest(
+        client,
+        HttpRequest(HttpMethod.HEAD, url, requestURL,
+            authorization: authorization,
+            queryParameters: queryParameters,
+            withCredentials: _withCredentials(client, authorization),
+            requestHeaders: requestHeaders),
         progressListener,
         client.logRequests);
   }
@@ -1286,21 +1340,28 @@ abstract class HttpClientRequester {
       Authorization? authorization,
       Map<String, String>? queryParameters,
       bool noQueryString = false,
-      ProgressListener? progressListener}) {
-    return doHttpRequest(
+      ProgressListener? progressListener}) async {
+    var requestURL = buildRequestURL(client, url,
+        authorization: authorization,
+        queryParameters: queryParameters,
+        noQueryString: noQueryString);
+
+    var requestHeaders = buildRequestHeaders(client, HttpMethod.OPTIONS, url,
+        headers: headers, authorization: authorization);
+
+    requestURL = await client._interceptRequest(
+        HttpMethod.OPTIONS, requestURL, requestHeaders);
+
+    return submitHttpRequest(
         client,
         HttpRequest(
           HttpMethod.OPTIONS,
           url,
-          buildRequestURL(client, url,
-              authorization: authorization,
-              queryParameters: queryParameters,
-              noQueryString: noQueryString),
+          requestURL,
           authorization: authorization,
           queryParameters: queryParameters,
           withCredentials: _withCredentials(client, authorization),
-          requestHeaders: buildRequestHeaders(client, url,
-              headers: headers, authorization: authorization),
+          requestHeaders: requestHeaders,
         ),
         progressListener,
         client.logRequests);
@@ -1314,30 +1375,33 @@ abstract class HttpClientRequester {
       Object? body,
       String? contentType,
       String? accept,
-      ProgressListener? progressListener}) {
+      ProgressListener? progressListener}) async {
     var httpBody = HttpRequestBody(body, contentType, queryParameters);
     var requestBody = buildRequestBody(client, httpBody, authorization);
 
     if (queryParameters != null &&
         queryParameters.isNotEmpty &&
         requestBody.isNull) {
-      var requestHeaders = buildRequestHeaders(client, url,
+      var requestHeaders = buildRequestHeaders(client, HttpMethod.POST, url,
           headers: headers,
           authorization: authorization,
           contentType: requestBody.contentType,
           accept: accept);
-      requestHeaders ??= {};
 
       var formData = buildPOSTFormData(queryParameters, requestHeaders);
-      if (requestHeaders.isEmpty) requestHeaders = null;
 
-      return doHttpRequest(
+      var requestURL = buildRequestURL(client, url,
+          authorization: authorization, noQueryString: noQueryString);
+
+      requestURL = await client._interceptRequest(
+          HttpMethod.POST, requestURL, requestHeaders);
+
+      return submitHttpRequest(
           client,
           HttpRequest(
             HttpMethod.POST,
             url,
-            buildRequestURL(client, url,
-                authorization: authorization, noQueryString: noQueryString),
+            requestURL,
             authorization: authorization,
             queryParameters: queryParameters,
             withCredentials: _withCredentials(client, authorization),
@@ -1347,23 +1411,30 @@ abstract class HttpClientRequester {
           progressListener,
           client.logRequests);
     } else {
-      return doHttpRequest(
+      var requestHeaders = buildRequestHeaders(client, HttpMethod.POST, url,
+          headers: headers,
+          authorization: authorization,
+          contentType: requestBody.contentType,
+          accept: accept);
+
+      var requestURL = buildRequestURL(client, url,
+          authorization: authorization,
+          queryParameters: queryParameters,
+          noQueryString: noQueryString);
+
+      requestURL = await client._interceptRequest(
+          HttpMethod.POST, requestURL, requestHeaders);
+
+      return submitHttpRequest(
           client,
           HttpRequest(
             HttpMethod.POST,
             url,
-            buildRequestURL(client, url,
-                authorization: authorization,
-                queryParameters: queryParameters,
-                noQueryString: noQueryString),
+            requestURL,
             authorization: authorization,
             queryParameters: queryParameters,
             withCredentials: _withCredentials(client, authorization),
-            requestHeaders: buildRequestHeaders(client, url,
-                headers: headers,
-                authorization: authorization,
-                contentType: requestBody.contentType,
-                accept: accept),
+            requestHeaders: requestHeaders,
             sendData: requestBody.contentAsSendData,
           ),
           progressListener,
@@ -1379,25 +1450,32 @@ abstract class HttpClientRequester {
       Object? body,
       String? contentType,
       String? accept,
-      ProgressListener? progressListener}) {
+      ProgressListener? progressListener}) async {
     var httpBody = HttpRequestBody(body, contentType, queryParameters);
     var requestBody = buildRequestBody(client, httpBody, authorization);
 
-    return doHttpRequest(
+    var requestURL = buildRequestURL(client, url,
+        authorization: authorization, noQueryString: noQueryString);
+
+    var requestHeaders = buildRequestHeaders(client, HttpMethod.PUT, url,
+        headers: headers,
+        authorization: authorization,
+        contentType: requestBody.contentType,
+        accept: accept);
+
+    requestURL = await client._interceptRequest(
+        HttpMethod.PUT, requestURL, requestHeaders);
+
+    return submitHttpRequest(
         client,
         HttpRequest(
           HttpMethod.PUT,
           url,
-          buildRequestURL(client, url,
-              authorization: authorization, noQueryString: noQueryString),
+          requestURL,
           authorization: authorization,
           queryParameters: queryParameters,
           withCredentials: _withCredentials(client, authorization),
-          requestHeaders: buildRequestHeaders(client, url,
-              headers: headers,
-              authorization: authorization,
-              contentType: requestBody.contentType,
-              accept: accept),
+          requestHeaders: requestHeaders,
           sendData: requestBody.contentAsSendData,
         ),
         progressListener,
@@ -1412,7 +1490,7 @@ abstract class HttpClientRequester {
       Object? body,
       String? contentType,
       String? accept,
-      ProgressListener? progressListener}) {
+      ProgressListener? progressListener}) async {
     var httpBody = HttpRequestBody(body, contentType, queryParameters);
     var requestBody = buildRequestBody(client, httpBody, authorization);
 
@@ -1425,21 +1503,28 @@ abstract class HttpClientRequester {
       requestBody = buildRequestBody(client, httpBody, authorization);
     }
 
-    return doHttpRequest(
+    var requestURL = buildRequestURL(client, url,
+        authorization: authorization, noQueryString: noQueryString);
+
+    var requestHeaders = buildRequestHeaders(client, HttpMethod.PATCH, url,
+        headers: headers,
+        authorization: authorization,
+        contentType: requestBody.contentType,
+        accept: accept);
+
+    requestURL = await client._interceptRequest(
+        HttpMethod.PATCH, requestURL, requestHeaders);
+
+    return submitHttpRequest(
         client,
         HttpRequest(
           HttpMethod.PATCH,
           url,
-          buildRequestURL(client, url,
-              authorization: authorization, noQueryString: noQueryString),
+          requestURL,
           authorization: authorization,
           queryParameters: queryParameters,
           withCredentials: _withCredentials(client, authorization),
-          requestHeaders: buildRequestHeaders(client, url,
-              headers: headers,
-              authorization: authorization,
-              contentType: requestBody.contentType,
-              accept: accept),
+          requestHeaders: requestHeaders,
           sendData: requestBody.contentAsSendData,
         ),
         progressListener,
@@ -1454,29 +1539,46 @@ abstract class HttpClientRequester {
       Object? body,
       String? contentType,
       String? accept,
-      ProgressListener? progressListener}) {
+      ProgressListener? progressListener}) async {
     var httpBody = HttpRequestBody(body, contentType, queryParameters);
     var requestBody = buildRequestBody(client, httpBody, authorization);
 
-    return doHttpRequest(
+    var requestURL = buildRequestURL(client, url,
+        authorization: authorization, noQueryString: noQueryString);
+
+    var requestHeaders = buildRequestHeaders(client, HttpMethod.DELETE, url,
+        headers: headers,
+        authorization: authorization,
+        contentType: requestBody.contentType,
+        accept: accept);
+
+    requestURL = await client._interceptRequest(
+        HttpMethod.DELETE, requestURL, requestHeaders);
+
+    return submitHttpRequest(
         client,
         HttpRequest(
           HttpMethod.DELETE,
           url,
-          buildRequestURL(client, url,
-              authorization: authorization, noQueryString: noQueryString),
+          requestURL,
           authorization: authorization,
           queryParameters: queryParameters,
           withCredentials: _withCredentials(client, authorization),
-          requestHeaders: buildRequestHeaders(client, url,
-              headers: headers,
-              authorization: authorization,
-              contentType: requestBody.contentType,
-              accept: accept),
+          requestHeaders: requestHeaders,
           sendData: requestBody.contentAsSendData,
         ),
         progressListener,
         client.logRequests);
+  }
+
+  Future<HttpResponse> submitHttpRequest(HttpClient client, HttpRequest request,
+      ProgressListener? progressListener, bool log) {
+    if (!client.hasInterceptor) {
+      return doHttpRequest(client, request, progressListener, log);
+    }
+
+    return doHttpRequest(client, request, progressListener, log)
+        .then((response) => client._interceptResponse(response));
   }
 
   /// Implements teh actual HTTP request for imported platform.
@@ -1516,29 +1618,26 @@ abstract class HttpClientRequester {
   }
 
   /// Helper to build the request headers.
-  Map<String, String>? buildRequestHeaders(
+  Map<String, String> buildRequestHeaders(
     HttpClient client,
+    HttpMethod method,
     String url, {
     Map<String, String>? headers,
     Authorization? authorization,
     String? contentType,
     String? accept,
   }) {
-    var requestHeaders = client.buildRequestHeaders(url);
+    var requestHeaders = client.buildRequestHeaders(url) ?? <String, String>{};
 
-    if (contentType != null) {
-      requestHeaders ??= {};
+    if (contentType != null && method != HttpMethod.GET) {
       requestHeaders['Content-Type'] = contentType;
     }
 
     if (accept != null) {
-      requestHeaders ??= {};
       requestHeaders['Accept'] = accept;
     }
 
     if (authorization != null && authorization.usesAuthorizationHeader) {
-      requestHeaders ??= {};
-
       var credential = authorization.resolvedCredential!;
       var authorizationHeaderLine = credential.buildAuthorizationHeaderLine();
       if (authorizationHeaderLine != null) {
@@ -1547,7 +1646,6 @@ abstract class HttpClientRequester {
     }
 
     if (headers != null) {
-      requestHeaders ??= {};
       requestHeaders.addAll(headers);
     }
 
@@ -1997,6 +2095,21 @@ class HttpClient {
         progressListener: progressListener);
   }
 
+  /// Does a HEAD request.
+  Future<HttpResponse> head(String path,
+      {Map<String, String>? headers,
+      bool fullPath = false,
+      Credential? authorization,
+      Map<String, String>? parameters,
+      ProgressListener? progressListener}) async {
+    var url = _buildURL(path, fullPath, parameters, true);
+    var requestAuthorization = await _buildRequestAuthorization(authorization);
+    return _clientRequester.requestHEAD(this, url,
+        headers: headers,
+        authorization: requestAuthorization,
+        progressListener: progressListener);
+  }
+
   /// Does an OPTIONS request.
   Future<HttpResponse> options(String path,
       {Map<String, String>? headers,
@@ -2301,6 +2414,64 @@ class HttpClient {
     if (requestHeadersBuilder == null) return null;
     return requestHeadersBuilder!(this, url);
   }
+
+  /// An optional interceptor, that can be used to log requests or to change
+  /// headers and URLs.
+  HttpClientInterceptor? interceptor;
+
+  /// Returns `true` if has an [interceptor].
+  bool get hasInterceptor => interceptor != null;
+
+  FutureOr<String> _interceptRequest(
+      HttpMethod method, String url, Map<String, String> headers) {
+    var interceptor = this.interceptor;
+    if (interceptor != null) {
+      var ret = interceptor.filterRequest(this, method, url, headers);
+      if (ret is Future<String?>) {
+        return ret.then((url2) => url2 != null && url2.isNotEmpty ? url2 : url);
+      } else {
+        return ret != null && ret.isNotEmpty ? ret : url;
+      }
+    } else {
+      return url;
+    }
+  }
+
+  FutureOr<HttpResponse> _interceptResponse(HttpResponse response) {
+    var interceptor = this.interceptor;
+    if (interceptor != null) {
+      var ret = interceptor.filterResponse(this, response);
+      if (ret is Future<HttpResponse?>) {
+        return ret.then((response2) => response2 ?? response);
+      } else {
+        return ret ?? response;
+      }
+    } else {
+      return response;
+    }
+  }
+}
+
+/// An interceptor that can be used to filter requests and responses.
+abstract class HttpClientInterceptor {
+  /// Filters the request before submit.
+  ///
+  /// Any modification to [headers] will be submitted.
+  /// - [client] the [HttpClient] performing the request.
+  /// - [method] the HTTP Method of the request.
+  /// - [url] the request URL.
+  /// - [headers] the headers of the request that can be modified.
+  /// - Return: should return the URL. If `null` or empty is returned the original [url] will be used.
+  FutureOr<String?> filterRequest(HttpClient client, HttpMethod method,
+          String url, Map<String, String>? headers) =>
+      null;
+
+  /// Filters the [response] before is returned by the [client].
+  ///
+  /// - Return: should return a filtered [HttpResponse] or `null` if no filter is performed.
+  FutureOr<HttpResponse?> filterResponse(
+          HttpClient client, HttpResponse response) =>
+      null;
 }
 
 typedef SimulateResponse = dynamic Function(
