@@ -18,6 +18,7 @@ dev_dependencies:
   stream_channel: ^2.1.0
   async: ^2.7.0
   dependency_validator: ^3.1.0
+  coverage: ^1.0.3
 
 #dependency_overrides:
 #  swiss_knife:
