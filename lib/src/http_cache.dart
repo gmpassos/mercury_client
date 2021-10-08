@@ -10,7 +10,7 @@ class _CacheRequest implements Comparable<_CacheRequest> {
 
   final String _url;
 
-  final Map<String, String>? _queryParameters;
+  final Map<String, String?>? _queryParameters;
 
   final dynamic _body;
 
@@ -66,7 +66,7 @@ class _CacheRequest implements Comparable<_CacheRequest> {
     if (_queryParameters != null) {
       for (var entry in _queryParameters!.entries) {
         memory += entry.key.length;
-        memory += entry.value.length;
+        memory += entry.value?.length ?? 0;
       }
     }
 
@@ -118,11 +118,10 @@ class HttpCache {
 
   HttpCache(
       {int maxCacheMemory = 0,
-      Duration timeout = _NO_DURATION,
-      bool verbose = false}) {
+      Duration timeout = _noDuration,
+      this.verbose = false}) {
     this.maxCacheMemory = maxCacheMemory;
     this.timeout = timeout;
-    this.verbose = verbose;
   }
 
   void _log(String msg) {
@@ -149,11 +148,11 @@ class HttpCache {
   /// The timeout of stored requests.
   Duration get timeout => _timeout;
 
-  static const Duration _NO_DURATION = Duration(milliseconds: 0);
+  static const Duration _noDuration = Duration(milliseconds: 0);
 
   set timeout(Duration value) {
     if (value.inMilliseconds <= 0) {
-      _timeout = _NO_DURATION;
+      _timeout = _noDuration;
     } else {
       if (value.inSeconds < 1) value = Duration(seconds: 1);
       _timeout = value;
@@ -288,7 +287,7 @@ class HttpCache {
       HttpClient httpClient, HttpMethod method, String? path,
       {bool fullPath = false,
       Credential? authorization,
-      Map<String, String>? queryParameters,
+      Map<String, String?>? queryParameters,
       Object? body,
       String? contentType,
       String? accept,
@@ -321,7 +320,7 @@ class HttpCache {
   Future<HttpResponse> requestURL(
       HttpClient? httpClient, HttpMethod method, String requestURL,
       {Credential? authorization,
-      Map<String, String>? queryParameters,
+      Map<String, String?>? queryParameters,
       Object? body,
       String? contentType,
       String? accept,
@@ -401,7 +400,7 @@ class HttpCache {
       HttpClient httpClient, HttpMethod method, String path,
       {bool fullPath = false,
       Credential? authorization,
-      Map<String, String>? queryParameters,
+      Map<String, String?>? queryParameters,
       Object? body,
       String? contentType,
       String? accept}) {
@@ -418,7 +417,7 @@ class HttpCache {
   /// Gets a request already in cache using [httpClient] and [requestURL].
   HttpResponse? getCachedRequestURL(HttpMethod method, String requestURL,
       {Credential? authorization,
-      Map<String, String>? queryParameters,
+      Map<String, String?>? queryParameters,
       Object? body,
       String? contentType,
       String? accept}) {
@@ -441,7 +440,7 @@ class HttpCache {
       {HttpClient? httpClient,
       bool fullPath = false,
       Credential? authorization,
-      Map<String, String>? parameters,
+      Map<String, String?>? parameters,
       String? accept,
       OnCachedResponse? onStaleResponse,
       Duration? staleResponseDelay}) async {
@@ -462,7 +461,7 @@ class HttpCache {
   Future<HttpResponse> get(HttpClient httpClient, String? path,
       {bool fullPath = false,
       Credential? authorization,
-      Map<String, String>? parameters,
+      Map<String, String?>? parameters,
       String? accept,
       OnCachedResponse? onStaleResponse,
       Duration? staleResponseDelay}) async {
@@ -481,7 +480,7 @@ class HttpCache {
   Future<HttpResponse> head(HttpClient httpClient, String? path,
       {bool fullPath = false,
       Credential? authorization,
-      Map<String, String>? parameters,
+      Map<String, String?>? parameters,
       String? accept,
       OnCachedResponse? onStaleResponse,
       Duration? staleResponseDelay}) async {
@@ -500,7 +499,7 @@ class HttpCache {
   Future<HttpResponse> options(HttpClient httpClient, String path,
       {bool fullPath = false,
       Credential? authorization,
-      Map<String, String>? parameters,
+      Map<String, String?>? parameters,
       String? accept,
       OnCachedResponse? onStaleResponse,
       Duration? staleResponseDelay}) async {
@@ -519,7 +518,7 @@ class HttpCache {
   Future<HttpResponse> post(HttpClient httpClient, String path,
       {bool fullPath = false,
       Credential? authorization,
-      Map<String, String>? parameters,
+      Map<String, String?>? parameters,
       Object? body,
       String? contentType,
       String? accept,
@@ -564,7 +563,7 @@ class HttpCache {
       HttpClient httpClient, HttpMethod method, String path,
       {bool fullPath = false,
       Credential? authorization,
-      Map<String, String>? queryParameters,
+      Map<String, String?>? queryParameters,
       Object? body,
       String? contentType,
       String? accept,
@@ -588,7 +587,7 @@ class HttpCache {
   Future<dynamic> getJSON(HttpClient httpClient, String path,
       {bool fullPath = false,
       Credential? authorization,
-      Map<String, String>? parameters,
+      Map<String, String?>? parameters,
       String? accept,
       OnCachedResponse? onStaleResponse,
       Duration? staleResponseDelay}) async {
@@ -608,7 +607,7 @@ class HttpCache {
   Future<dynamic> optionsJSON(HttpClient httpClient, String path,
       {bool fullPath = false,
       Credential? authorization,
-      Map<String, String>? parameters,
+      Map<String, String?>? parameters,
       String? accept,
       OnCachedResponse? onStaleResponse,
       Duration? staleResponseDelay}) async {
@@ -628,7 +627,7 @@ class HttpCache {
   Future<dynamic> postJSON(HttpClient httpClient, String path,
       {bool fullPath = false,
       Credential? authorization,
-      Map<String, String>? parameters,
+      Map<String, String?>? parameters,
       Object? body,
       String? contentType,
       String? accept,

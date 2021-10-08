@@ -57,6 +57,65 @@ void doBasicTests(TestServerChannel testServerChannel) {
                   (e) => e.contains('download[') && e.contains('/50]')) !=
               null,
           isTrue);
+
+      var response2 = await client
+          .get('foo', parameters: {'a': '22', 'b': null, 'c': '33'});
+
+      expect(response2.isOK, equals(true));
+      expect(response2.bodyAsString,
+          equals('Hello, world! Method: GET ; Path: /tests/foo?a=22&b&c=33'));
+    });
+
+    test('HttpCache', () async {
+      await testServerChannel.waitOpen();
+
+      var client =
+          HttpClient('http://localhost:${testServerChannel.serverPort}/tests');
+
+      var cache = HttpCache();
+
+      var responseCached = cache.getCachedRequest(client, HttpMethod.GET, 'foo',
+          queryParameters: {'a': '123'});
+
+      expect(responseCached, isNull);
+
+      var response = await cache.get(client, 'foo', parameters: {'a': '123'});
+
+      expect(response.isOK, equals(true));
+      expect(response.isNotOK, equals(false));
+      expect(response.isError, equals(false));
+
+      expect(response.bodyAsString,
+          equals('Hello, world! Method: GET ; Path: /tests/foo?a=123'));
+
+      var responseCached2 = cache.getCachedRequest(
+          client, HttpMethod.GET, 'foo',
+          queryParameters: {'a': '123'});
+
+      expect(responseCached2, isNotNull);
+
+      expect(responseCached2!.bodyAsString,
+          equals('Hello, world! Method: GET ; Path: /tests/foo?a=123'));
+    });
+
+    test('HttpCache', () async {
+      await testServerChannel.waitOpen();
+
+      var httpRequester = HttpRequester({
+        'httpMethod': 'GET',
+        'scheme': 'http',
+        'host': 'localhost:${testServerChannel.serverPort}',
+        'path': 'tests/foo',
+        'parameters': {'a': '456'}
+      });
+
+      expect(httpRequester.path, equals('tests/foo'));
+      expect(httpRequester.parameters, equals({'a': '456'}));
+
+      var body = await httpRequester.doRequest();
+
+      expect(
+          body, equals('Hello, world! Method: GET ; Path: /tests/foo?a=456'));
     });
 
     test('Method GET - 404', () async {

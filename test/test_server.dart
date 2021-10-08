@@ -56,15 +56,15 @@ class TestServer {
 
   Future _processTestRequest(io.HttpRequest request) async {
     if (request.method == 'GET' && request.uri.path.contains('404')) {
-      return _processTestRequest_status(request, 404);
+      return _processTestRequestStatus(request, 404);
     } else if (request.method == 'GET' && request.uri.path.contains('500')) {
-      return _processTestRequest_status(request, 500);
+      return _processTestRequestStatus(request, 500);
     } else {
-      return _processTestRequest_OK(request);
+      return _processTestRequestOK(request);
     }
   }
 
-  Future _processTestRequest_OK(io.HttpRequest request) async {
+  Future _processTestRequestOK(io.HttpRequest request) async {
     var response =
         'Hello, world! Method: ${request.method} ; Path: ${request.uri}';
 
@@ -95,7 +95,7 @@ class TestServer {
     await request.response.close();
   }
 
-  Future _processTestRequest_status(io.HttpRequest request, int status) async {
+  Future _processTestRequestStatus(io.HttpRequest request, int status) async {
     var origin =
         request.headers['Origin'] ?? 'http://${request.headers.host}:$port/';
 

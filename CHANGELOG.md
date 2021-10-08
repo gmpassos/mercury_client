@@ -1,3 +1,13 @@
+## 2.1.1
+
+- `parameters` now accepts `Map<String,String?>`.
+- Using Dart coverage for `VM` and `Browser` tests.
+- Improved tests.
+- Migrated from `pedantic` to `lints`.
+- lints: ^1.0.1
+- swiss_knife: ^3.0.8
+- dependency_validator: ^3.1.0
+
 ## 2.1.0
 
 - Added `HttpClientInterceptor`.

@@ -37,9 +37,24 @@ jobs:
         run: su -c 'cd $(< /tmp/test-dir.txt) && dart format -o none --set-exit-if-changed .' tester
       - name: dart analyze
         run: su -c 'cd $(< /tmp/test-dir.txt) && dart analyze --fatal-infos --fatal-warnings .' tester
-      - name: Run Browser tests (Firefox)
-        run: su -c 'DISPLAY=:0 cd $(< /tmp/test-dir.txt) && dart test -p firefox' tester
+      - name: dependency_validator
+        run: su -c 'cd $(< /tmp/test-dir.txt) && dart run dependency_validator' tester
       - name: Run VM tests
         run: su -c 'DISPLAY=:0 cd $(< /tmp/test-dir.txt) && dart test -p vm' tester
+      - name: Run Browser tests (Firefox)
+        run: su -c 'DISPLAY=:0 cd $(< /tmp/test-dir.txt) && dart test -p firefox' tester
+      - name: Generate coverage report
+        run: |
+          su -c 'DISPLAY=:0 cd $(< /tmp/test-dir.txt) && dart test --coverage=./coverage -p vm,firefox' tester
+          su -c 'DISPLAY=:0 cd $(< /tmp/test-dir.txt) && dart pub global run coverage:format_coverage --packages=.packages --report-on=lib --lcov -o ./coverage/lcov.info -i ./coverage' tester
+          su -c 'DISPLAY=:0 cd $(< /tmp/test-dir.txt) && chmod -R 777 ./coverage' tester
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v1
+        with:
+          directory: ./coverage/
+          flags: unittests
+          env_vars: OS,DART
+          fail_ci_if_error: true
+          verbose: true
       - name: publish --dry-run
         run: su -c 'DISPLAY=:0 cd $(< /tmp/test-dir.txt) && dart pub publish --dry-run' tester

@@ -26,23 +26,42 @@ class HttpRequester {
 
   late String _path;
 
+  Map<String, String?>? _parameters;
+
   String? _bodyType;
 
   String? _body;
 
   String? _responseType;
 
-  HttpRequester(this.config, [MapProperties? properties, this.httpCache])
-      : properties = properties ?? MapProperties() {
+  static MapProperties _asMapProperties(Object? o, [MapProperties? def]) {
+    if (o == null) return def ?? MapProperties();
+
+    if (o is MapProperties) return o;
+    if (o is Map<String, String>) return MapProperties.fromStringProperties(o);
+    if (o is Map<String, Object?>) return MapProperties.fromProperties(o);
+    if (o is Map) return MapProperties.fromMap(o);
+
+    return def ?? MapProperties();
+  }
+
+  HttpRequester(Map<String, Object?> config,
+      [Map<String, Object?>? properties, this.httpCache])
+      : config = _asMapProperties(config),
+        properties = _asMapProperties(properties) {
+    var config = this.config;
+
     var schemeType = config
         .findPropertyAsStringTrimLC(['scheme', 'protocol', 'type'], 'http')!;
     var secure = config.findPropertyAsBool(['secure', 'ssl', 'https'], false)!;
 
     var host = config.getPropertyAsStringTrimLC('host');
     var method = config
-        .findPropertyAsStringTrimLC(['method', 'htttp_method', 'htttpMethod']);
+        .findPropertyAsStringTrimLC(['method', 'http_method', 'httpMethod']);
 
     var path = config.getPropertyAsString('path', '/');
+
+    var parameters = config.getPropertyAsStringMap('parameters');
 
     var bodyType = config.findPropertyAsStringTrimLC([
       'body_type',
@@ -58,8 +77,6 @@ class HttpRequester {
         config.findPropertyAsStringTrimLC(['response_type', 'responseType']);
 
     if (responseType != null) responseType = responseType.toLowerCase();
-
-    /////
 
     var runtimeUri = getHttpClientRuntimeUri();
 
@@ -79,11 +96,7 @@ class HttpRequester {
       host = '${runtimeUri.host}:$port';
     }
 
-    /////
-
     var httpMethod = getHttpMethod(method, HttpMethod.GET)!;
-
-    /////
 
     var pathBuilt = '/';
 
@@ -94,9 +107,7 @@ class HttpRequester {
           : path;
     }
 
-    /////
-
-    var bodyBuilt;
+    String? bodyBuilt;
 
     if (body != null) {
       bodyBuilt = body.contains('{{')
@@ -104,12 +115,11 @@ class HttpRequester {
           : body;
     }
 
-    /////
-
     _host = host;
     _scheme = scheme;
     _httpMethod = httpMethod;
     _path = pathBuilt;
+    _parameters = parameters;
     _responseType = responseType;
     _bodyType = bodyType;
     _body = bodyBuilt;
@@ -122,6 +132,8 @@ class HttpRequester {
   HttpMethod get httpMethod => _httpMethod;
 
   String get path => _path;
+
+  Map<String, String?>? get parameters => _parameters;
 
   String? get bodyType => _bodyType;
 
@@ -149,10 +161,10 @@ class HttpRequester {
     HttpResponse httpResponse;
     if (httpCache != null) {
       httpResponse = await httpCache!.request(httpClient, httpMethod, path,
-          body: _body, contentType: bodyType);
+          queryParameters: _parameters, body: _body, contentType: bodyType);
     } else {
       httpResponse = await httpClient.request(httpMethod, path,
-          body: _body, contentType: bodyType);
+          parameters: _parameters, body: _body, contentType: bodyType);
     }
 
     return _processResponse(httpResponse, httpClient);

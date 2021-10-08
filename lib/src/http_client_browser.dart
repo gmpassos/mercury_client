@@ -167,15 +167,15 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     if (httpError.isOAuthAuthorizationError) return false;
 
     if (status == 0 || status == 401) {
-      return _checkForRetry_authorizationProvider(originalRequestCompleter,
+      return _checkForRetryAuthorizationProvider(originalRequestCompleter,
           client, request, progressListener, log, httpError);
     } else {
-      return _checkForRetry_networkIssue(originalRequestCompleter, client,
+      return _checkForRetryNetworkIssue(originalRequestCompleter, client,
           request, progressListener, log, status, httpError);
     }
   }
 
-  Future<bool> _checkForRetry_networkIssue(
+  Future<bool> _checkForRetryNetworkIssue(
       Completer<HttpResponse> originalRequestCompleter,
       HttpClient client,
       HttpRequest request,
@@ -192,7 +192,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     return false;
   }
 
-  Future<bool> _checkForRetry_authorizationProvider(
+  Future<bool> _checkForRetryAuthorizationProvider(
       Completer<HttpResponse> originalRequestCompleter,
       HttpClient client,
       HttpRequest request,
