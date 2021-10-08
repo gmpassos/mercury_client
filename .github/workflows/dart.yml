@@ -46,7 +46,7 @@ jobs:
       - name: Generate coverage report
         run: |
           su -c 'DISPLAY=:0 cd $(< /tmp/test-dir.txt) && dart test --coverage=./coverage -p vm,firefox' tester
-          su -c 'DISPLAY=:0 cd $(< /tmp/test-dir.txt) && dart pub global run coverage:format_coverage --packages=.packages --report-on=lib --lcov -o ./coverage/lcov.info -i ./coverage' tester
+          su -c 'DISPLAY=:0 cd $(< /tmp/test-dir.txt) && dart pub global activate coverage && dart pub global run coverage:format_coverage --packages=.packages --report-on=lib --lcov -o ./coverage/lcov.info -i ./coverage' tester
           su -c 'DISPLAY=:0 cd $(< /tmp/test-dir.txt) && chmod -R 777 ./coverage' tester
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v1
