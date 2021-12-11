@@ -15,6 +15,12 @@ class HttpClientRequesterIO extends HttpClientRequester {
     _setupMercuryUserAgent();
   }
 
+  @override
+  void stdout(Object? o) => io.stdout.writeln(o);
+
+  @override
+  void stderr(Object? o) => io.stderr.writeln(o);
+
   void _setupMercuryUserAgent() {
     var dartAgent = (_ioClient.userAgent ?? '').trim();
     var mercuryAgent = 'mercury_client';
@@ -32,10 +38,15 @@ class HttpClientRequesterIO extends HttpClientRequester {
       ProgressListener? progressListener, bool log) async {
     var uri = Uri.parse(request.requestURL);
 
+    if (log) {
+      this.log('REQUEST: $request > URI: $uri');
+    }
+
     var req = await _request(client, request, uri);
     var response = await req.close();
 
-    return _processResponse(client, request, uri, response, progressListener);
+    return _processResponse(
+        client, request, uri, response, progressListener, log);
   }
 
   Future<HttpResponse> _processResponse(
@@ -43,7 +54,8 @@ class HttpClientRequesterIO extends HttpClientRequester {
       HttpRequest request,
       Uri requestURI,
       io.HttpClientResponse response,
-      ProgressListener? progressListener) async {
+      ProgressListener? progressListener,
+      bool log) async {
     var contentType = response.headers.contentType;
 
     var body =
@@ -59,6 +71,10 @@ class HttpClientRequesterIO extends HttpClientRequester {
         body,
         (key) => responseHeaders[key.toLowerCase()],
         response);
+
+    if (log) {
+      this.log('RESPONSE: $resp');
+    }
 
     var responseHeaderWithToken = client.responseHeaderWithToken;
 
@@ -250,8 +266,15 @@ class HttpClientRequesterIO extends HttpClientRequester {
   ////////////////////////////////
 
   void _putSendData(HttpRequest request, io.HttpClientRequest req) {
-    if (request.sendData != null) {
-      req.write(request.sendData);
+    var sendData = request.sendData;
+    if (sendData != null) {
+      if (sendData is List<int>) {
+        req.add(sendData);
+      } else if (sendData is ByteBuffer) {
+        req.add(sendData.asUint8List());
+      } else {
+        req.write(sendData);
+      }
     }
   }
 
@@ -259,8 +282,10 @@ class HttpClientRequesterIO extends HttpClientRequester {
     var requestHeaders = request.requestHeaders;
     if (requestHeaders != null && requestHeaders.isNotEmpty) {
       for (var header in requestHeaders.keys) {
-        var val = requestHeaders[header]!;
-        req.headers.add(header, val);
+        var val = requestHeaders[header];
+        if (val != null) {
+          req.headers.add(header, val);
+        }
       }
     }
   }

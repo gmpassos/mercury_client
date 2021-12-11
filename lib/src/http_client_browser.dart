@@ -4,20 +4,20 @@ import 'dart:typed_data';
 
 import 'package:swiss_knife/swiss_knife.dart';
 
+import 'http_client_extension.dart';
 import 'http_client.dart';
 
 /// HttpClientRequester implementation for Browser.
 class HttpClientRequesterBrowser extends HttpClientRequester {
   @override
+  void stdout(Object? o) => browser.window.console.log(o);
+
+  @override
+  void stderr(Object? o) => browser.window.console.error(o);
+
+  @override
   Future<HttpResponse> doHttpRequest(HttpClient client, HttpRequest request,
       ProgressListener? progressListener, bool log) {
-    if (log) {
-      print('<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<');
-      print(client);
-      print(request);
-      print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
-    }
-
     var completer = Completer<HttpResponse>();
 
     var xhr = browser.HttpRequest();
@@ -28,6 +28,10 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
         .hasMatch(methodName));
 
     var url = request.requestURL;
+
+    if (log) {
+      this.log('REQUEST: $request > URI: $url');
+    }
 
     xhr.open(methodName, url, async: true);
 
@@ -94,14 +98,23 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       if (accepted || fileUri || notModified || unknownRedirect) {
         var response =
             _processResponse(client, request, request.method, request.url, xhr);
+        if (log) {
+          this.log('RESPONSE: $response');
+        }
         completer.complete(response);
       } else {
+        if (log) {
+          logError('REQUEST: $request > status: ${xhr.status}', e);
+        }
         _completeOnError(completer, client, request, progressListener, log,
             status, xhr.responseText, e);
       }
     });
 
     xhr.onError.listen((e) {
+      if (log) {
+        logError('REQUEST: $request > status: ${xhr.status}', e);
+      }
       _completeOnError(completer, client, request, progressListener, log,
           xhr.status ?? 0, xhr.responseText, e);
     });
@@ -208,7 +221,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
         request.incrementRetries();
 
         var authorization2 = Authorization.fromCredential(credential);
-        var request2 = request.copy(client, authorization2);
+        var request2 = request.copyWithAuthorization(client, authorization2);
 
         return _retryRequest(
             originalRequestCompleter, client, request2, progressListener, log);
@@ -236,16 +249,16 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       bool log) async {
     try {
       if (log) {
-        print('<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<');
-        print('RETRY: ${request.retries}');
-        print(request);
-        print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
+        this.log('RETRY: ${request.retries} ; REQUEST: $request');
       }
 
       var response =
           await doHttpRequest(client, request, progressListener, log);
       originalRequestCompleter.complete(response);
     } catch (error) {
+      if (log) {
+        logError('REQUEST: $request', error);
+      }
       originalRequestCompleter.completeError(error);
     }
     return true;
@@ -326,7 +339,7 @@ class HttpBlobBrowser extends HttpBlob<browser.Blob> {
       if (result is ByteBuffer) {
         data = result;
       } else if (result is String) {
-        data = Uint16List.fromList(result.codeUnits).buffer;
+        data = result.toByteBuffer();
       } else if (result is List<int>) {
         if (result is TypedData) {
           data = (result as TypedData).buffer;

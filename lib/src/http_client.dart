@@ -2,9 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:collection/collection.dart' show IterableExtension;
+import 'package:collection/collection.dart'
+    show IterableExtension, equalsIgnoreAsciiCase;
 import 'package:enum_to_string/enum_to_string.dart';
 import 'package:swiss_knife/swiss_knife.dart';
+
+import 'http_client_extension.dart';
 
 import 'http_client_none.dart'
     if (dart.library.html) 'http_client_browser.dart'
@@ -127,7 +130,7 @@ class HttpError extends HttpStatus {
   }
 }
 
-abstract class HttpBlob<B /*!*/ > {
+abstract class HttpBlob<B> {
   final B blob;
 
   final MimeType? mimeType;
@@ -221,10 +224,10 @@ class HttpBody {
       }
     } else if (isString) {
       var s = _body as String;
-      return Uint8List.fromList(s.codeUnits).buffer;
+      return s.toByteBuffer();
     } else if (isMap) {
       var s = asString!;
-      return Uint8List.fromList(s.codeUnits).buffer;
+      return s.toByteBuffer();
     }
 
     return null;
@@ -234,13 +237,12 @@ class HttpBody {
     if (isByteBuffer) {
       return (_body as ByteBuffer).asUint8List();
     } else if (isBytesArray) {
-      return _body as List<int>;
+      return (_body as List<int>).toUint8List();
     } else if (isString) {
       var s = _body as String;
-      return s.codeUnits;
+      return s.toUint8List();
     } else if (isMap) {
-      var s = asString!;
-      return s.codeUnits;
+      return asString!.toUint8List();
     }
 
     return null;
@@ -356,6 +358,9 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
     return body != null && body.size > 0 ? body.asString : null;
   }
 
+  /// Returns the [body] `length` (if present).
+  int? get bodyLength => _body?.size;
+
   /// Returns the [body] as JSON.
   dynamic get json => _jsonDecode(bodyAsString!);
 
@@ -370,7 +375,7 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
   }
 
   /// The [body] type (Content-Type).
-  String? get bodyType => getResponseHeader('Content-Type');
+  String? get bodyType => getResponseHeader(HttpRequest._headerKeyContentType);
 
   /// Same as [bodyType], but returns as [MimeType].
   MimeType? get bodyMimeType {
@@ -409,9 +414,20 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
   @override
   String toString([bool? withBody]) {
     withBody ??= false;
-    var infos = 'method: $method, requestedURL: $requestedURL, status: $status';
-    if (withBody) infos += ', body: $bodyAsString';
-    return 'RESTResponse{$infos}';
+    var infos = 'status: $status, method: $method, requestedURL: $requestedURL';
+
+    if (withBody) {
+      var bodyStr = bodyAsString;
+      if (bodyStr != null) {
+        infos += ', body: $bodyAsString';
+      }
+    } else {
+      var bodyLength = this.bodyLength;
+      if (bodyLength != null) {
+        infos += ', body: $bodyLength bytes';
+      }
+    }
+    return 'HttpResponse{ $infos }';
   }
 
   /// Compares using [instanceTime].
@@ -445,15 +461,17 @@ class HttpRequestBody {
   String? _contentType;
 
   HttpRequestBody(Object? content, String? type,
-      [Map<String, String?>? parameters]) {
+      [Map<String, Object?>? parameters]) {
     _contentType = normalizeType(type);
+
+    var parametersMapStr = _toParametersMapOfString(parameters);
 
     if (content is HttpBodyBuilder) {
       var f = content;
-      content = f(parameters ?? {});
+      content = f(parametersMapStr ?? {});
     } else if (content is HttpBodyBuilderTyped) {
       var f = content;
-      content = f(parameters ?? {}, _contentType);
+      content = f(parametersMapStr ?? {}, _contentType);
     } else if (content is Function) {
       var f = content;
       content = f();
@@ -482,12 +500,13 @@ class HttpRequestBody {
   }
 
   dynamic get contentAsSendData {
-    if (_content == null) return null;
-    if (_content!.isString) return _content!.asString;
-    if (_content!.isByteBuffer) return _content!.asByteBuffer;
-    if (_content!.isBytesArray) return _content!.asByteArray;
-    if (_content!.isBlob) return _content!.asBlob!.blob;
-    return _content!.asString;
+    var content = _content;
+    if (content == null) return null;
+    if (content.isString) return content.asString;
+    if (content.isByteBuffer) return content.asByteBuffer;
+    if (content.isBytesArray) return content.asByteArray;
+    if (content.isBlob) return content.asBlob!.blob;
+    return content.asString;
   }
 
   /// Type of the body (Content-Type header).
@@ -1119,11 +1138,9 @@ class HttpRequest {
   /// MimeType of request sent data (body).
   final String? mimeType;
 
-  /// Headers of the request.
-  final Map<String, String>? requestHeaders;
+  Map<String, String>? _requestHeaders;
 
-  /// Data/body to send with the request.
-  final dynamic sendData;
+  Object? _sendData;
 
   int _retries = 0;
 
@@ -1134,17 +1151,25 @@ class HttpRequest {
       this.withCredentials = false,
       this.responseType,
       this.mimeType,
-      this.requestHeaders,
-      this.sendData});
+      Map<String, String>? requestHeaders,
+      Object? sendData})
+      : _requestHeaders = requestHeaders,
+        _sendData = sendData {
+    updateContentLength();
+  }
 
   /// Copies this instance with a different [client] and [authorization] if provided.
-  HttpRequest copy(HttpClient client, [Authorization? authorization]) {
+  ///
+  /// If [authorization] is `null` returns `this`.
+  HttpRequest copyWithAuthorization(HttpClient client,
+      [Authorization? authorization]) {
     if (authorization == null || authorization == this.authorization) {
       return this;
     }
 
     var requestHeaders = client.clientRequester.buildRequestHeaders(
         client, method, url,
+        headers: this.requestHeaders,
         authorization: authorization,
         contentType: headerContentType,
         accept: headerAccept);
@@ -1177,13 +1202,199 @@ class HttpRequest {
     return copy;
   }
 
+  /// Headers of the request.
+  Map<String, String>? get requestHeaders => _requestHeaders;
+
+  void updateContentLength() {
+    var sendDataLength = _sendDataLength(updateToBytes: true);
+    if (sendDataLength != null) {
+      var contentLength = headerContentLength;
+      if (contentLength == null) {
+        var requestHeaders = _requestHeaders ??= <String, String>{};
+        requestHeaders[HttpRequest._headerKeyContentLength] = '$sendDataLength';
+      }
+    }
+  }
+
+  /// Data/body to send with the request.
+  dynamic get sendData => _sendData;
+
+  /// [sendData] length in bytes.
+  int? get sendDataLength => _sendDataLength();
+
+  int? _sendDataLength({bool updateToBytes = false}) {
+    var sendData = this.sendData;
+    if (sendData == null) return null;
+
+    if (sendData is Uint8List) {
+      return sendData.length;
+    } else if (sendData is List<int>) {
+      return sendData.length;
+    } else if (sendData is ByteBuffer) {
+      return sendData.lengthInBytes;
+    } else if (sendData is HttpBlob) {
+      return sendData.size();
+    } else if (sendData is String) {
+      var bytes = sendData.toUint8List();
+      if (updateToBytes) {
+        _sendData = bytes;
+      }
+      return bytes.length;
+    }
+
+    return null;
+  }
+
+  /// [sendData] as a [String].
+  String? get sendDataAsString {
+    var sendData = this.sendData;
+    if (sendData != null) {
+      if (sendData is List<int>) {
+        return sendData.decodeUTF8();
+      } else if (sendData is ByteBuffer) {
+        return sendData.asUint8List().decodeUTF8();
+      } else {
+        return sendData.toString();
+      }
+    }
+    return null;
+  }
+
   /// Returns the header: Accept
   String? get headerAccept =>
-      requestHeaders != null ? requestHeaders!['Accept'] : null;
+      _getMapValueKeyIgnoreCase(requestHeaders, 'Content-Accept');
+
+  static const _headerKeyContentType = 'Content-Type';
 
   /// Returns the header: Content-Type
   String? get headerContentType =>
-      requestHeaders != null ? requestHeaders!['Content-Type'] : null;
+      _getMapValueKeyIgnoreCase(requestHeaders, _headerKeyContentType);
+
+  set headerContentType(String? contentType) {
+    if (contentType == null) {
+      var k = _getMapKeyIgnoreCase(requestHeaders, _headerKeyContentType);
+      if (k != null) {
+        requestHeaders?.remove(k);
+      }
+    } else {
+      var requestHeaders = _requestHeaders ??= <String, String>{};
+      var k = _getMapKeyIgnoreCase(requestHeaders, _headerKeyContentType) ??
+          _headerKeyContentType;
+      requestHeaders[k] = contentType.trim();
+    }
+  }
+
+  /// Returns the header `Content-Type` Mime-Type (without the charset).
+  String? get headerContentTypeMimeType {
+    var contentType = headerContentType;
+    if (contentType == null) return null;
+    var idx = contentType.indexOf(';');
+    if (idx < 0) return contentType.trim();
+    var mimeType = contentType.substring(0, idx).trim();
+    return mimeType;
+  }
+
+  set headerContentTypeMimeType(String? mimeType) {
+    if (mimeType == null) {
+      headerContentType = null;
+      return;
+    }
+
+    var contentType = headerContentType;
+    var idx = contentType?.indexOf(';') ?? -1;
+    if (idx < 0) {
+      headerContentType = mimeType.trim();
+      return;
+    }
+
+    var rest = contentType!.substring(idx + 1).trim();
+    contentType =
+        rest.isNotEmpty ? mimeType.trim() + '; ' + rest : mimeType.trim();
+
+    headerContentType = contentType;
+  }
+
+  /// Returns the header `Content-Type` charset.
+  String? get headerContentTypeCharset {
+    var contentType = headerContentType;
+    if (contentType == null) return null;
+    var idx = contentType.indexOf(';');
+    if (idx < 0) return null;
+
+    var rest = contentType.substring(idx + 1);
+    var parts = rest.split(';').map((e) => e.trim().split('='));
+    if (parts.isEmpty) return null;
+
+    var charsetPair =
+        parts.firstWhereOrNull((e) => equalsIgnoreAsciiCase(e[0], 'charset'));
+    if (charsetPair == null) return null;
+
+    var charset = charsetPair[1].trim();
+    return charset;
+  }
+
+  set headerContentTypeCharset(String? charset) {
+    charset = _normalizeCharset(charset);
+
+    var contentType = headerContentType;
+    if (contentType == null) {
+      if (charset != null) {
+        headerContentType = 'text/plain; charset=$charset';
+      }
+      return;
+    }
+
+    var parts = contentType
+        .split(';')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+
+    var charsetEntry = charset != null ? 'charset=$charset' : null;
+
+    if (parts.length == 1) {
+      if (charsetEntry != null) {
+        parts.add(charsetEntry);
+      }
+    } else {
+      var idx = parts.indexWhere((e) => e.startsWith('charset='));
+
+      if (charsetEntry != null) {
+        if (idx >= 0) {
+          parts[idx] = charsetEntry;
+        } else {
+          parts.insert(1, charsetEntry);
+        }
+      } else if (idx >= 0) {
+        parts.removeAt(idx);
+      }
+    }
+
+    headerContentType = parts.join('; ');
+  }
+
+  String? _normalizeCharset(String? charset) {
+    if (charset == null) return null;
+    charset = charset.trim();
+    if (charset.isEmpty) return null;
+
+    if (equalsIgnoreAsciiCase(charset, 'UTF-8') ||
+        equalsIgnoreAsciiCase(charset, 'UTF8')) {
+      return 'UTF-8';
+    } else if (equalsIgnoreAsciiCase(charset, 'LATIN-1') ||
+        equalsIgnoreAsciiCase(charset, 'LATIN1') ||
+        equalsIgnoreAsciiCase(charset, 'ISO-8859-1')) {
+      return 'ISO-8859-1';
+    }
+
+    return charset;
+  }
+
+  static const _headerKeyContentLength = 'Content-Length';
+
+  /// Returns the header: Content-Length
+  String? get headerContentLength =>
+      _getMapValueKeyIgnoreCase(requestHeaders, _headerKeyContentLength);
 
   /// Number of retries for this request.
   int get retries => _retries;
@@ -1194,7 +1405,17 @@ class HttpRequest {
 
   @override
   String toString() {
-    return 'HttpRequest{method: $method, url: $url, requestURL: $requestURL, retries: $_retries, queryParameters: $queryParameters, authorization: $authorization, withCredentials: $withCredentials, responseType: $responseType, mimeType: $mimeType, requestHeaders: $requestHeaders, sendData: $sendData}';
+    return 'HttpRequest{ method: $method, '
+        'url: $url, '
+        'requestURL: $requestURL, '
+        'retries: $_retries, '
+        'queryParameters: $queryParameters, '
+        'authorization: $authorization, '
+        'withCredentials: $withCredentials, '
+        'responseType: $responseType, '
+        'mimeType: $mimeType, '
+        'requestHeaders: $requestHeaders, '
+        'sendData: $sendDataAsString }';
   }
 }
 
@@ -1204,6 +1425,26 @@ typedef ProgressListener = void Function(
 /// Abstract [HttpClient] requester. This should implement the actual
 /// request process.
 abstract class HttpClientRequester {
+  void stdout(Object? o) => print(o);
+
+  void stderr(Object? o) => stdout(o);
+
+  void log(Object? o) {
+    stdout('[HttpClient] $o');
+  }
+
+  void logError(Object? message, [Object? error, StackTrace? stackTrace]) {
+    if (message != null) {
+      stderr('** [HttpClient] ERROR> $message');
+    }
+    if (error != null) {
+      stderr(error);
+    }
+    if (stackTrace != null) {
+      stderr(stackTrace);
+    }
+  }
+
   Future<HttpResponse> request(HttpClient client, HttpMethod method, String url,
       {Map<String, String>? headers,
       Authorization? authorization,
@@ -1605,7 +1846,7 @@ abstract class HttpClientRequester {
     var formData = buildQueryString(data);
 
     if (requestHeaders != null) {
-      requestHeaders.putIfAbsent('Content-Type',
+      requestHeaders.putIfAbsent(HttpRequest._headerKeyContentType,
           () => 'application/x-www-form-urlencoded; charset=UTF-8');
     }
 
@@ -1645,7 +1886,7 @@ abstract class HttpClientRequester {
     var requestHeaders = client.buildRequestHeaders(url) ?? <String, String>{};
 
     if (contentType != null && method != HttpMethod.GET) {
-      requestHeaders['Content-Type'] = contentType;
+      requestHeaders[HttpRequest._headerKeyContentType] = contentType;
     }
 
     if (accept != null) {
@@ -1905,12 +2146,14 @@ class HttpClient {
 
   /// Requests using [method] and [path] and returns a decoded JSON.
   Future<dynamic> requestJSON(HttpMethod method, String path,
-      {Credential? authorization,
-      Map<String, String?>? queryParameters,
+      {Map<String, String>? headers,
+      Credential? authorization,
+      Map<String, Object?>? queryParameters,
       Object? body,
       String? contentType,
       String? accept}) async {
     return request(method, path,
+            headers: headers,
             authorization: authorization,
             parameters: queryParameters,
             body: body,
@@ -1921,25 +2164,37 @@ class HttpClient {
 
   /// Does a GET request and returns a decoded JSON.
   Future<dynamic> getJSON(String path,
-      {Credential? authorization, Map<String, String?>? parameters}) async {
-    return get(path, authorization: authorization, parameters: parameters)
+      {Map<String, String>? headers,
+      Credential? authorization,
+      Map<String, Object?>? parameters}) async {
+    return get(path,
+            headers: headers,
+            authorization: authorization,
+            parameters: parameters)
         .then((r) => _jsonDecode(r.bodyAsString));
   }
 
   /// Does an OPTION request and returns a decoded JSON.
   Future<dynamic> optionsJSON(String path,
-      {Credential? authorization, Map<String, String?>? parameters}) async {
-    return options(path, authorization: authorization, parameters: parameters)
+      {Map<String, String>? headers,
+      Credential? authorization,
+      Map<String, Object?>? parameters}) async {
+    return options(path,
+            headers: headers,
+            authorization: authorization,
+            parameters: parameters)
         .then((r) => _jsonDecode(r.bodyAsString));
   }
 
   /// Does a POST request and returns a decoded JSON.
   Future<dynamic> postJSON(String path,
-      {Credential? authorization,
-      Map<String, String?>? parameters,
+      {Map<String, String>? headers,
+      Credential? authorization,
+      Map<String, Object?>? parameters,
       Object? body,
       String? contentType}) async {
     return post(path,
+            headers: headers,
             authorization: authorization,
             parameters: parameters,
             body: body,
@@ -1949,9 +2204,15 @@ class HttpClient {
 
   /// Does a PUT request and returns a decoded JSON.
   Future<dynamic> putJSON(String path,
-      {Credential? authorization, Object? body, String? contentType}) async {
+      {Map<String, String>? headers,
+      Credential? authorization,
+      Object? body,
+      String? contentType}) async {
     return put(path,
-            authorization: authorization, body: body, contentType: contentType)
+            headers: headers,
+            authorization: authorization,
+            body: body,
+            contentType: contentType)
         .then((r) => _jsonDecode(r.bodyAsString));
   }
 
@@ -2044,23 +2305,27 @@ class HttpClient {
   /// Does a request using [method].
   Future<HttpResponse> request(HttpMethod method, String path,
       {bool fullPath = false,
+      Map<String, String>? headers,
       Credential? authorization,
-      Map<String, String?>? parameters,
+      Map<String, Object?>? parameters,
       String? queryString,
       Object? body,
       String? contentType,
       String? accept,
       bool noQueryString = false,
       ProgressListener? progressListener}) async {
-    var url = buildMethodRequestURL(method, path, fullPath, parameters);
+    var parametersMapStr = _toParametersMapOfString(parameters);
+    var url = buildMethodRequestURL(method, path, fullPath, parametersMapStr);
 
-    var retUrlParameters = _buildURLAndParameters(url, parameters, queryString);
+    var retUrlParameters =
+        _buildURLAndParameters(url, parametersMapStr, queryString);
     url = retUrlParameters.key;
-    parameters = retUrlParameters.value;
+    parametersMapStr = retUrlParameters.value;
 
     return requestURL(method, url,
+        headers: headers,
         authorization: authorization,
-        queryParameters: parameters,
+        queryParameters: parametersMapStr,
         body: body,
         contentType: contentType,
         accept: accept,
@@ -2074,8 +2339,9 @@ class HttpClient {
       _buildURL(path, fullPath, parameters, methodAcceptsQueryString(method));
 
   Future<HttpResponse> requestURL(HttpMethod method, String url,
-      {Credential? authorization,
-      Map<String, String?>? queryParameters,
+      {Map<String, String>? headers,
+      Credential? authorization,
+      Map<String, Object?>? queryParameters,
       noQueryString = false,
       Object? body,
       String? contentType,
@@ -2083,8 +2349,9 @@ class HttpClient {
       ProgressListener? progressListener}) async {
     var requestAuthorization = await _buildRequestAuthorization(authorization);
     return _clientRequester.request(this, method, url,
+        headers: headers,
         authorization: requestAuthorization,
-        queryParameters: queryParameters,
+        queryParameters: _toParametersMapOfString(queryParameters),
         noQueryString: noQueryString,
         body: body,
         contentType: contentType,
@@ -2099,9 +2366,10 @@ class HttpClient {
       {Map<String, String>? headers,
       bool fullPath = false,
       Credential? authorization,
-      Map<String, String?>? parameters,
+      Map<String, Object?>? parameters,
       ProgressListener? progressListener}) async {
-    var url = _buildURL(path, fullPath, parameters, true);
+    var parametersMapStr = _toParametersMapOfString(parameters);
+    var url = _buildURL(path, fullPath, parametersMapStr, true);
     var requestAuthorization = await _buildRequestAuthorization(authorization);
     return _clientRequester.requestGET(this, url,
         headers: headers,
@@ -2114,9 +2382,10 @@ class HttpClient {
       {Map<String, String>? headers,
       bool fullPath = false,
       Credential? authorization,
-      Map<String, String?>? parameters,
+      Map<String, Object?>? parameters,
       ProgressListener? progressListener}) async {
-    var url = _buildURL(path, fullPath, parameters, true);
+    var parametersMapStr = _toParametersMapOfString(parameters);
+    var url = _buildURL(path, fullPath, parametersMapStr, true);
     var requestAuthorization = await _buildRequestAuthorization(authorization);
     return _clientRequester.requestHEAD(this, url,
         headers: headers,
@@ -2129,9 +2398,10 @@ class HttpClient {
       {Map<String, String>? headers,
       bool fullPath = false,
       Credential? authorization,
-      Map<String, String?>? parameters,
+      Map<String, Object?>? parameters,
       ProgressListener? progressListener}) async {
-    var url = _buildURL(path, fullPath, parameters, true);
+    var parametersMapStr = _toParametersMapOfString(parameters);
+    var url = _buildURL(path, fullPath, parametersMapStr, true);
     var requestAuthorization = await _buildRequestAuthorization(authorization);
     return _clientRequester.requestOPTIONS(this, url,
         headers: headers,
@@ -2144,23 +2414,25 @@ class HttpClient {
       {Map<String, String>? headers,
       bool fullPath = false,
       Credential? authorization,
-      Map<String, String?>? parameters,
+      Map<String, Object?>? parameters,
       String? queryString,
       Object? body,
       String? contentType,
       String? accept,
       ProgressListener? progressListener}) async {
-    var url = _buildURL(path, fullPath, parameters);
+    var parametersMapStr = _toParametersMapOfString(parameters);
+    var url = _buildURL(path, fullPath, parametersMapStr);
 
-    var retUrlParameters = _buildURLAndParameters(url, parameters, queryString);
+    var retUrlParameters =
+        _buildURLAndParameters(url, parametersMapStr, queryString);
     url = retUrlParameters.key;
-    parameters = retUrlParameters.value;
+    parametersMapStr = retUrlParameters.value;
 
     var requestAuthorization = await _buildRequestAuthorization(authorization);
     return _clientRequester.requestPOST(this, url,
         headers: headers,
         authorization: requestAuthorization,
-        queryParameters: parameters,
+        queryParameters: parametersMapStr,
         body: body,
         contentType: contentType,
         accept: accept,
@@ -2172,23 +2444,25 @@ class HttpClient {
       {Map<String, String>? headers,
       bool fullPath = false,
       Credential? authorization,
-      Map<String, String?>? parameters,
+      Map<String, Object?>? parameters,
       String? queryString,
       Object? body,
       String? contentType,
       String? accept,
       ProgressListener? progressListener}) async {
-    var url = _buildURL(path, fullPath, parameters);
+    var parametersMapStr = _toParametersMapOfString(parameters);
+    var url = _buildURL(path, fullPath, parametersMapStr);
 
-    var retUrlParameters = _buildURLAndParameters(url, parameters, queryString);
+    var retUrlParameters =
+        _buildURLAndParameters(url, parametersMapStr, queryString);
     url = retUrlParameters.key;
-    parameters = retUrlParameters.value;
+    parametersMapStr = retUrlParameters.value;
 
     var requestAuthorization = await _buildRequestAuthorization(authorization);
     return _clientRequester.requestPUT(this, url,
         headers: headers,
         authorization: requestAuthorization,
-        queryParameters: parameters,
+        queryParameters: parametersMapStr,
         body: body,
         contentType: contentType,
         accept: accept,
@@ -2200,23 +2474,25 @@ class HttpClient {
       {Map<String, String>? headers,
       bool fullPath = false,
       Credential? authorization,
-      Map<String, String?>? parameters,
+      Map<String, Object?>? parameters,
       String? queryString,
       Object? body,
       String? contentType,
       String? accept,
       ProgressListener? progressListener}) async {
-    var url = _buildURL(path, fullPath, parameters);
+    var parametersMapStr = _toParametersMapOfString(parameters);
+    var url = _buildURL(path, fullPath, parametersMapStr);
 
-    var retUrlParameters = _buildURLAndParameters(url, parameters, queryString);
+    var retUrlParameters =
+        _buildURLAndParameters(url, parametersMapStr, queryString);
     url = retUrlParameters.key;
-    parameters = retUrlParameters.value;
+    parametersMapStr = retUrlParameters.value;
 
     var requestAuthorization = await _buildRequestAuthorization(authorization);
     return _clientRequester.requestPATCH(this, url,
         headers: headers,
         authorization: requestAuthorization,
-        queryParameters: parameters,
+        queryParameters: parametersMapStr,
         body: body,
         contentType: contentType,
         accept: accept,
@@ -2313,18 +2589,20 @@ class HttpClient {
   String buildRequestURL(HttpMethod method, String path,
       {bool fullPath = false,
       Authorization? authorization,
-      Map<String, String?>? parameters,
+      Map<String, Object?>? parameters,
       String? queryString,
       bool noQueryString = false}) {
-    var url = buildMethodRequestURL(method, path, fullPath, parameters);
+    var parametersMapStr = _toParametersMapOfString(parameters);
+    var url = buildMethodRequestURL(method, path, fullPath, parametersMapStr);
 
-    var retUrlParameters = _buildURLAndParameters(url, parameters, queryString);
+    var retUrlParameters =
+        _buildURLAndParameters(url, parametersMapStr, queryString);
     url = retUrlParameters.key;
-    parameters = retUrlParameters.value;
+    parametersMapStr = retUrlParameters.value;
 
     return _clientRequester.buildRequestURL(this, url,
         authorization: authorization,
-        queryParameters: parameters,
+        queryParameters: parametersMapStr,
         noQueryString: noQueryString);
   }
 
@@ -2632,4 +2910,40 @@ HttpClientRequester createHttpClientRequester() {
 /// Returns the base runtime Uri for the platform.
 Uri getHttpClientRuntimeUri() {
   return getHttpClientRuntimeUriImpl();
+}
+
+Map<String, String?>? _toParametersMapOfString(
+    Map<String, Object?>? parameters) {
+  if (parameters == null) return null;
+  if (parameters is Map<String, String?>) return parameters;
+  return Map<String, String?>.fromEntries(
+      parameters.entries.map((e) => MapEntry(e.key, e.value?.toString())));
+}
+
+V? _getMapValueKeyIgnoreCase<V>(Map<String, V>? map, String key) {
+  if (map == null || map.isEmpty) return null;
+  var k = _getMapKeyIgnoreCase(map, key);
+  return k != null ? map[k] : null;
+}
+
+String? _getMapKeyIgnoreCase(Map<String, Object?>? map, String key) {
+  if (map == null || map.isEmpty) return null;
+
+  if (map.containsKey(key)) {
+    return key;
+  }
+
+  var keyLC = key.toLowerCase();
+
+  if (map.containsKey(keyLC)) {
+    return keyLC;
+  }
+
+  for (var k in map.keys) {
+    if (equalsIgnoreAsciiCase(k, key)) {
+      return k;
+    }
+  }
+
+  return null;
 }

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:collection/collection.dart' show IterableExtension;
 import 'package:mercury_client/mercury_client.dart';
 import 'package:test/test.dart';
@@ -27,6 +29,177 @@ void doBasicTests(TestServerChannel testServerChannel) {
 
     tearDown(() async {
       await testServerChannel.close();
+    });
+
+    test('HttpRequest', () async {
+      {
+        var client = HttpClient('http://foo.com/');
+
+        var request = HttpRequest(
+            HttpMethod.GET, 'http://foo.com/path', 'https://foo.com/path',
+            queryParameters: {
+              'a': '1'
+            },
+            requestHeaders: {
+              'X-Extra': '123',
+            });
+
+        expect(request.url, equals('http://foo.com/path'));
+        expect(request.requestURL, equals('https://foo.com/path'));
+        expect(request.queryParameters, equals({'a': '1'}));
+        expect(
+            request.requestHeaders,
+            equals({
+              'X-Extra': '123',
+            }));
+        expect(request.sendData, isNull);
+        expect(request.sendDataLength, isNull);
+        expect(request.sendDataAsString, isNull);
+
+        var request2 = request.copyWithAuthorization(client,
+            Authorization.fromCredential(BasicCredential('joe', '123456')));
+
+        expect(request2.url, equals('http://foo.com/path'));
+        expect(request2.requestURL, equals('http://foo.com/path?a=1'));
+        expect(request2.queryParameters, equals({'a': '1'}));
+        expect(
+            request2.requestHeaders,
+            equals({
+              'Authorization': 'Basic am9lOjEyMzQ1Ng==',
+              'X-Extra': '123',
+            }));
+        expect(request2.sendData, isNull);
+        expect(request2.sendDataLength, isNull);
+        expect(request2.sendDataAsString, isNull);
+      }
+
+      {
+        var client = HttpClient('http://foo.com/');
+
+        var request = HttpRequest(
+            HttpMethod.GET, 'http://foo.com/path', 'http://foo.com/path',
+            sendData: 'abcd');
+
+        expect(request.sendData, equals([97, 98, 99, 100]));
+        expect(request.sendDataLength, equals(4));
+        expect(request.sendDataAsString, 'abcd');
+        expect(request.sendDataAsString!.length, equals(4));
+
+        var request2 = request.copyWithAuthorization(client,
+            Authorization.fromCredential(BasicCredential('joe', '123456')));
+
+        expect(request2.sendData, equals([97, 98, 99, 100]));
+        expect(request2.sendDataLength, equals(4));
+        expect(request2.sendDataAsString, 'abcd');
+        expect(request2.sendDataAsString!.length, equals(4));
+      }
+
+      {
+        var client = HttpClient('http://foo.com/');
+
+        var request = HttpRequest(
+            HttpMethod.GET, 'http://foo.com/path', 'http://foo.com/path',
+            sendData: 'char utf-8: Đ!');
+
+        expect(
+            request.sendData,
+            equals([
+              99,
+              104,
+              97,
+              114,
+              32,
+              117,
+              116,
+              102,
+              45,
+              56,
+              58,
+              32,
+              196,
+              144,
+              33
+            ]));
+        expect(latin1.decode(request.sendData), equals('char utf-8: Ä!'));
+        expect(request.sendDataLength, equals(15));
+        expect(request.sendDataAsString, 'char utf-8: Đ!');
+        expect(request.sendDataAsString!.length, equals(14));
+
+        var request2 = request.copyWithAuthorization(client,
+            Authorization.fromCredential(BasicCredential('joe', '123456')));
+
+        expect(
+            request2.sendData,
+            equals([
+              99,
+              104,
+              97,
+              114,
+              32,
+              117,
+              116,
+              102,
+              45,
+              56,
+              58,
+              32,
+              196,
+              144,
+              33
+            ]));
+        expect(request2.sendDataLength, equals(15));
+        expect(request2.sendDataAsString, 'char utf-8: Đ!');
+        expect(request2.sendDataAsString!.length, equals(14));
+      }
+
+      {
+        var request = HttpRequest(
+            HttpMethod.GET, 'http://foo.com/path', 'http://foo.com/path',
+            requestHeaders: {
+              'X-Extra': 'xyz',
+              'Content-Type': 'text/plain; charset=UTF-8'
+            });
+
+        expect(request.requestHeaders?['X-Extra'], equals('xyz'));
+        expect(request.requestHeaders?['Content-Type'],
+            equals('text/plain; charset=UTF-8'));
+        expect(request.headerContentType, equals('text/plain; charset=UTF-8'));
+        expect(request.headerContentTypeMimeType, equals('text/plain'));
+        expect(request.headerContentTypeCharset, equals('UTF-8'));
+
+        request.headerContentTypeMimeType = 'text/html';
+        expect(request.headerContentType, equals('text/html; charset=UTF-8'));
+        expect(request.headerContentTypeMimeType, equals('text/html'));
+        expect(request.headerContentTypeCharset, equals('UTF-8'));
+
+        request.headerContentTypeCharset = 'latin-1';
+        expect(
+            request.headerContentType, equals('text/html; charset=ISO-8859-1'));
+        expect(request.headerContentTypeMimeType, equals('text/html'));
+        expect(request.headerContentTypeCharset, equals('ISO-8859-1'));
+
+        request.headerContentType = null;
+        expect(request.headerContentType, isNull);
+        expect(request.headerContentTypeMimeType, isNull);
+        expect(request.headerContentTypeCharset, isNull);
+      }
+
+      {
+        var request = HttpRequest(
+            HttpMethod.GET, 'http://foo.com/path', 'http://foo.com/path',
+            requestHeaders: {'Content-Type': 'text/plain'});
+
+        expect(request.requestHeaders?['Content-Type'], equals('text/plain'));
+        expect(request.headerContentType, equals('text/plain'));
+        expect(request.headerContentTypeMimeType, equals('text/plain'));
+        expect(request.headerContentTypeCharset, isNull);
+
+        request.headerContentTypeCharset = 'utf8';
+        expect(request.headerContentType, equals('text/plain; charset=UTF-8'));
+
+        request.headerContentTypeCharset = null;
+        expect(request.headerContentType, equals('text/plain'));
+      }
     });
 
     test('Method GET', () async {

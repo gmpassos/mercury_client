@@ -1,3 +1,12 @@
+## 2.1.2
+
+- Improve `HttpRequest` handling of body headers:
+  - `Content-Type` (`Mime-Type` and `charset`)
+  - `sendData` (request body) as bytes.
+  - `Content-Length` from `sendData`.
+- Improve request logging.
+- `HttpClient` request `parameters` values now can be a `Object?`.
+
 ## 2.1.1
 
 - `parameters` now accepts `Map<String,String?>`.
