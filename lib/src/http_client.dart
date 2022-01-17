@@ -481,6 +481,8 @@ class HttpRequestBody {
       _content = null;
     } else if (content is HttpBody) {
       _content = content;
+    } else if (!isJSONType && content is List<int>) {
+      _content = HttpBody.from(content, MimeType.parse(_contentType));
     } else if (content is String) {
       _content = HttpBody.from(content, MimeType.parse(_contentType));
     } else if (isJSONType ||

@@ -1,3 +1,7 @@
+## 2.1.3
+
+- Fix upload of raw bytes (`Uint8List`).
+
 ## 2.1.2
 
 - Improve `HttpRequest` handling of body headers:

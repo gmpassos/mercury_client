@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:collection/collection.dart' show IterableExtension;
 import 'package:mercury_client/mercury_client.dart';
@@ -369,6 +370,42 @@ void doBasicTests(TestServerChannel testServerChannel) {
           response.bodyAsString,
           equals(
               'Hello, world! Method: POST ; Path: /tests/foo/1001?%C3%A1=12+3&b=456&id=1001 ; Content-Type: application/json <Body!>'));
+    });
+
+    test('Method POST: raw bytes', () async {
+      await testServerChannel.waitOpen();
+
+      var client =
+          HttpClient('http://localhost:${testServerChannel.serverPort}/tests');
+      expect(client.baseURL, matches(RegExp(r'^http://localhost:\d+/tests$')));
+
+      var response = await client.post('foo',
+          body: Uint8List.fromList([1, 2, 3, 4, 5, 6, 7, 8, 9, 0]));
+
+      expect(response.isOK, equals(true));
+
+      expect(
+          response.bodyAsString,
+          equals(
+              'Hello, world! Method: POST ; Path: /tests/foo <\x01\x02\x03\x04\x05\x06\x07\b\t\x00>'));
+    });
+
+    test('Method POST: JSON List<int>', () async {
+      await testServerChannel.waitOpen();
+
+      var client =
+          HttpClient('http://localhost:${testServerChannel.serverPort}/tests');
+      expect(client.baseURL, matches(RegExp(r'^http://localhost:\d+/tests$')));
+
+      var response = await client.post('foo',
+          body: [1, 2, 3, 4, 5, 6, 7, 8, 9, 0], contentType: 'json');
+
+      expect(response.isOK, equals(true));
+
+      expect(
+          response.bodyAsString,
+          equals(
+              'Hello, world! Method: POST ; Path: /tests/foo ; Content-Type: application/json <[1,2,3,4,5,6,7,8,9,0]>'));
     });
   });
 }
