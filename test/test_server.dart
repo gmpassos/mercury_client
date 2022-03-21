@@ -65,19 +65,29 @@ class TestServer {
   }
 
   Future _processTestRequestOK(io.HttpRequest request) async {
-    var response =
-        'Hello, world! Method: ${request.method} ; Path: ${request.uri}';
-
     var contentType = request.headers.contentType;
-
-    if (contentType != null) {
-      response += ' ; Content-Type: $contentType';
-    }
-
     var body = await _decodeBody(contentType, request);
 
-    if (body.isNotEmpty) {
-      response += ' <$body>';
+    String response;
+    String responseType;
+
+    if (request.uri.path.endsWith('json')) {
+      responseType = 'application/json';
+      var json = {'parameters': request.uri.queryParameters};
+      response = jsonEncode(json);
+    } else {
+      responseType = 'text/plain';
+
+      response =
+          'Hello, world! Method: ${request.method} ; Path: ${request.uri}';
+
+      if (contentType != null) {
+        response += ' ; Content-Type: $contentType';
+      }
+
+      if (body.isNotEmpty) {
+        response += ' <$body>';
+      }
     }
 
     var origin =
@@ -90,6 +100,10 @@ class TestServer {
 
     request.response.headers
         .add('Content-Length', response.length, preserveHeaderCase: true);
+
+    request.response.headers
+        .add('Content-Type', responseType, preserveHeaderCase: true);
+
     request.response.write(response);
 
     await request.response.close();

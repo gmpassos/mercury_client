@@ -217,9 +217,22 @@ void doBasicTests(TestServerChannel testServerChannel) {
         progress.add('${upload ? 'upload' : 'download'}[$loaded/$total]');
       });
 
-      expect(response.isOK, equals(true));
-      expect(response.isNotOK, equals(false));
-      expect(response.isError, equals(false));
+      expect(response.isOK, isTrue);
+      expect(response.isNotOK, isFalse);
+      expect(response.isError, isFalse);
+
+      expect(response.isStatusSuccessful, isTrue);
+      expect(response.isStatusUnauthenticated, isFalse);
+      expect(response.isStatusInList([200, 202]), isTrue);
+      expect(response.isStatusInList([400, 404]), isFalse);
+      expect(response.isStatusInRange(200, 299), isTrue);
+      expect(response.isStatusInRange(400, 499), isFalse);
+      expect(response.isStatusNotFound, isFalse);
+      expect(response.isStatusForbidden, isFalse);
+      expect(response.isStatusError, isFalse);
+      expect(response.isStatusServerError, isFalse);
+      expect(response.isStatusNetworkError, isFalse);
+      expect(response.isStatusAccessError, isFalse);
 
       expect(response.bodyAsString,
           equals('Hello, world! Method: GET ; Path: /tests/foo?a=123'));
@@ -235,7 +248,7 @@ void doBasicTests(TestServerChannel testServerChannel) {
       var response2 = await client
           .get('foo', parameters: {'a': '22', 'b': null, 'c': '33'});
 
-      expect(response2.isOK, equals(true));
+      expect(response2.isOK, isTrue);
       expect(response2.bodyAsString,
           equals('Hello, world! Method: GET ; Path: /tests/foo?a=22&b&c=33'));
     });
@@ -255,9 +268,9 @@ void doBasicTests(TestServerChannel testServerChannel) {
 
       var response = await cache.get(client, 'foo', parameters: {'a': '123'});
 
-      expect(response.isOK, equals(true));
-      expect(response.isNotOK, equals(false));
-      expect(response.isError, equals(false));
+      expect(response.isOK, isTrue);
+      expect(response.isNotOK, isFalse);
+      expect(response.isError, isFalse);
 
       expect(response.bodyAsString,
           equals('Hello, world! Method: GET ; Path: /tests/foo?a=123'));
@@ -301,10 +314,23 @@ void doBasicTests(TestServerChannel testServerChannel) {
 
       var response = await client.get('foo/404');
 
-      expect(response.isOK, equals(false));
-      expect(response.isNotOK, equals(true));
-      expect(response.isError, equals(false));
+      expect(response.isOK, isFalse);
+      expect(response.isNotOK, isTrue);
+      expect(response.isError, isFalse);
       expect(response.status, equals(404));
+      expect(response.isStatusNotFound, isTrue);
+
+      expect(response.isStatusSuccessful, isFalse);
+      expect(response.isStatusUnauthenticated, isFalse);
+      expect(response.isStatusInList([200, 202]), isFalse);
+      expect(response.isStatusInList([400, 404]), isTrue);
+      expect(response.isStatusInRange(200, 299), isFalse);
+      expect(response.isStatusInRange(400, 499), isTrue);
+      expect(response.isStatusForbidden, isFalse);
+      expect(response.isStatusError, isFalse);
+      expect(response.isStatusServerError, isFalse);
+      expect(response.isStatusNetworkError, isFalse);
+      expect(response.isStatusAccessError, isFalse);
 
       expect(response.bodyAsString, isNull);
 
@@ -321,10 +347,22 @@ void doBasicTests(TestServerChannel testServerChannel) {
 
       var response = await client.get('foo/500');
 
-      expect(response.isOK, equals(false));
-      expect(response.isNotOK, equals(true));
-      expect(response.isError, equals(true));
+      expect(response.isOK, isFalse);
+      expect(response.isNotOK, isTrue);
+      expect(response.isError, isTrue);
       expect(response.status, equals(500));
+
+      expect(response.isStatusSuccessful, isFalse);
+      expect(response.isStatusUnauthenticated, isFalse);
+      expect(response.isStatusInList([500, 503]), isTrue);
+      expect(response.isStatusInList([400, 404]), isFalse);
+      expect(response.isStatusInRange(200, 299), isFalse);
+      expect(response.isStatusInRange(500, 599), isTrue);
+      expect(response.isStatusForbidden, isFalse);
+      expect(response.isStatusError, isTrue);
+      expect(response.isStatusServerError, isTrue);
+      expect(response.isStatusNetworkError, isFalse);
+      expect(response.isStatusAccessError, isFalse);
 
       expect(response.bodyAsString, isNull);
 
@@ -344,12 +382,72 @@ void doBasicTests(TestServerChannel testServerChannel) {
           body: 'Boooodyyy!',
           contentType: 'application/json');
 
-      expect(response.isOK, equals(true));
+      expect(response.isOK, isTrue);
 
       expect(
           response.bodyAsString,
           equals(
               'Hello, world! Method: POST ; Path: /tests/foo?%C3%A1=12+3&b=456 ; Content-Type: application/json <Boooodyyy!>'));
+    });
+
+    test('Method PUT', () async {
+      await testServerChannel.waitOpen();
+
+      var client =
+          HttpClient('http://localhost:${testServerChannel.serverPort}/tests');
+      expect(client.baseURL, matches(RegExp(r'^http://localhost:\d+/tests$')));
+
+      var response = await client.put('foo',
+          parameters: {'á': '12 3', 'b': '456'},
+          body: 'Boooodyyy!',
+          contentType: 'application/json');
+
+      expect(response.isOK, isTrue);
+
+      expect(
+          response.bodyAsString,
+          equals(
+              'Hello, world! Method: PUT ; Path: /tests/foo?%C3%A1=12+3&b=456 ; Content-Type: application/json <Boooodyyy!>'));
+    });
+
+    test('Method PATH', () async {
+      await testServerChannel.waitOpen();
+
+      var client =
+          HttpClient('http://localhost:${testServerChannel.serverPort}/tests');
+      expect(client.baseURL, matches(RegExp(r'^http://localhost:\d+/tests$')));
+
+      var response = await client.patch('foo',
+          parameters: {'á': '12 3', 'b': '456'},
+          body: 'Boooodyyy!',
+          contentType: 'application/json');
+
+      expect(response.isOK, isTrue);
+
+      expect(
+          response.bodyAsString,
+          equals(
+              'Hello, world! Method: PATCH ; Path: /tests/foo?%C3%A1=12+3&b=456 ; Content-Type: application/json <Boooodyyy!>'));
+    });
+
+    test('Method PATH', () async {
+      await testServerChannel.waitOpen();
+
+      var client =
+          HttpClient('http://localhost:${testServerChannel.serverPort}/tests');
+      expect(client.baseURL, matches(RegExp(r'^http://localhost:\d+/tests$')));
+
+      var response = await client.delete('foo',
+          parameters: {'á': '12 3', 'b': '456'},
+          body: 'Boooodyyy!',
+          contentType: 'application/json');
+
+      expect(response.isOK, isTrue);
+
+      expect(
+          response.bodyAsString,
+          equals(
+              'Hello, world! Method: DELETE ; Path: /tests/foo?%C3%A1=12+3&b=456 ; Content-Type: application/json <Boooodyyy!>'));
     });
 
     test('Method POS: path pattern', () async {
@@ -364,7 +462,7 @@ void doBasicTests(TestServerChannel testServerChannel) {
           body: 'Body!',
           contentType: 'application/json');
 
-      expect(response.isOK, equals(true));
+      expect(response.isOK, isTrue);
 
       expect(
           response.bodyAsString,
@@ -382,7 +480,7 @@ void doBasicTests(TestServerChannel testServerChannel) {
       var response = await client.post('foo',
           body: Uint8List.fromList([1, 2, 3, 4, 5, 6, 7, 8, 9, 0]));
 
-      expect(response.isOK, equals(true));
+      expect(response.isOK, isTrue);
 
       expect(
           response.bodyAsString,
@@ -400,12 +498,67 @@ void doBasicTests(TestServerChannel testServerChannel) {
       var response = await client.post('foo',
           body: [1, 2, 3, 4, 5, 6, 7, 8, 9, 0], contentType: 'json');
 
-      expect(response.isOK, equals(true));
+      expect(response.isOK, isTrue);
 
       expect(
           response.bodyAsString,
           equals(
               'Hello, world! Method: POST ; Path: /tests/foo ; Content-Type: application/json <[1,2,3,4,5,6,7,8,9,0]>'));
+    });
+
+    test('Method GET: JSON response', () async {
+      await testServerChannel.waitOpen();
+
+      var client = HttpClient(
+          'http://localhost:${testServerChannel.serverPort}/tests/json');
+      expect(client.baseURL,
+          matches(RegExp(r'^http://localhost:\d+/tests/json$')));
+
+      {
+        var response1 = await client
+            .get('json', parameters: {'a': 11, 'b': 22, 'c': 'xyz'});
+
+        expect(response1.isOK, isTrue);
+        expect(response1.isBodyTypeJSON, isTrue);
+        expect(
+            response1.json,
+            equals({
+              'parameters': {'a': '11', 'b': '22', 'c': 'xyz'}
+            }));
+
+        var response2 = await client
+            .getJSON('json', parameters: {'a': 111, 'b': 222, 'c': 'wxyz'});
+
+        expect(
+            response2,
+            equals({
+              'parameters': {'a': '111', 'b': '222', 'c': 'wxyz'}
+            }));
+      }
+
+      {
+        client.jsonDecoder = (s) => jsonDecode(s.toUpperCase());
+
+        var response1 = await client
+            .get('json', parameters: {'a': 11, 'b': 22, 'c': 'xyz'});
+
+        expect(response1.isOK, isTrue);
+        expect(response1.isBodyTypeJSON, isTrue);
+        expect(
+            response1.json,
+            equals({
+              'PARAMETERS': {'A': '11', 'B': '22', 'C': 'XYZ'}
+            }));
+
+        var response2 = await client
+            .getJSON('json', parameters: {'a': 111, 'b': 222, 'c': 'wxyz'});
+
+        expect(
+            response2,
+            equals({
+              'PARAMETERS': {'A': '111', 'B': '222', 'C': 'WXYZ'}
+            }));
+      }
     });
   });
 }

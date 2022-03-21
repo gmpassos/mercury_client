@@ -1,3 +1,7 @@
+## 2.1.4
+
+- Added `HttpClient.jsonDecoder`.
+
 ## 2.1.3
 
 - Fix upload of raw bytes (`Uint8List`).

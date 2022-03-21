@@ -63,14 +63,11 @@ class HttpClientRequesterIO extends HttpClientRequester {
 
     var responseHeaders = await _decodeHeaders(response);
 
-    var resp = HttpResponse(
-        request.method,
-        request.url,
-        requestURI.toString(),
-        response.statusCode,
-        body,
-        (key) => responseHeaders[key.toLowerCase()],
-        response);
+    var resp = HttpResponse(request.method, request.url, requestURI.toString(),
+        response.statusCode, body,
+        responseHeaderGetter: (key) => responseHeaders[key.toLowerCase()],
+        request: response,
+        jsonDecoder: client.jsonDecoder);
 
     if (log) {
       this.log('RESPONSE: $resp');

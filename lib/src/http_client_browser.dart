@@ -151,7 +151,8 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     if (!requestCompleted) {
       var bodyError = error != null ? HttpBody.from(error) : null;
       var response = HttpResponse(
-          request.method, request.url, request.requestURL, status, bodyError);
+          request.method, request.url, request.requestURL, status, bodyError,
+          jsonDecoder: client.jsonDecoder);
       originalRequestCompleter.complete(response);
     }
   }
@@ -232,7 +233,8 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
         if (status == 0) status = 401;
 
         var response = HttpResponse(
-            request.method, request.url, request.requestURL, status, bodyError);
+            request.method, request.url, request.requestURL, status, bodyError,
+            jsonDecoder: client.jsonDecoder);
         originalRequestCompleter.complete(response);
         return true;
       }
@@ -283,8 +285,11 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       httpBody = HttpBody.from(null, MimeType.parse(contentType));
     }
 
-    var response = HttpResponse(method, url, xhr.responseUrl ?? url, status,
-        httpBody, (key) => xhr.getResponseHeader(key), xhr);
+    var response = HttpResponse(
+        method, url, xhr.responseUrl ?? url, status, httpBody,
+        responseHeaderGetter: (key) => xhr.getResponseHeader(key),
+        request: xhr,
+        jsonDecoder: client.jsonDecoder);
 
     var responseHeaderWithToken = client.responseHeaderWithToken;
 

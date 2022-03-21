@@ -164,7 +164,11 @@ class HttpBody {
     return HttpBody._(body, mimeType);
   }
 
-  HttpBody._(this._body, [this.mimeType]);
+  HttpBody._(this._body, [this.mimeType]) {
+    if (_body is Future) {
+      throw ArgumentError("Can't use a `Future` as body value.");
+    }
+  }
 
   bool get isString => _body is String;
 
@@ -323,10 +327,16 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
 
   int? _accessTime;
 
+  /// The
+  dynamic Function(String jsonEncoded)? jsonDecoder;
+
   HttpResponse(
       this.method, String url, String requestedURL, int status, HttpBody? body,
-      [this._responseHeaderGetter, this.request])
+      {ResponseHeaderGetter? responseHeaderGetter,
+      this.request,
+      this.jsonDecoder})
       : _body = body,
+        _responseHeaderGetter = responseHeaderGetter,
         super(url, requestedURL, status) {
     _accessTime = instanceTime;
   }
@@ -362,10 +372,17 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
   int? get bodyLength => _body?.size;
 
   /// Returns the [body] as JSON.
-  dynamic get json => _jsonDecode(bodyAsString!);
+  dynamic get json => _jsonDecode(bodyAsString);
 
   dynamic _jsonDecode(String? s) {
-    return s == null || s.isEmpty ? null : jsonDecode(s);
+    if (s == null || s.isEmpty) return null;
+
+    var jsonDecoder = this.jsonDecoder;
+    if (jsonDecoder != null) {
+      return jsonDecoder(s);
+    } else {
+      return jsonDecode(s);
+    }
   }
 
   /// Returns [true] if has [body].
@@ -1713,7 +1730,9 @@ abstract class HttpClientRequester {
     var requestBody = buildRequestBody(client, httpBody, authorization);
 
     var requestURL = buildRequestURL(client, url,
-        authorization: authorization, noQueryString: noQueryString);
+        authorization: authorization,
+        queryParameters: queryParameters,
+        noQueryString: noQueryString);
 
     var requestHeaders = buildRequestHeaders(client, HttpMethod.PUT, url,
         headers: headers,
@@ -1762,7 +1781,9 @@ abstract class HttpClientRequester {
     }
 
     var requestURL = buildRequestURL(client, url,
-        authorization: authorization, noQueryString: noQueryString);
+        authorization: authorization,
+        queryParameters: queryParameters,
+        noQueryString: noQueryString);
 
     var requestHeaders = buildRequestHeaders(client, HttpMethod.PATCH, url,
         headers: headers,
@@ -1802,7 +1823,9 @@ abstract class HttpClientRequester {
     var requestBody = buildRequestBody(client, httpBody, authorization);
 
     var requestURL = buildRequestURL(client, url,
-        authorization: authorization, noQueryString: noQueryString);
+        authorization: authorization,
+        queryParameters: queryParameters,
+        noQueryString: noQueryString);
 
     var requestHeaders = buildRequestHeaders(client, HttpMethod.DELETE, url,
         headers: headers,
@@ -2076,11 +2099,13 @@ class HttpClient {
 
   static int _idCounter = 0;
 
-  late int _id;
+  /// ID of this client.
+  final int id = ++_idCounter;
+
+  /// The JSON decoder. Default: `dart:convert json`
+  dynamic Function(String jsonEncoded)? jsonDecoder;
 
   HttpClient(String baseURL, [HttpClientRequester? clientRequester]) {
-    _id = ++_idCounter;
-
     var baseURL2 = baseURL.trimLeft();
 
     if (baseURL2.endsWith('/')) {
@@ -2134,11 +2159,15 @@ class HttpClient {
 
   @override
   String toString() {
-    return 'HttpClient{id: $_id, baseURL: $baseURL, authorization: $authorization, crossSiteWithCredentials: $crossSiteWithCredentials, logJSON: $logJSON, _clientRequester: $_clientRequester}';
+    return 'HttpClient{ '
+        'id: $id, '
+        'baseURL: $baseURL, '
+        'authorization: $authorization, '
+        'crossSiteWithCredentials: $crossSiteWithCredentials, '
+        'logJSON: $logJSON, '
+        'clientRequester: $_clientRequester '
+        '}';
   }
-
-  /// ID of this client.
-  int get id => _id;
 
   /// Returns [true] if this [baseURL] is `localhost`.
   bool isBaseUrlLocalhost() {
@@ -2265,7 +2294,16 @@ class HttpClient {
 
   dynamic _jsonDecode(String? s) {
     if (logJSON) _logJSON(s);
-    return s == null || s.isEmpty ? null : jsonDecode(s);
+
+    if (s == null || s.isEmpty) return null;
+
+    var jsonDecoder = this.jsonDecoder;
+
+    if (jsonDecoder != null) {
+      return jsonDecoder(s);
+    } else {
+      return jsonDecode(s);
+    }
   }
 
   void _logJSON(String? json) {
@@ -2886,8 +2924,9 @@ class HttpClientRequesterSimulation extends HttpClientRequester {
 
     var respVal = resp(url, queryParameters);
 
-    var restResponse =
-        HttpResponse(method, url, url, 200, HttpBody.from(respVal));
+    var restResponse = HttpResponse(
+        method, url, url, 200, HttpBody.from(respVal),
+        jsonDecoder: client.jsonDecoder);
 
     return Future.value(restResponse);
   }
