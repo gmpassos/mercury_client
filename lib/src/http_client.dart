@@ -504,7 +504,7 @@ class HttpRequestBody {
       _content = HttpBody.from(content, MimeType.parse(_contentType));
     } else if (isJSONType ||
         (_contentType == null && (content is Map || content is List))) {
-      _contentType ??= MimeType.APPLICATION_JSON;
+      _contentType ??= MimeType.applicationJson;
       var jsonEncoded = encodeJSON(content);
       _content = HttpBody.from(jsonEncoded, MimeType.parse(_contentType));
     } else {
@@ -1774,7 +1774,7 @@ abstract class HttpClientRequester {
     if (queryParameters != null &&
         queryParameters.isNotEmpty &&
         requestBody.isNull) {
-      var mimeType = MimeType.parse(MimeType.APPLICATION_JSON);
+      var mimeType = MimeType.parse(MimeType.applicationJson);
       var body = HttpBody.from(queryParameters, mimeType);
       httpBody = HttpRequestBody(body, contentType, queryParameters);
       requestBody = buildRequestBody(client, httpBody, authorization);

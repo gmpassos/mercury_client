@@ -1,3 +1,8 @@
+## 2.1.5
+
+- Improve GitHub CI.
+- swiss_knife: ^3.1.1
+
 ## 2.1.4
 
 - Added `HttpClient.jsonDecoder`.
