@@ -2,10 +2,41 @@ import 'dart:async';
 import 'dart:html' as browser;
 import 'dart:typed_data';
 
+import 'package:collection/collection.dart';
 import 'package:swiss_knife/swiss_knife.dart';
 
 import 'http_client_extension.dart';
 import 'http_client.dart';
+
+const _forbiddenRequestHeaders = <String>{
+  'Accept-Charset',
+  'Accept-Encoding',
+  'Access-Control-Request-Headers',
+  'Access-Control-Request-Method',
+  'Connection',
+  'Content-Length',
+  'Cookie',
+  'Date',
+  'DNT',
+  'Expect',
+  'Feature-Policy',
+  'Host',
+  'Keep-Alive',
+  'Origin',
+  'Referer',
+  'TE',
+  'Trailer',
+  'Transfer-Encoding',
+  'Upgrade',
+  'Via',
+};
+
+bool _isForbiddenRequestHeader(String header) {
+  for (var h in _forbiddenRequestHeaders) {
+    if (equalsIgnoreAsciiCase(h, header)) return true;
+  }
+  return false;
+}
 
 /// HttpClientRequester implementation for Browser.
 class HttpClientRequesterBrowser extends HttpClientRequester {
@@ -47,7 +78,11 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
 
     if (request.requestHeaders != null) {
       request.requestHeaders!.forEach((header, value) {
-        xhr.setRequestHeader(header, value);
+        if (!_isForbiddenRequestHeader(header)) {
+          try {
+            xhr.setRequestHeader(header, value);
+          } catch (_) {}
+        }
       });
     }
 

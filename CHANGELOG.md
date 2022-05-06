@@ -1,3 +1,8 @@
+## 2.1.6
+
+- Browser implementation:
+  - Ignore forbidden headers for a request.
+
 ## 2.1.5
 
 - Improve GitHub CI.
