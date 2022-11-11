@@ -41,6 +41,9 @@ bool _isForbiddenRequestHeader(String header) {
 /// HttpClientRequester implementation for Browser.
 class HttpClientRequesterBrowser extends HttpClientRequester {
   @override
+  bool setupUserAgent(String? userAgent) => false;
+
+  @override
   void stdout(Object? o) => browser.window.console.log(o);
 
   @override

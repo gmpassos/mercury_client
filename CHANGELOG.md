@@ -1,3 +1,23 @@
+## 2.1.7
+
+- `HttpClient`:
+  - Added `userAgent`.
+- `HttpClientRequester`: 
+  - Added `setupUserAgent`.
+- `HttpClientRequesterIO`:
+  - `req.headers.add` with `preserveHeaderCase`:
+    Some servers (like IPP printers) won't accept lower-case headers. 
+- `HttpRequest`:
+  - `updateContentLength`: won't set `Content-Length` if `Transfer-Encoding: chunked` is defined.
+  - `sendDataAsString`: tries to decode using UTF-8 and if fails uses LATIN1.
+- sdk: '>=2.18.0 <3.0.0'
+- collection: ^1.17.0
+- lints: ^2.0.1
+- stream_channel: ^2.1.1
+- async: ^2.10.0 
+- dependency_validator: ^3.2.2
+- coverage: ^1.6.1
+
 ## 2.1.6
 
 - Browser implementation:

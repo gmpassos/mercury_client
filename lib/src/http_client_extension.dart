@@ -18,6 +18,20 @@ extension ListIntExtension on List<int> {
   }
 
   String decodeUTF8() => utf8.decode(this);
+
+  String decodeLATIN1() => latin1.decode(this);
+
+  String decode({bool tryUTF8 = true}) {
+    if (tryUTF8) {
+      try {
+        return decodeUTF8();
+      } catch (_) {
+        return decodeLATIN1();
+      }
+    } else {
+      return decodeLATIN1();
+    }
+  }
 }
 
 extension StringExtension on String {

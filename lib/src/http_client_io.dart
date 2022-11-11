@@ -8,11 +8,20 @@ import 'http_client.dart';
 
 /// HttpClientRequester implementation for VM [dart:io].
 class HttpClientRequesterIO extends HttpClientRequester {
-  late io.HttpClient _ioClient;
+  late final io.HttpClient _ioClient;
+
+  late final String _initialUserAgent;
 
   HttpClientRequesterIO() {
     _ioClient = io.HttpClient();
+    _initialUserAgent = _ioClient.userAgent?.trim() ?? '';
     _setupMercuryUserAgent();
+  }
+
+  @override
+  bool setupUserAgent(String? userAgent) {
+    _setupMercuryUserAgent(userAgent);
+    return true;
   }
 
   @override
@@ -21,11 +30,15 @@ class HttpClientRequesterIO extends HttpClientRequester {
   @override
   void stderr(Object? o) => io.stderr.writeln(o);
 
-  void _setupMercuryUserAgent() {
-    var dartAgent = (_ioClient.userAgent ?? '').trim();
-    var mercuryAgent = 'mercury_client';
-    _ioClient.userAgent =
-        dartAgent.isNotEmpty ? '$dartAgent ($mercuryAgent)' : mercuryAgent;
+  void _setupMercuryUserAgent([String? userAgent]) {
+    if (userAgent != null) {
+      _ioClient.userAgent = userAgent;
+    } else {
+      var dartAgent = _initialUserAgent;
+      var mercuryAgent = 'mercury_client';
+      _ioClient.userAgent =
+          dartAgent.isNotEmpty ? '$dartAgent ($mercuryAgent)' : mercuryAgent;
+    }
   }
 
   @override
@@ -281,7 +294,7 @@ class HttpClientRequesterIO extends HttpClientRequester {
       for (var header in requestHeaders.keys) {
         var val = requestHeaders[header];
         if (val != null) {
-          req.headers.add(header, val);
+          req.headers.add(header, val, preserveHeaderCase: true);
         }
       }
     }

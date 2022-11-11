@@ -1228,7 +1228,9 @@ class HttpRequest {
     var sendDataLength = _sendDataLength(updateToBytes: true);
     if (sendDataLength != null) {
       var contentLength = headerContentLength;
-      if (contentLength == null) {
+      var transferEncoding = headerTransferEncoding;
+      if (contentLength == null &&
+          (transferEncoding == null || transferEncoding.contains('chunked'))) {
         var requestHeaders = _requestHeaders ??= <String, String>{};
         requestHeaders[HttpRequest._headerKeyContentLength] = '$sendDataLength';
       }
@@ -1269,9 +1271,9 @@ class HttpRequest {
     var sendData = this.sendData;
     if (sendData != null) {
       if (sendData is List<int>) {
-        return sendData.decodeUTF8();
+        return sendData.decode();
       } else if (sendData is ByteBuffer) {
-        return sendData.asUint8List().decodeUTF8();
+        return sendData.asUint8List().decode();
       } else {
         return sendData.toString();
       }
@@ -1328,7 +1330,7 @@ class HttpRequest {
 
     var rest = contentType!.substring(idx + 1).trim();
     contentType =
-        rest.isNotEmpty ? mimeType.trim() + '; ' + rest : mimeType.trim();
+        rest.isNotEmpty ? '${mimeType.trim()}; $rest' : mimeType.trim();
 
     headerContentType = contentType;
   }
@@ -1415,6 +1417,12 @@ class HttpRequest {
   String? get headerContentLength =>
       _getMapValueKeyIgnoreCase(requestHeaders, _headerKeyContentLength);
 
+  static const _headerKeyTransferEncoding = 'Transfer-Encoding';
+
+  /// Returns the header: Transfer-Encoding
+  String? get headerTransferEncoding =>
+      _getMapValueKeyIgnoreCase(requestHeaders, _headerKeyTransferEncoding);
+
   /// Number of retries for this request.
   int get retries => _retries;
 
@@ -1444,6 +1452,8 @@ typedef ProgressListener = void Function(
 /// Abstract [HttpClient] requester. This should implement the actual
 /// request process.
 abstract class HttpClientRequester {
+  bool setupUserAgent(String? userAgent);
+
   void stdout(Object? o) => print(o);
 
   void stderr(Object? o) => stdout(o);
@@ -1854,6 +1864,8 @@ abstract class HttpClientRequester {
 
   Future<HttpResponse> submitHttpRequest(HttpClient client, HttpRequest request,
       ProgressListener? progressListener, bool log) {
+    setupUserAgent(client.userAgent);
+
     if (!client.hasInterceptor) {
       return doHttpRequest(client, request, progressListener, log);
     }
@@ -2105,6 +2117,8 @@ class HttpClient {
   /// The JSON decoder. Default: `dart:convert json`
   dynamic Function(String jsonEncoded)? jsonDecoder;
 
+  String? userAgent;
+
   HttpClient(String baseURL, [HttpClientRequester? clientRequester]) {
     var baseURL2 = baseURL.trimLeft();
 
@@ -2129,7 +2143,8 @@ class HttpClient {
     if (this.baseURL == baseURL) {
       return this;
     }
-    var httpClient = HttpClient(baseURL, clientRequester);
+    var httpClient = HttpClient(baseURL, clientRequester)
+      ..userAgent = userAgent;
 
     if (preserveAuthorization) {
       httpClient._authorization = _authorization;
@@ -2809,6 +2824,9 @@ typedef SimulateResponse = dynamic Function(
 
 /// A Simulated [HttpClientRequester]. Useful for tests and mocks.
 class HttpClientRequesterSimulation extends HttpClientRequester {
+  @override
+  bool setupUserAgent(String? userAgent) => false;
+
   final Map<RegExp, SimulateResponse> _getPatterns = {};
 
   /// Defines a reply [response] for GET requests with [urlPattern].
