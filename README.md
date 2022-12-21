@@ -2,8 +2,7 @@
 
 [![pub package](https://img.shields.io/pub/v/mercury_client.svg?logo=dart&logoColor=00b9fc)](https://pub.dartlang.org/packages/mercury_client)
 [![Null Safety](https://img.shields.io/badge/null-safety-brightgreen)](https://dart.dev/null-safety)
-
-[![CI](https://img.shields.io/github/workflow/status/gmpassos/mercury_client/Dart%20CI/master?logo=github-actions&logoColor=white)](https://github.com/gmpassos/mercury_client/actions)
+[![Dart CI](https://github.com/gmpassos/mercury_client/actions/workflows/dart.yml/badge.svg?branch=master)](https://github.com/gmpassos/mercury_client/actions/workflows/dart.yml)
 [![GitHub Tag](https://img.shields.io/github/v/tag/gmpassos/mercury_client?logo=git&logoColor=white)](https://github.com/gmpassos/mercury_client/releases)
 [![New Commits](https://img.shields.io/github/commits-since/gmpassos/mercury_client/latest?logo=git&logoColor=white)](https://github.com/gmpassos/mercury_client/network)
 [![Last Commits](https://img.shields.io/github/last-commit/gmpassos/mercury_client?logo=git&logoColor=white)](https://github.com/gmpassos/mercury_client/commits/master)

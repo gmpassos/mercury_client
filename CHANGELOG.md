@@ -1,3 +1,8 @@
+## 2.1.8
+
+- swiss_knife: ^3.1.3
+- test: ^1.22.1
+
 ## 2.1.7
 
 - `HttpClient`:
