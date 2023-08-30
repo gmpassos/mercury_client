@@ -76,10 +76,13 @@ class HttpClientRequesterIO extends HttpClientRequester {
 
     var responseHeaders = await _decodeHeaders(response);
 
+    var redirects = response.redirects.map((e) => e.location).toList();
+
     var resp = HttpResponse(request.method, request.url, requestURI.toString(),
         response.statusCode, body,
         responseHeaderGetter: (key) => responseHeaders[key.toLowerCase()],
         request: response,
+        redirects: redirects,
         jsonDecoder: client.jsonDecoder);
 
     if (log) {
