@@ -37,6 +37,10 @@ class HttpStatus {
   /// Returns [true] if is a successful status: from range 200 to 299.
   bool get isStatusSuccessful => isStatusInRange(200, 299);
 
+  /// Returns [true] if is 300-303 or 307-308 status (Redirect).
+  bool get isStatusRedirect =>
+      isStatusInRange(300, 303) || isStatusInRange(307, 308);
+
   /// Returns [true] if is 404 status (Not Found).
   bool get isStatusNotFound => isStatus(404);
 
@@ -318,6 +322,10 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
   /// Actual request of the client.
   final Object? request;
 
+  /// Returns the series of redirects this request has been through.
+  /// The list will be empty if no redirects were followed.
+  final List<Uri> redirects;
+
   /// Time of instantiation.
   final int instanceTime = DateTime.now().millisecondsSinceEpoch;
 
@@ -327,16 +335,18 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
 
   int? _accessTime;
 
-  /// The
+  /// The JSON decoder [Function] to use (optional).
   dynamic Function(String jsonEncoded)? jsonDecoder;
 
   HttpResponse(
       this.method, String url, String requestedURL, int status, HttpBody? body,
       {ResponseHeaderGetter? responseHeaderGetter,
       this.request,
+      List<Uri>? redirects,
       this.jsonDecoder})
       : _body = body,
         _responseHeaderGetter = responseHeaderGetter,
+        redirects = redirects ?? [],
         super(url, requestedURL, status) {
     _accessTime = instanceTime;
   }
@@ -358,6 +368,11 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
         (url == requestedURL ? url.length : url.length + requestedURL.length);
     return memory;
   }
+
+  /// Returns the redirect `location` header, the redirect that should be performed.
+  /// - See [isStatusRedirect].
+  /// - See [redirects] for previous redirected locations.
+  String? get redirectToLocation => getResponseHeader('location');
 
   /// Returns the response [HttpBody].
   HttpBody? get body => _body;

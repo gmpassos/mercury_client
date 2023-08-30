@@ -1,3 +1,19 @@
+## 2.2.0
+
+- `HttpStatus`: added `isStatusRedirect`.
+- `HttpResponse`: added `redirects` and `redirectToLocation`.
+- Dart CI: update and optimize jobs.
+
+- sdk: '>=3.0.0 <4.0.0'
+
+- swiss_knife: ^3.1.5
+- collection: ^1.18.0
+- lints: ^2.1.1
+- test: ^1.24.6
+- stream_channel: ^2.1.2
+- async: ^2.11.0
+- coverage: ^1.6.3
+
 ## 2.1.8
 
 - swiss_knife: ^3.1.3
