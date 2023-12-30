@@ -89,8 +89,7 @@ class HttpError extends HttpStatus {
   final Object? error;
 
   HttpError(
-      String url, String requestedURL, int status, this.message, this.error)
-      : super(url, requestedURL, status);
+      super.url, super.requestedURL, super.status, this.message, this.error);
 
   /// If has the field [message]
   bool get hasMessage => message.isNotEmpty;

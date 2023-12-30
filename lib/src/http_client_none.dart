@@ -30,7 +30,7 @@ Uri getHttpClientRuntimeUriImpl() {
 }
 
 class HttpBlobNone extends HttpBlob {
-  HttpBlobNone(Object blob, MimeType? mimeType) : super(blob, mimeType);
+  HttpBlobNone(Object super.blob, super.mimeType);
 
   @override
   int size() => 0;

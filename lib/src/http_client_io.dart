@@ -313,7 +313,7 @@ Uri getHttpClientRuntimeUriImpl() {
 }
 
 class HttpBlobIO extends HttpBlob<TypedData> {
-  HttpBlobIO(TypedData blob, MimeType? mimeType) : super(blob, mimeType);
+  HttpBlobIO(super.blob, super.mimeType);
 
   @override
   int size() => blob.lengthInBytes;

@@ -363,8 +363,7 @@ Uri getHttpClientRuntimeUriImpl() {
 }
 
 class HttpBlobBrowser extends HttpBlob<browser.Blob> {
-  HttpBlobBrowser(browser.Blob blob, MimeType? mimeType)
-      : super(blob, mimeType);
+  HttpBlobBrowser(super.blob, super.mimeType);
 
   @override
   int size() => blob.size;
