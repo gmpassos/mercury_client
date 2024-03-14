@@ -187,10 +187,12 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
         client, request, progressListener, log, status, httpError);
 
     if (!requestCompleted) {
-      var bodyError = error != null ? HttpBody.from(error) : null;
+      var bodyError = HttpBody.from(message);
+
       var response = HttpResponse(
           request.method, request.url, request.requestURL, status, bodyError,
-          jsonDecoder: client.jsonDecoder);
+          error: httpError, jsonDecoder: client.jsonDecoder);
+
       originalRequestCompleter.complete(response);
     }
   }
@@ -265,14 +267,14 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
         return _retryRequest(
             originalRequestCompleter, client, request2, progressListener, log);
       } else {
-        var bodyError =
-            httpError.error != null ? HttpBody.from(httpError.error) : null;
+        var bodyError = HttpBody.from(httpError.message);
+
         var status = httpError.status;
         if (status == 0) status = 401;
 
         var response = HttpResponse(
             request.method, request.url, request.requestURL, status, bodyError,
-            jsonDecoder: client.jsonDecoder);
+            error: httpError, jsonDecoder: client.jsonDecoder);
         originalRequestCompleter.complete(response);
         return true;
       }

@@ -1,3 +1,13 @@
+## 2.2.2
+
+- `HttpResponse`:
+  - Added field `error`.
+
+- `HttpClientRequesterBrowser`: better error handling and body/message parsing for HTTP errors. 
+
+- swiss_knife: ^3.2.0
+- test: ^1.25.2
+
 ## 2.2.1
 
 - lints: ^3.0.0
