@@ -129,7 +129,7 @@ class HttpError extends HttpStatus {
 
   @override
   String toString() {
-    return 'RESTError{requestedURL: $requestedURL, status: $status, message: $message, error: $error}';
+    return 'HttpError{requestedURL: $requestedURL, status: $status, message: $message, error: $error}';
   }
 }
 
@@ -315,6 +315,9 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
   /// Response body.
   final HttpBody? _body;
 
+  /// Response error.
+  final HttpError? _error;
+
   /// A getter capable to get a header entry value.
   final ResponseHeaderGetter? _responseHeaderGetter;
 
@@ -342,8 +345,10 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
       {ResponseHeaderGetter? responseHeaderGetter,
       this.request,
       List<Uri>? redirects,
-      this.jsonDecoder})
+      this.jsonDecoder,
+      HttpError? error})
       : _body = body,
+        _error = error,
         _responseHeaderGetter = responseHeaderGetter,
         redirects = redirects ?? [],
         super(url, requestedURL, status) {
@@ -372,6 +377,9 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
   /// - See [isStatusRedirect].
   /// - See [redirects] for previous redirected locations.
   String? get redirectToLocation => getResponseHeader('location');
+
+  /// The response [HttpError].
+  HttpError? get error => _error;
 
   /// Returns the response [HttpBody].
   HttpBody? get body => _body;
