@@ -35,7 +35,9 @@ extension ListIntExtension on List<int> {
 }
 
 extension StringExtension on String {
-  Uint8List toUint8List() => utf8.encode(this).toUint8List();
+  Uint8List toUint8List({Encoding? encoding}) =>
+      (encoding ?? utf8).encode(this).toUint8List();
 
-  ByteBuffer toByteBuffer() => toUint8List().buffer;
+  ByteBuffer toByteBuffer({Encoding? encoding}) =>
+      toUint8List(encoding: encoding).buffer;
 }

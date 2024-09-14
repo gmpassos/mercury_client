@@ -5,8 +5,8 @@ import 'dart:typed_data';
 import 'package:collection/collection.dart';
 import 'package:swiss_knife/swiss_knife.dart';
 
-import 'http_client_extension.dart';
 import 'http_client.dart';
+import 'http_client_extension.dart';
 
 const _forbiddenRequestHeaders = <String>{
   'Accept-Charset',
@@ -383,7 +383,7 @@ class HttpBlobBrowser extends HttpBlob<browser.Blob> {
       if (result is ByteBuffer) {
         data = result;
       } else if (result is String) {
-        data = result.toByteBuffer();
+        data = result.toByteBuffer(encoding: mimeType?.preferredStringEncoding);
       } else if (result is List<int>) {
         if (result is TypedData) {
           data = (result as TypedData).buffer;

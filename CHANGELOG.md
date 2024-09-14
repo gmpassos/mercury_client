@@ -1,5 +1,7 @@
 ## 2.2.3
 
+- Use `mimeType?.preferredStringEncoding` to convert a `String` response to `Uint8List`.
+
 - sdk: '>=3.3.0 <4.0.0'
 
 - swiss_knife: ^3.2.2

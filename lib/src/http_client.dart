@@ -8,7 +8,6 @@ import 'package:enum_to_string/enum_to_string.dart';
 import 'package:swiss_knife/swiss_knife.dart';
 
 import 'http_client_extension.dart';
-
 import 'http_client_none.dart'
     if (dart.library.html) 'http_client_browser.dart'
     if (dart.library.io) 'http_client_io.dart';
@@ -247,7 +246,7 @@ class HttpBody {
       return (_body as List<int>).toUint8List();
     } else if (isString) {
       var s = _body as String;
-      return s.toUint8List();
+      return s.toUint8List(encoding: mimeType?.preferredStringEncoding);
     } else if (isMap) {
       return asString!.toUint8List();
     }
@@ -1278,7 +1277,8 @@ class HttpRequest {
     } else if (sendData is HttpBlob) {
       return sendData.size();
     } else if (sendData is String) {
-      var bytes = sendData.toUint8List();
+      var bytes = sendData.toUint8List(
+          encoding: MimeType.parse(mimeType)?.preferredStringEncoding);
       if (updateToBytes) {
         _sendData = bytes;
       }
