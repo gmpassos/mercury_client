@@ -49,7 +49,7 @@ class _CacheRequest implements Comparable<_CacheRequest> {
     return _CacheRequest(
         _method,
         _url,
-        _queryParameters != null ? Map.from(_queryParameters!) : null,
+        _queryParameters != null ? Map.from(_queryParameters) : null,
         _body,
         _contentType,
         _accept);
@@ -60,11 +60,11 @@ class _CacheRequest implements Comparable<_CacheRequest> {
         4 +
         _url.length +
         (_body != null ? _body.length : 0) +
-        (_contentType != null ? _contentType!.length : 0) +
-        (_accept != null ? _accept!.length : 0);
+        (_contentType != null ? _contentType.length : 0) +
+        (_accept != null ? _accept.length : 0);
 
     if (_queryParameters != null) {
-      for (var entry in _queryParameters!.entries) {
+      for (var entry in _queryParameters.entries) {
         memory += entry.key.length;
         memory += entry.value?.length ?? 0;
       }

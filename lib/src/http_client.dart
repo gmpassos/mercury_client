@@ -257,7 +257,7 @@ class HttpBody {
 
   HttpBlob? get asBlob {
     if (isBlob) {
-      if (_body is HttpBlob) return _body as HttpBlob;
+      if (_body is HttpBlob) return _body;
       return createHttpBlob(_body as List<dynamic>, mimeType);
     } else if (isByteBuffer) {
       return createHttpBlob([_body], mimeType);
@@ -368,7 +368,7 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
         8 +
         8 +
         4 +
-        (_body != null ? _body!.size : 0) +
+        (_body != null ? _body.size : 0) +
         (url == requestedURL ? url.length : url.length + requestedURL.length);
     return memory;
   }
@@ -441,7 +441,7 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
     if (_responseHeaderGetter == null) return null;
 
     try {
-      return _responseHeaderGetter!(headerKey);
+      return _responseHeaderGetter(headerKey);
     } catch (e, s) {
       print("[HttpResponse] Can't access response header: $headerKey");
       print(e);
