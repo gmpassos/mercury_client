@@ -145,8 +145,9 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
         if (log) {
           logError('REQUEST: $request > status: ${xhr.status}', e);
         }
+
         _completeOnError(completer, client, request, progressListener, log,
-            status, xhr.responseText, e);
+            status, HttpBody.from(xhr.response)?.asString, e);
       }
     });
 
@@ -155,7 +156,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
         logError('REQUEST: $request > status: ${xhr.status}', e);
       }
       _completeOnError(completer, client, request, progressListener, log,
-          xhr.status ?? 0, xhr.responseText, e);
+          xhr.status ?? 0, HttpBody.from(xhr.response)?.asString, e);
     });
 
     if (request.sendData != null) {
