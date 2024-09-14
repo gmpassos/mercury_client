@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:charset/charset.dart' show utf16;
 import 'package:collection/collection.dart'
     show IterableExtension, equalsIgnoreAsciiCase;
 import 'package:enum_to_string/enum_to_string.dart';
@@ -205,16 +206,41 @@ class HttpBody {
       return _body as String;
     } else if (isByteBuffer) {
       var bytes = _body as ByteBuffer;
-      var bits16 = mimeType != null && mimeType!.isCharsetUTF16;
-      var bytesLists = bits16 ? bytes.asUint16List() : bytes.asUint8List();
-      return String.fromCharCodes(bytesLists);
+      return bytesToString(bytes.asUint8List(), mimeType);
     } else if (isBytesArray) {
       var a = _body as List<int>;
-      return String.fromCharCodes(a);
+      return bytesToString(a.toUint8List(), mimeType);
     } else if (isMap) {
       return json.encode(_body);
     } else {
       return null;
+    }
+  }
+
+  /// Converts [bytes] using the encoding specified by [mimeType] if provided.
+  /// If [mimeType] is `null` or an [Encoding] cannot be determined,
+  /// it will attempt to decode using UTF-8, and if that fails, it will
+  /// try LATIN-1.
+  static String bytesToString(Uint8List bytes, [MimeType? mimeType]) {
+    if (mimeType != null) {
+      if (mimeType.isCharsetUTF8) {
+        return utf8.decode(bytes);
+      } else if (mimeType.isCharsetLATIN1) {
+        return utf8.decode(bytes);
+      } else if (mimeType.isCharsetUTF16) {
+        return utf16.decode(bytes);
+      } else {
+        var encoding = mimeType.preferredStringEncoding;
+        if (encoding != null) {
+          return encoding.decode(bytes);
+        }
+      }
+    }
+
+    try {
+      return utf8.decode(bytes);
+    } catch (_) {
+      return latin1.decode(bytes);
     }
   }
 
@@ -296,9 +322,8 @@ class HttpBody {
 
     var bytes = await asByteBufferAsync;
     if (bytes == null) return null;
-    var bits16 = mimeType != null && mimeType!.isCharsetUTF16;
-    var bytesLists = bits16 ? bytes.asUint16List() : bytes.asUint8List();
-    return String.fromCharCodes(bytesLists);
+
+    return bytesToString(bytes.asUint8List(), mimeType);
   }
 
   /// Alias to [asString].
