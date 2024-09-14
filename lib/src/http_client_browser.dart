@@ -55,6 +55,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     var completer = Completer<HttpResponse>();
 
     var xhr = browser.HttpRequest();
+    xhr.responseType = 'arraybuffer';
 
     var methodName = getHttpMethodName(request.method, HttpMethod.GET)!;
 
