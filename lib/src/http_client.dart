@@ -824,10 +824,17 @@ class BasicCredential extends Credential {
     return null;
   }
 
-  /// Instantiate using a base64 encoded credential, in format  `$username:$password`.
+  /// Instantiate using a base64 encoded credential, in format `$username:$password`.
   factory BasicCredential.base64(String base64) {
     var decodedBytes = Base64Codec.urlSafe().decode(base64);
-    var decoded = String.fromCharCodes(decodedBytes);
+
+    String decoded;
+    try {
+      decoded = utf8.decode(decodedBytes);
+    } catch (_) {
+      decoded = latin1.decode(decodedBytes);
+    }
+
     var idx = decoded.indexOf(':');
 
     if (idx < 0) {
