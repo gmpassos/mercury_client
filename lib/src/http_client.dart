@@ -1536,6 +1536,7 @@ abstract class HttpClientRequester {
       Object? body,
       String? contentType,
       String? accept,
+      String? responseType,
       ProgressListener? progressListener}) {
     switch (method) {
       case HttpMethod.GET:
@@ -1544,6 +1545,8 @@ abstract class HttpClientRequester {
             authorization: authorization,
             queryParameters: queryParameters,
             noQueryString: noQueryString,
+            accept: accept,
+            responseType: responseType,
             progressListener: progressListener);
       case HttpMethod.HEAD:
         return requestHEAD(client, url,
@@ -1568,6 +1571,7 @@ abstract class HttpClientRequester {
             body: body,
             contentType: contentType,
             accept: accept,
+            responseType: responseType,
             progressListener: progressListener);
       case HttpMethod.PUT:
         return requestPUT(client, url,
@@ -1578,6 +1582,7 @@ abstract class HttpClientRequester {
             body: body,
             contentType: contentType,
             accept: accept,
+            responseType: responseType,
             progressListener: progressListener);
       case HttpMethod.PATCH:
         return requestPATCH(client, url,
@@ -1588,6 +1593,7 @@ abstract class HttpClientRequester {
             body: body,
             contentType: contentType,
             accept: accept,
+            responseType: responseType,
             progressListener: progressListener);
       case HttpMethod.DELETE:
         return requestDELETE(client, url,
@@ -1598,6 +1604,7 @@ abstract class HttpClientRequester {
             body: body,
             contentType: contentType,
             accept: accept,
+            responseType: responseType,
             progressListener: progressListener);
 
       default:
@@ -1623,6 +1630,8 @@ abstract class HttpClientRequester {
       Authorization? authorization,
       Map<String, String?>? queryParameters,
       bool noQueryString = false,
+      String? accept,
+      String? responseType,
       ProgressListener? progressListener}) async {
     var requestURL = buildRequestURL(client, url,
         authorization: authorization,
@@ -1630,7 +1639,7 @@ abstract class HttpClientRequester {
         noQueryString: noQueryString);
 
     var requestHeaders = buildRequestHeaders(client, HttpMethod.GET, url,
-        headers: headers, authorization: authorization);
+        headers: headers, authorization: authorization, accept: accept);
 
     requestURL = await client._interceptRequest(
         HttpMethod.GET, requestURL, requestHeaders);
@@ -1641,7 +1650,8 @@ abstract class HttpClientRequester {
             authorization: authorization,
             queryParameters: queryParameters,
             withCredentials: _withCredentials(client, authorization),
-            requestHeaders: requestHeaders),
+            requestHeaders: requestHeaders,
+            responseType: responseType),
         progressListener,
         client.logRequests);
   }
@@ -1714,6 +1724,7 @@ abstract class HttpClientRequester {
       Object? body,
       String? contentType,
       String? accept,
+      String? responseType,
       ProgressListener? progressListener}) async {
     var httpBody = HttpRequestBody(body, contentType, queryParameters);
     var requestBody = buildRequestBody(client, httpBody, authorization);
@@ -1746,6 +1757,7 @@ abstract class HttpClientRequester {
             withCredentials: _withCredentials(client, authorization),
             requestHeaders: requestHeaders,
             sendData: formData,
+            responseType: responseType,
           ),
           progressListener,
           client.logRequests);
@@ -1775,6 +1787,7 @@ abstract class HttpClientRequester {
             withCredentials: _withCredentials(client, authorization),
             requestHeaders: requestHeaders,
             sendData: requestBody.contentAsSendData,
+            responseType: responseType,
           ),
           progressListener,
           client.logRequests);
@@ -1789,6 +1802,7 @@ abstract class HttpClientRequester {
       Object? body,
       String? contentType,
       String? accept,
+      String? responseType,
       ProgressListener? progressListener}) async {
     var httpBody = HttpRequestBody(body, contentType, queryParameters);
     var requestBody = buildRequestBody(client, httpBody, authorization);
@@ -1818,6 +1832,7 @@ abstract class HttpClientRequester {
           withCredentials: _withCredentials(client, authorization),
           requestHeaders: requestHeaders,
           sendData: requestBody.contentAsSendData,
+          responseType: responseType,
         ),
         progressListener,
         client.logRequests);
@@ -1831,6 +1846,7 @@ abstract class HttpClientRequester {
       Object? body,
       String? contentType,
       String? accept,
+      String? responseType,
       ProgressListener? progressListener}) async {
     var httpBody = HttpRequestBody(body, contentType, queryParameters);
     var requestBody = buildRequestBody(client, httpBody, authorization);
@@ -1869,6 +1885,7 @@ abstract class HttpClientRequester {
           withCredentials: _withCredentials(client, authorization),
           requestHeaders: requestHeaders,
           sendData: requestBody.contentAsSendData,
+          responseType: responseType,
         ),
         progressListener,
         client.logRequests);
@@ -1882,6 +1899,7 @@ abstract class HttpClientRequester {
       Object? body,
       String? contentType,
       String? accept,
+      String? responseType,
       ProgressListener? progressListener}) async {
     var httpBody = HttpRequestBody(body, contentType, queryParameters);
     var requestBody = buildRequestBody(client, httpBody, authorization);
@@ -1911,6 +1929,7 @@ abstract class HttpClientRequester {
           withCredentials: _withCredentials(client, authorization),
           requestHeaders: requestHeaders,
           sendData: requestBody.contentAsSendData,
+          responseType: responseType,
         ),
         progressListener,
         client.logRequests);
@@ -2476,6 +2495,8 @@ class HttpClient {
       bool fullPath = false,
       Credential? authorization,
       Map<String, Object?>? parameters,
+      String? accept,
+      String? responseType,
       ProgressListener? progressListener}) async {
     var parametersMapStr = _toParametersMapOfString(parameters);
     var url = _buildURL(path, fullPath, parametersMapStr, true);
@@ -2483,6 +2504,8 @@ class HttpClient {
     return _clientRequester.requestGET(this, url,
         headers: headers,
         authorization: requestAuthorization,
+        accept: accept,
+        responseType: responseType,
         progressListener: progressListener);
   }
 
@@ -2528,6 +2551,7 @@ class HttpClient {
       Object? body,
       String? contentType,
       String? accept,
+      String? responseType,
       ProgressListener? progressListener}) async {
     var parametersMapStr = _toParametersMapOfString(parameters);
     var url = _buildURL(path, fullPath, parametersMapStr);
@@ -2545,6 +2569,7 @@ class HttpClient {
         body: body,
         contentType: contentType,
         accept: accept,
+        responseType: responseType,
         progressListener: progressListener);
   }
 
@@ -2558,6 +2583,7 @@ class HttpClient {
       Object? body,
       String? contentType,
       String? accept,
+      String? responseType,
       ProgressListener? progressListener}) async {
     var parametersMapStr = _toParametersMapOfString(parameters);
     var url = _buildURL(path, fullPath, parametersMapStr);
@@ -2575,6 +2601,7 @@ class HttpClient {
         body: body,
         contentType: contentType,
         accept: accept,
+        responseType: responseType,
         progressListener: progressListener);
   }
 
@@ -2588,6 +2615,7 @@ class HttpClient {
       Object? body,
       String? contentType,
       String? accept,
+      String? responseType,
       ProgressListener? progressListener}) async {
     var parametersMapStr = _toParametersMapOfString(parameters);
     var url = _buildURL(path, fullPath, parametersMapStr);
@@ -2605,6 +2633,7 @@ class HttpClient {
         body: body,
         contentType: contentType,
         accept: accept,
+        responseType: responseType,
         progressListener: progressListener);
   }
 
@@ -2618,6 +2647,7 @@ class HttpClient {
       Object? body,
       String? contentType,
       String? accept,
+      String? responseType,
       ProgressListener? progressListener}) async {
     var url = _buildURL(path, fullPath, parameters);
 
@@ -2633,6 +2663,7 @@ class HttpClient {
         body: body,
         contentType: contentType,
         accept: accept,
+        responseType: responseType,
         progressListener: progressListener);
   }
 
