@@ -1,10 +1,21 @@
 ## 2.2.3
 
-- Use `mimeType?.preferredStringEncoding` to convert a `String` response to `Uint8List`.
+- `HttpBody`:
+  - Added `bytesToString`, to correctly convert `body` bytes using `mimeType` to determine the `Encoding`. 
+
+- `BasicCredential.base64`:
+  - Use `utf8` to decode.
+
+- `browser.HttpRequest()`:
+  - `responseType = 'arraybuffer'`
+
+- `HttpClient`:
+  - Pass parameter `responseType` to the requests.
 
 - sdk: '>=3.3.0 <4.0.0'
 
 - swiss_knife: ^3.2.2
+- charset: ^2.0.1
 - test: ^1.25.8
 - coverage: ^1.9.2
 
