@@ -2,7 +2,7 @@
 
 - sdk: '>=3.3.0 <4.0.0'
 
-- swiss_knife: ^3.2.1
+- swiss_knife: ^3.2.2
 - test: ^1.25.8
 - coverage: ^1.9.2
 
