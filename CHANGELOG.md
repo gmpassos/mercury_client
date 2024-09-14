@@ -1,3 +1,11 @@
+## 2.2.3
+
+- sdk: '>=3.3.0 <4.0.0'
+
+- swiss_knife: ^3.2.1
+- test: ^1.25.8
+- coverage: ^1.9.2
+
 ## 2.2.2
 
 - `HttpResponse`:
