@@ -184,16 +184,16 @@ class HttpBody {
   bool get isBytesArray => _body is List<int>;
 
   int get size {
-    if (isString) {
-      return (_body as String).length;
+    final body = _body;
+
+    if (body is String) {
+      return body.length;
+    } else if (body is ByteBuffer) {
+      return body.lengthInBytes;
+    } else if (body is List<int>) {
+      return body.length;
     } else if (isMap) {
       return asString!.length;
-    } else if (isByteBuffer) {
-      var bytes = _body as ByteBuffer;
-      return bytes.lengthInBytes;
-    } else if (isBytesArray) {
-      var a = _body as List<int>;
-      return a.length;
     } else if (isBlob) {
       return asBlob!.size();
     } else {
@@ -202,16 +202,16 @@ class HttpBody {
   }
 
   String? get asString {
-    if (isString) {
-      return _body as String;
-    } else if (isByteBuffer) {
-      var bytes = _body as ByteBuffer;
-      return bytesToString(bytes.asUint8List(), mimeType);
-    } else if (isBytesArray) {
-      var a = _body as List<int>;
-      return bytesToString(a.toUint8List(), mimeType);
+    final body = _body;
+
+    if (body is String) {
+      return body;
+    } else if (body is ByteBuffer) {
+      return bytesToString(body.asUint8List(), mimeType);
+    } else if (body is List<int>) {
+      return bytesToString(body.toUint8List(), mimeType);
     } else if (isMap) {
-      return json.encode(_body);
+      return json.encode(body);
     } else {
       return null;
     }
@@ -245,18 +245,18 @@ class HttpBody {
   }
 
   ByteBuffer? get asByteBuffer {
-    if (isByteBuffer) {
-      return _body as ByteBuffer;
-    } else if (isBytesArray) {
-      var a = _body as List<int>;
-      if (a is TypedData) {
-        return (a as TypedData).buffer;
+    final body = _body;
+
+    if (body is ByteBuffer) {
+      return body;
+    } else if (body is List<int>) {
+      if (body is TypedData) {
+        return (body as TypedData).buffer;
       } else {
-        return Uint8List.fromList(a).buffer;
+        return Uint8List.fromList(body).buffer;
       }
-    } else if (isString) {
-      var s = _body as String;
-      return s.toByteBuffer();
+    } else if (body is String) {
+      return body.toByteBuffer(encoding: mimeType?.preferredStringEncoding);
     } else if (isMap) {
       var s = asString!;
       return s.toByteBuffer();
@@ -266,13 +266,14 @@ class HttpBody {
   }
 
   List<int>? get asByteArray {
-    if (isByteBuffer) {
-      return (_body as ByteBuffer).asUint8List();
-    } else if (isBytesArray) {
-      return (_body as List<int>).toUint8List();
-    } else if (isString) {
-      var s = _body as String;
-      return s.toUint8List(encoding: mimeType?.preferredStringEncoding);
+    final body = _body;
+
+    if (body is ByteBuffer) {
+      return body.asUint8List();
+    } else if (body is List<int>) {
+      return body.toUint8List();
+    } else if (body is String) {
+      return body.toUint8List(encoding: mimeType?.preferredStringEncoding);
     } else if (isMap) {
       return asString!.toUint8List();
     }

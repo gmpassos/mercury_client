@@ -1,3 +1,8 @@
+## 2.2.4
+
+- `HttpBody`:
+  - Optimize internal resolution of: `size`, `asString`, `asByteBuffer`, `asByteArray`.
+
 ## 2.2.3
 
 - `HttpBody`:
