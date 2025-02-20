@@ -1,5 +1,5 @@
 /// Library `Mercury_Client`
-library mercury_client;
+library;
 
 export 'src/http_cache.dart';
 export 'src/http_client.dart';

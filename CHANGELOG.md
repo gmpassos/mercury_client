@@ -1,3 +1,14 @@
+## 2.2.5
+
+- swiss_knife: ^3.2.3
+- collection: ^1.19.0
+
+- lints: ^5.1.1
+- test: ^1.25.15
+- stream_channel: ^2.1.4
+- async: ^2.13.0
+- coverage: ^1.11.1
+
 ## 2.2.4
 
 - `HttpBody`:

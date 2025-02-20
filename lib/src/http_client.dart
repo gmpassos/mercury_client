@@ -5,7 +5,6 @@ import 'dart:typed_data';
 import 'package:charset/charset.dart' show utf16;
 import 'package:collection/collection.dart'
     show IterableExtension, equalsIgnoreAsciiCase;
-import 'package:enum_to_string/enum_to_string.dart';
 import 'package:swiss_knife/swiss_knife.dart';
 
 import 'http_client_extension.dart';
@@ -1178,8 +1177,6 @@ String? getHttpMethodName(HttpMethod? method, [HttpMethod? def]) {
       return 'PATCH';
     case HttpMethod.HEAD:
       return 'HEAD';
-    default:
-      return null;
   }
 }
 
@@ -1607,10 +1604,6 @@ abstract class HttpClientRequester {
             accept: accept,
             responseType: responseType,
             progressListener: progressListener);
-
-      default:
-        throw StateError(
-            "Can't handle method: ${EnumToString.convertToString(method)}");
     }
   }
 
