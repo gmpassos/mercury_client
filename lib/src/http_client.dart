@@ -2272,7 +2272,7 @@ class HttpClient {
             body: body,
             contentType: contentType,
             accept: accept)
-        .then((r) => _jsonDecode(r.bodyAsString));
+        .then((r) => _jsonDecodeResponse(r));
   }
 
   /// Does a GET request and returns a decoded JSON.
@@ -2284,7 +2284,7 @@ class HttpClient {
             headers: headers,
             authorization: authorization,
             parameters: parameters)
-        .then((r) => _jsonDecode(r.bodyAsString));
+        .then((r) => _jsonDecodeResponse(r));
   }
 
   /// Does an OPTION request and returns a decoded JSON.
@@ -2296,7 +2296,7 @@ class HttpClient {
             headers: headers,
             authorization: authorization,
             parameters: parameters)
-        .then((r) => _jsonDecode(r.bodyAsString));
+        .then((r) => _jsonDecodeResponse(r));
   }
 
   /// Does a POST request and returns a decoded JSON.
@@ -2312,7 +2312,7 @@ class HttpClient {
             parameters: parameters,
             body: body,
             contentType: contentType)
-        .then((r) => _jsonDecode(r.bodyAsString));
+        .then((r) => _jsonDecodeResponse(r));
   }
 
   /// Does a PUT request and returns a decoded JSON.
@@ -2326,7 +2326,7 @@ class HttpClient {
             authorization: authorization,
             body: body,
             contentType: contentType)
-        .then((r) => _jsonDecode(r.bodyAsString));
+        .then((r) => _jsonDecodeResponse(r));
   }
 
   /// If set to true, sends credential to cross sites.
@@ -2373,6 +2373,39 @@ class HttpClient {
   bool logRequests = false;
 
   bool logJSON = false;
+
+  dynamic _jsonDecodeResponse(HttpResponse r) {
+    if (r.isStatusNetworkError || r.isStatusServerError) {
+      var error = r.error;
+      if (error != null) {
+        throw error;
+      }
+
+      return null;
+    }
+
+    String? body;
+
+    try {
+      body = r.bodyAsString;
+      return _jsonDecode(body);
+    } catch (e, s) {
+      Object? source;
+      int? offset;
+
+      if (e is FormatException) {
+        source = e.source;
+        offset = e.offset;
+      }
+
+      Error.throwWithStackTrace(
+          FormatException(
+              "JSON parsing error:\n-- Request: $r\n-- Cause: $e\n$body",
+              source,
+              offset),
+          s);
+    }
+  }
 
   dynamic _jsonDecode(String? s) {
     if (logJSON) _logJSON(s);

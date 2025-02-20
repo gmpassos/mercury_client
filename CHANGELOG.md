@@ -1,5 +1,8 @@
 ## 2.2.5
 
+- `requestJSON`, `getJSON`, `optionsJSON`, `postJSON`, `putJSON`:
+  - Call `_jsonDecodeResponse` to handle response errors, and avoid direct call to `_jsonDecode`.
+
 - swiss_knife: ^3.2.3
 - collection: ^1.19.0
 
