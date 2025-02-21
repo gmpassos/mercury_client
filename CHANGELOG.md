@@ -1,7 +1,14 @@
 ## 2.2.5
 
-- `requestJSON`, `getJSON`, `optionsJSON`, `postJSON`, `putJSON`:
-  - Call `_jsonDecodeResponse` to handle response errors, and avoid direct call to `_jsonDecode`.
+- `HttpClient`:
+  - `requestJSON`, `getJSON`, `optionsJSON`, `postJSON`, `putJSON`:
+    - Call `_jsonDecodeResponse` to handle response errors, and avoid direct call to `_jsonDecode`.
+  - `_jsonDecodeResponse`: throw an `HttpError` on error status responses.
+
+- New `WithHttpStatus`.
+
+- `HttpError`: now extends `Error` with `WithHttpStatus`.
+  - Added field `httpStatus`.
 
 - swiss_knife: ^3.2.3
 - collection: ^1.19.0

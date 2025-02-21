@@ -366,8 +366,15 @@ void doBasicTests(TestServerChannel testServerChannel) {
 
       expect(response.bodyAsString, isNull);
 
-      var responseJSON = await client.getJSON('foo/500');
-      expect(responseJSON, isNull);
+      expect(
+        client.getJSON('foo/500'),
+        throwsA(
+          isA<HttpError>()
+              .having((e) => e.status, 'status', equals(500))
+              .having(
+                  (e) => e.requestedURL, 'requestedURL', contains('/foo/500')),
+        ),
+      );
     });
 
     test('Method POST', () async {

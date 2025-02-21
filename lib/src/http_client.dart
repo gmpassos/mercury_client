@@ -79,8 +79,72 @@ class HttpStatus {
   }
 }
 
+/// Implements an [HttpStatus] and delegates to [httpStatus].
+mixin WithHttpStatus implements HttpStatus {
+  HttpStatus get httpStatus;
+
+  @override
+  bool get isError => httpStatus.isError;
+
+  @override
+  bool get isNotOK => httpStatus.isNotOK;
+
+  @override
+  bool get isOK => httpStatus.isOK;
+
+  @override
+  bool isStatus(int status) => httpStatus.isStatus(status);
+
+  @override
+  bool get isStatusAccessError => httpStatus.isStatusAccessError;
+
+  @override
+  bool get isStatusError => httpStatus.isStatusError;
+
+  @override
+  bool get isStatusForbidden => httpStatus.isStatusForbidden;
+
+  @override
+  bool isStatusInList(List<int> statusList) =>
+      httpStatus.isStatusInList(statusList);
+
+  @override
+  bool isStatusInRange(int statusInit, int statusEnd) =>
+      httpStatus.isStatusInRange(statusInit, statusEnd);
+
+  @override
+  bool get isStatusNetworkError => httpStatus.isStatusNetworkError;
+
+  @override
+  bool get isStatusNotFound => httpStatus.isStatusNotFound;
+
+  @override
+  bool get isStatusRedirect => httpStatus.isStatusRedirect;
+
+  @override
+  bool get isStatusServerError => httpStatus.isStatusServerError;
+
+  @override
+  bool get isStatusSuccessful => httpStatus.isStatusSuccessful;
+
+  @override
+  bool get isStatusUnauthenticated => httpStatus.isStatusUnauthenticated;
+
+  @override
+  String get requestedURL => httpStatus.requestedURL;
+
+  @override
+  int get status => httpStatus.status;
+
+  @override
+  String get url => httpStatus.url;
+}
+
 /// Represents a response Error.
-class HttpError extends HttpStatus {
+class HttpError extends Error with WithHttpStatus {
+  @override
+  final HttpStatus httpStatus;
+
   /// The error message, for better understanding than [error].
   final String message;
 
@@ -88,7 +152,8 @@ class HttpError extends HttpStatus {
   final Object? error;
 
   HttpError(
-      super.url, super.requestedURL, super.status, this.message, this.error);
+      String url, String requestedURL, int status, this.message, this.error)
+      : httpStatus = HttpStatus(url, requestedURL, status);
 
   /// If has the field [message]
   bool get hasMessage => message.isNotEmpty;
@@ -2381,7 +2446,13 @@ class HttpClient {
         throw error;
       }
 
-      return null;
+      var status = r.status;
+      var errorMessage =
+          "Can't parse JSON from an HTTP $status error response.";
+
+      var httpError =
+          HttpError(r.url, r.url, status, errorMessage, errorMessage);
+      throw httpError;
     }
 
     String? body;
