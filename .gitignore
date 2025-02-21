@@ -14,3 +14,5 @@ coverage/
 doc/api/
 
 *.iml
+
+.DS_Store
