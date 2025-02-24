@@ -1,3 +1,13 @@
+## 2.3.0
+
+- Change use of `dart:html` to package `web`.
+
+- `HttpRequest`:
+  - `sendData`: return `Object?` (instead of `dynamic`).
+
+- swiss_knife: ^3.3.0
+- http: ^1.3.0
+
 ## 2.2.5
 
 - `HttpClient`:

@@ -121,7 +121,8 @@ void doBasicTests(TestServerChannel testServerChannel) {
               144,
               33
             ]));
-        expect(latin1.decode(request.sendData), equals('char utf-8: Ä!'));
+        expect(latin1.decode(request.sendData as List<int>),
+            equals('char utf-8: Ä!'));
         expect(request.sendDataLength, equals(15));
         expect(request.sendDataAsString, 'char utf-8: Đ!');
         expect(request.sendDataAsString!.length, equals(14));
@@ -216,6 +217,8 @@ void doBasicTests(TestServerChannel testServerChannel) {
           progressListener: (request, loaded, total, ratio, upload) {
         progress.add('${upload ? 'upload' : 'download'}[$loaded/$total]');
       });
+
+      print('!!! response: $response');
 
       expect(response.isOK, isTrue);
       expect(response.isNotOK, isFalse);
