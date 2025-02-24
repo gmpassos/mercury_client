@@ -218,8 +218,6 @@ void doBasicTests(TestServerChannel testServerChannel) {
         progress.add('${upload ? 'upload' : 'download'}[$loaded/$total]');
       });
 
-      print('!!! response: $response');
-
       expect(response.isOK, isTrue);
       expect(response.isNotOK, isFalse);
       expect(response.isError, isFalse);

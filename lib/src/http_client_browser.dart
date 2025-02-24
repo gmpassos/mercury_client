@@ -212,6 +212,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       var event = error as web.Event;
       return '{type: ${event.type} ; target: ${event.target} ; error: $event}';
     }
+
     return '$error';
   }
 
