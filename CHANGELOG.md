@@ -6,7 +6,8 @@
   - `sendData`: return `Object?` (instead of `dynamic`).
 
 - swiss_knife: ^3.3.0
-- http: ^1.3.0
+- web: ^1.1.0
+- js_interop_utils: ^1.0.6
 
 ## 2.2.5
 
