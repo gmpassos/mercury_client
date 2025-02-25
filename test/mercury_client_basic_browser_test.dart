@@ -77,7 +77,8 @@ class BrowserTestServerChannel implements TestServerChannel {
     print('[BROWSER] WAIT OPEN');
 
     send('wait');
-    _serverPort = await receive(-1);
+    var port = await receive<num>(-1);
+    _serverPort = port.toInt();
     return true;
   }
 

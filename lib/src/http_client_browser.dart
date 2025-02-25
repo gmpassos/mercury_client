@@ -1,10 +1,10 @@
 import 'dart:async';
-// ignore: deprecated_member_use
-import 'dart:html' as browser;
 import 'dart:typed_data';
 
 import 'package:collection/collection.dart';
+import 'package:js_interop_utils/js_interop_utils.dart';
 import 'package:swiss_knife/swiss_knife.dart';
+import 'package:web/web.dart' as web;
 
 import 'http_client.dart';
 import 'http_client_extension.dart';
@@ -45,31 +45,29 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
   bool setupUserAgent(String? userAgent) => false;
 
   @override
-  void stdout(Object? o) => browser.window.console.log(o);
+  void stdout(Object? o) => web.console.log(o?.jsify());
 
   @override
-  void stderr(Object? o) => browser.window.console.error(o);
+  void stderr(Object? o) => web.console.error(o?.jsify());
 
   @override
   Future<HttpResponse> doHttpRequest(HttpClient client, HttpRequest request,
       ProgressListener? progressListener, bool log) {
-    var completer = Completer<HttpResponse>();
-
-    var xhr = browser.HttpRequest();
-    xhr.responseType = 'arraybuffer';
-
     var methodName = getHttpMethodName(request.method, HttpMethod.GET)!;
-
     assert(RegExp(r'^(?:GET|OPTIONS|POST|PUT|DELETE|PATCH|HEAD)$')
         .hasMatch(methodName));
 
     var url = request.requestURL;
-
     if (log) {
       this.log('REQUEST: $request > URI: $url');
     }
 
-    xhr.open(methodName, url, async: true);
+    var completer = Completer<HttpResponse>();
+
+    var xhr = web.XMLHttpRequest();
+    xhr.responseType = 'arraybuffer';
+
+    xhr.open(methodName, url, true);
 
     xhr.withCredentials = request.withCredentials;
 
@@ -81,18 +79,23 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       xhr.overrideMimeType(request.mimeType!);
     }
 
-    if (request.requestHeaders != null) {
-      request.requestHeaders!.forEach((header, value) {
+    var requestHeaders = request.requestHeaders;
+    if (requestHeaders != null) {
+      for (var e in requestHeaders.entries) {
+        var header = e.key;
         if (!_isForbiddenRequestHeader(header)) {
           try {
-            xhr.setRequestHeader(header, value);
+            xhr.setRequestHeader(header, e.value);
           } catch (_) {}
         }
-      });
+      }
     }
 
     if (progressListener != null) {
-      xhr.upload.onProgress.listen((e) {
+      var uploadOnProgress =
+          web.EventStreamProviders.progressEvent.forTarget(xhr.upload);
+
+      uploadOnProgress.listen((e) {
         try {
           progressListener(request, e.loaded, e.total, _calcLoadRatio(e), true);
         } catch (e, s) {
@@ -123,7 +126,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
         }
       }
 
-      var status = xhr.status ?? 0;
+      var status = xhr.status;
 
       var accepted = status >= 200 && status < 300;
       var fileUri = status == 0; // file:// URIs have status of 0.
@@ -147,8 +150,9 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
           logError('REQUEST: $request > status: ${xhr.status}', e);
         }
 
+        var errorBody = HttpBody.from(xhr.response?.dartify());
         _completeOnError(completer, client, request, progressListener, log,
-            status, HttpBody.from(xhr.response)?.asString, e);
+            status, errorBody?.asString, e);
       }
     });
 
@@ -156,12 +160,13 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       if (log) {
         logError('REQUEST: $request > status: ${xhr.status}', e);
       }
+      var errorResponse = HttpBody.from(xhr.response?.dartify());
       _completeOnError(completer, client, request, progressListener, log,
-          xhr.status ?? 0, HttpBody.from(xhr.response)?.asString, e);
+          xhr.status, errorResponse?.asString, e);
     });
 
     if (request.sendData != null) {
-      xhr.send(request.sendData);
+      xhr.send(request.sendData?.jsify());
     } else {
       xhr.send();
     }
@@ -169,8 +174,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     return completer.future;
   }
 
-  double? _calcLoadRatio(browser.ProgressEvent e) =>
-      e.loaded == null || e.total == null ? null : e.loaded! / e.total!;
+  double? _calcLoadRatio(web.ProgressEvent e) => e.loaded / e.total;
 
   void _completeOnError(
       Completer<HttpResponse> originalRequestCompleter,
@@ -200,12 +204,15 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     }
   }
 
-  String _errorToString(dynamic error) {
+  String _errorToString(Object? error) {
     if (error == null) return '';
     if (error is String) return error;
-    if (error is browser.Event) {
-      return '{type: ${error.type} ; target: ${error.target} ; error: $error}';
+
+    if (error.asJSAny.isA<web.Event>()) {
+      var event = error as web.Event;
+      return '{type: ${event.type} ; target: ${event.target} ; error: $event}';
     }
+
     return '$error';
   }
 
@@ -310,10 +317,10 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
   }
 
   HttpResponse _processResponse(HttpClient client, HttpRequest request,
-      HttpMethod method, String url, browser.HttpRequest xhr) {
+      HttpMethod method, String url, web.XMLHttpRequest xhr) {
     var contentType = xhr.getResponseHeader('Content-Type');
-    var status = xhr.status ?? 0;
-    var body = xhr.response;
+    var status = xhr.status;
+    var body = xhr.response?.dartify();
     var irrelevantContent = (status >= 300 && status < 600);
 
     if (status == 204) {
@@ -328,8 +335,7 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       httpBody = HttpBody.from(null, MimeType.parse(contentType));
     }
 
-    var response = HttpResponse(
-        method, url, xhr.responseUrl ?? url, status, httpBody,
+    var response = HttpResponse(method, url, xhr.responseURL, status, httpBody,
         responseHeaderGetter: (key) => xhr.getResponseHeader(key),
         request: xhr,
         jsonDecoder: client.jsonDecoder);
@@ -363,11 +369,11 @@ HttpClientRequester createHttpClientRequesterImpl() {
 }
 
 Uri getHttpClientRuntimeUriImpl() {
-  var href = Uri.parse(browser.window.location.href);
+  var href = Uri.parse(web.window.location.href);
   return href;
 }
 
-class HttpBlobBrowser extends HttpBlob<browser.Blob> {
+class HttpBlobBrowser extends HttpBlob<web.Blob> {
   HttpBlobBrowser(super.blob, super.mimeType);
 
   @override
@@ -377,21 +383,39 @@ class HttpBlobBrowser extends HttpBlob<browser.Blob> {
   Future<ByteBuffer> readByteBuffer() {
     var completer = Completer<ByteBuffer>();
 
-    var reader = browser.FileReader();
+    var reader = web.FileReader();
 
     reader.onLoadEnd.listen((e) {
       var result = reader.result;
 
       ByteBuffer? data;
-      if (result is ByteBuffer) {
-        data = result;
-      } else if (result is String) {
-        data = result.toByteBuffer(encoding: mimeType?.preferredStringEncoding);
-      } else if (result is List<int>) {
-        if (result is TypedData) {
-          data = (result as TypedData).buffer;
+      if (result.isA<JSArrayBuffer>()) {
+        data = (result as JSArrayBuffer).toDart;
+      } else if (result.isA<JSString>()) {
+        data = (result as JSString)
+            .toDart
+            .toByteBuffer(encoding: mimeType?.preferredStringEncoding);
+      } else if (result.isA<JSArray>()) {
+        if (result.isA<JSUint8Array>()) {
+          data = (result as JSUint8Array).toDart.buffer;
+        } else if (result.isA<JSInt8Array>()) {
+          data = (result as JSInt8Array).toDart.buffer;
+        } else if (result.isA<JSUint8ClampedArray>()) {
+          data = (result as JSUint8ClampedArray).toDart.buffer;
+        } else if (result.isA<JSArray<JSNumber>>()) {
+          data = Uint8List.fromList((result as JSArray<JSNumber>)
+                  .toDart
+                  .map((e) => e.toDartInt)
+                  .toList())
+              .buffer;
         } else {
-          data = Uint8List.fromList(result).buffer;
+          data = Uint8List.fromList((result as JSArray)
+                  .toDart
+                  .map((e) =>
+                      e.isA<JSNumber>() ? (e as JSNumber).toDartInt : null)
+                  .nonNulls
+                  .toList())
+              .buffer;
         }
       }
       completer.complete(data);
@@ -406,9 +430,19 @@ class HttpBlobBrowser extends HttpBlob<browser.Blob> {
 HttpBlob? createHttpBlobImpl(Object? content, MimeType? mimeType) {
   if (content == null) return null;
   if (content is HttpBlob) return content;
-  if (content is browser.Blob) return HttpBlobBrowser(content, mimeType);
-  var blob = browser.Blob([content], mimeType.toString());
+
+  var jsAny = content.asJSAny;
+  if (jsAny == null) return null;
+
+  if (jsAny.isA<web.Blob>()) {
+    return HttpBlobBrowser(jsAny as web.Blob, mimeType);
+  }
+
+  var blob = mimeType != null
+      ? web.Blob([jsAny].toJS, web.BlobPropertyBag(type: mimeType.toString()))
+      : web.Blob([jsAny].toJS);
+
   return HttpBlobBrowser(blob, mimeType);
 }
 
-bool isHttpBlobImpl(Object? o) => o is HttpBlob || o is browser.Blob;
+bool isHttpBlobImpl(Object? o) => o is HttpBlob || o.asJSAny.isA<web.Blob>();

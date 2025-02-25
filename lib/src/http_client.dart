@@ -9,8 +9,8 @@ import 'package:swiss_knife/swiss_knife.dart';
 
 import 'http_client_extension.dart';
 import 'http_client_none.dart'
-    if (dart.library.html) 'http_client_browser.dart'
-    if (dart.library.io) 'http_client_io.dart';
+    if (dart.library.io) 'http_client_io.dart'
+    if (dart.library.js_interop) 'http_client_browser.dart';
 
 typedef ResponseHeaderGetter = String? Function(String headerKey);
 
@@ -1354,7 +1354,7 @@ class HttpRequest {
   }
 
   /// Data/body to send with the request.
-  dynamic get sendData => _sendData;
+  Object? get sendData => _sendData;
 
   /// [sendData] length in bytes.
   int? get sendDataLength => _sendDataLength();
