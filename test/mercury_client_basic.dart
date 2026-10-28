@@ -32,6 +32,24 @@ void doBasicTests(TestServerChannel testServerChannel) {
       await testServerChannel.close();
     });
 
+    test('HttpStatus: 4xx errors', () {
+      bool isError(int status) =>
+          HttpStatus('http://localhost/', 'http://localhost/', status).isError;
+
+      for (var status in [
+        400, 401, 402, 403, //
+        for (var s = 405; s <= 418; ++s) s,
+        421, 422, 423, 424, 425, 426, 428, 431, 451,
+      ]) {
+        expect(isError(status), isTrue, reason: '$status');
+      }
+
+      // An absent resource, and too many requests: not errors.
+      for (var status in [404, 429]) {
+        expect(isError(status), isFalse, reason: '$status');
+      }
+    });
+
     test('HttpRequest', () async {
       {
         var client = HttpClient('http://foo.com/');
@@ -337,6 +355,27 @@ void doBasicTests(TestServerChannel testServerChannel) {
 
       var responseJSON = await client.getJSON('foo/404');
       expect(responseJSON, isNull);
+    });
+
+    test('Method GET - 401', () async {
+      await testServerChannel.waitOpen();
+
+      var client =
+          HttpClient('http://localhost:${testServerChannel.serverPort}/tests');
+
+      var response = await client.get('foo/401');
+
+      expect(response.isOK, isFalse);
+      expect(response.isNotOK, isTrue);
+      expect(response.isError, isTrue);
+      expect(response.status, equals(401));
+
+      expect(response.isStatusUnauthenticated, isTrue);
+      expect(response.isStatusForbidden, isFalse);
+      expect(response.isStatusError, isTrue);
+      expect(response.isStatusAccessError, isTrue);
+      expect(response.isStatusServerError, isFalse);
+      expect(response.isStatusNetworkError, isFalse);
     });
 
     test('Method GET - 500', () async {

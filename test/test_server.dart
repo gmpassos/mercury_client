@@ -57,6 +57,8 @@ class TestServer {
   Future _processTestRequest(io.HttpRequest request) async {
     if (request.method == 'GET' && request.uri.path.contains('404')) {
       return _processTestRequestStatus(request, 404);
+    } else if (request.method == 'GET' && request.uri.path.contains('401')) {
+      return _processTestRequestStatus(request, 401);
     } else if (request.method == 'GET' && request.uri.path.contains('500')) {
       return _processTestRequestStatus(request, 500);
     } else {
