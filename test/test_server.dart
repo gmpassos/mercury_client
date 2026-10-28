@@ -58,6 +58,10 @@ class TestServer {
     if (request.method == 'GET' && request.uri.path.contains('404')) {
       return _processTestRequestStatus(request, 404);
     } else if (request.method == 'GET' && request.uri.path.contains('401')) {
+      // `401-slow`: answered later (e.g. after another request's `401`).
+      if (request.uri.path.contains('slow')) {
+        await Future.delayed(Duration(milliseconds: 400));
+      }
       return _processTestRequestStatus(request, 401);
     } else if (request.method == 'GET' && request.uri.path.contains('500')) {
       return _processTestRequestStatus(request, 500);

@@ -230,10 +230,11 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
 
     if (httpError.isOAuthAuthorizationError) return false;
 
-    // A `0` can also be a `401` without CORS headers (the browser hides it):
-    // first the authorization provider. A `401` is only for it; a `0` not
-    // handled by it (no provider, or a static credential) is a network issue:
-    // a network retry (`0` or `504`).
+    // A `401` and a `0` first go to the authorization provider (a `0` retried
+    // by it uses the same credential: it can't tell a `401` hidden by the
+    // browser, without CORS headers, from a network error). A `401` is only
+    // for it; a `0` not handled by it (no provider, or a static credential)
+    // is a network issue ([_checkForRetryNetworkIssue]).
     if (status == 0 || status == 401) {
       var handled = await _checkForRetryAuthorizationProvider(
           originalRequestCompleter,
@@ -249,6 +250,16 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
         progressListener, log, status, httpError);
   }
 
+  /// The [HttpMethod]s retried after a network error (status `0`): only the
+  /// safe ones. A `0` may also be a connection lost after the server
+  /// processed the request: a `POST`, `PUT`, `PATCH` or `DELETE` sent again
+  /// could be applied twice.
+  static const networkErrorRetryMethods = {
+    HttpMethod.GET,
+    HttpMethod.HEAD,
+    HttpMethod.OPTIONS,
+  };
+
   Future<bool> _checkForRetryNetworkIssue(
       Completer<HttpResponse> originalRequestCompleter,
       HttpClient client,
@@ -257,8 +268,16 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       bool log,
       int status,
       HttpError httpError) async {
-    if (status == 0 || status == 504) {
+    if (status == 504) {
       request.incrementRetries();
+      return _retryRequest(
+          originalRequestCompleter, client, request, progressListener, log);
+    }
+
+    if (status == 0 && networkErrorRetryMethods.contains(request.method)) {
+      request.incrementRetries();
+      // Not at once: a network error usually lasts a moment.
+      await Future.delayed(Duration(milliseconds: 200 * request.retries));
       return _retryRequest(
           originalRequestCompleter, client, request, progressListener, log);
     }
@@ -276,7 +295,13 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     var authorization = request.authorization;
 
     if (authorization != null && !authorization.isStaticCredential) {
-      var credential = await authorization.resolveCredential(client, httpError);
+      // Already resolved again by another rejected request: retried with it,
+      // without resolving it again (that could discard a valid credential, or
+      // invalidate it with a provider rotating its tokens).
+      var current = authorization.tryResolvedCredential;
+      var credential = current != null && !_isSentCredential(request, current)
+          ? current
+          : await authorization.resolveCredential(client, httpError);
 
       if (credential != null) {
         request.incrementRetries();
@@ -301,6 +326,16 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     }
 
     return false;
+  }
+
+  /// Whether [request] was sent with [credential]: its `Authorization`
+  /// header. A credential not in that header (in the URL or the body) can't
+  /// be compared: taken as sent.
+  static bool _isSentCredential(HttpRequest request, Credential credential) {
+    if (!credential.usesAuthorizationHeader) return true;
+
+    var sent = request.requestHeaders?['Authorization'];
+    return sent == null || sent == credential.buildAuthorizationHeaderLine();
   }
 
   Future<bool> _retryRequest(

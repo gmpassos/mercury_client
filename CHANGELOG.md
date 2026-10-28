@@ -1,13 +1,20 @@
 ## 2.3.2
 
 - Browser client retries:
-  - A network error (status `0`) is retried again (up to 3 times, like a
-    `504`). It was sent only to the authorization retry, which doesn't retry
-    without an authorization provider (or with a static credential), so it
-    was never retried.
+  - A network error (status `0`) is retried again, up to 3 times (after 200,
+    400 and 600 ms), but only for a `GET`, `HEAD` or `OPTIONS`
+    (`networkErrorRetryMethods`): a `0` may be a connection lost after the
+    server processed the request, and a `POST`, `PUT`, `PATCH` or `DELETE`
+    sent again could be applied twice. It was sent only to the authorization
+    retry, which doesn't retry without an authorization provider (or with a
+    static credential), so it was never retried.
   - A `401` with an authorization provider (`Authorization.fromProvider`):
     its retry uses a new credential. `resolveCredential` returned the cached,
     rejected one, so the provider was never called again.
+  - Concurrent requests rejected (`401`) with the same credential: resolved
+    again only once. A retry uses the credential already resolved again by
+    another request (compared with its `Authorization` header), instead of
+    discarding it and calling the provider again.
 - `Authorization.resolveCredential`: a `lastError` with status `401` (a
   rejected credential) resolves it again (a resolvable `Authorization`),
   calling the provider with it.

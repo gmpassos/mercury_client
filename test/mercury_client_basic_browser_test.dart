@@ -131,5 +131,57 @@ void main() {
       // static copy of it, so a `401` again isn't retried.
       expect(lastErrorsStatus, equals([null, 401]));
     });
+
+    test('401 of concurrent requests: resolved again only once', () async {
+      await testServerChannel.waitOpen();
+
+      var lastErrorsStatus = <int?>[];
+
+      var client =
+          HttpClient('http://localhost:${testServerChannel.serverPort}/tests')
+            ..authorization =
+                Authorization.fromProvider((client, lastError) async {
+              lastErrorsStatus.add(lastError?.status);
+              await Future.delayed(Duration(milliseconds: 50));
+              return BearerCredential('token-${lastErrorsStatus.length}');
+            });
+
+      // Resolved before the requests (both sent with the same credential):
+      await client.get('foo');
+      expect(lastErrorsStatus, equals([null]));
+
+      // The second rejected after the first's credential was resolved again:
+      var responses = await Future.wait([
+        client.get('foo/401'),
+        client.get('foo/401-slow'),
+      ]);
+      expect(responses.map((r) => r.status), equals([401, 401]));
+
+      // Both rejected, but resolved again only once: the second retry uses
+      // the credential already resolved again by the first (not discarding
+      // it, resolving a third one).
+      expect(lastErrorsStatus, equals([null, 401]));
+    });
+
+    test('network error (0): only safe methods are retried', () async {
+      // Port 1: refused by the browser (an unsafe port), a status `0`.
+      var client = HttpClient('http://localhost:1/');
+
+      var getInit = DateTime.now();
+      var getResponse = await client.get('foo');
+      var getTime = DateTime.now().difference(getInit);
+
+      expect(getResponse.status, equals(0));
+      // 3 retries, after 200, 400 and 600 ms:
+      expect(getTime.inMilliseconds, greaterThanOrEqualTo(1200));
+
+      var postInit = DateTime.now();
+      var postResponse = await client.post('foo', body: 'x');
+      var postTime = DateTime.now().difference(postInit);
+
+      expect(postResponse.status, equals(0));
+      // Not retried (it could be applied twice):
+      expect(postTime.inMilliseconds, lessThan(1200));
+    });
   });
 }
