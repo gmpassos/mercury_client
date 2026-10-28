@@ -56,16 +56,17 @@ class HttpStatus {
   bool get isStatusServerError => isStatusInRange(500, 599);
 
   /// Returns [true] if is a client error status (the request refused as
-  /// sent): 405..418 OR 421..426 OR IN [400, 401, 402, 403, 428, 431, 451].
+  /// sent): 400..403 OR 405..418 OR 421..426 OR IN [428, 431, 451].
   ///
   /// - A `401` (not authenticated, see [isStatusUnauthenticated]) is an error
   ///   too, like a `403`.
   /// - Not a `404` ([isStatusNotFound]: an absent resource, not an error) nor
   ///   a `429` (too many requests).
   bool get isStatusAccessError =>
+      isStatusInRange(400, 403) ||
       isStatusInRange(405, 418) ||
       isStatusInRange(421, 426) ||
-      isStatusInList([400, 401, 402, 403, 428, 431, 451]);
+      isStatusInList([428, 431, 451]);
 
   /// Returns [true] if any error happens: [isStatusNetworkError] || [isStatusServerError] || [isStatusAccessError]
   bool get isStatusError =>
