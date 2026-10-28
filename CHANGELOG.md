@@ -8,6 +8,9 @@
     sent again could be applied twice. It was sent only to the authorization
     retry, which doesn't retry without an authorization provider (or with a
     static credential), so it was never retried.
+    - With an authorization provider, a `0` of any method is still retried
+      once by the authorization retry (a `401` without CORS headers is also a
+      `0` in a browser).
   - A `401` with an authorization provider (`Authorization.fromProvider`):
     its retry uses a new credential. `resolveCredential` returned the cached,
     rejected one, so the provider was never called again.

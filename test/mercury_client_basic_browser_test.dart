@@ -163,6 +163,21 @@ void main() {
       expect(lastErrorsStatus, equals([null, 401]));
     });
 
+    test('504: retried (any method)', () async {
+      await testServerChannel.waitOpen();
+
+      var client =
+          HttpClient('http://localhost:${testServerChannel.serverPort}/tests');
+
+      // A `504` the first time, then OK: the retry gets the OK.
+      var get = await client.get('504-once', parameters: {'id': 'get'});
+      expect(get.status, equals(200));
+
+      var post = await client.post('504-once',
+          parameters: {'id': 'post'}, body: 'x', contentType: 'text/plain');
+      expect(post.status, equals(200));
+    });
+
     test('network error (0): only safe methods are retried', () async {
       // Port 1: refused by the browser (an unsafe port), a status `0`.
       var client = HttpClient('http://localhost:1/');
