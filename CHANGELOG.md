@@ -21,6 +21,20 @@
 - `Authorization.resolveCredential`: a `lastError` with status `401` (a
   rejected credential) resolves it again (a resolvable `Authorization`),
   calling the provider with it.
+- Fix: `HttpBody.bytesToString`: a `LATIN-1` charset decoded the bytes as
+  UTF-8 (wrong characters, or an error, for bytes above `0x7F`).
+- Fix: `HttpRequest.headerAccept`: read the header `Content-Accept` (always
+  `null`) instead of `Accept`.
+- Tests:
+  - Unit tests (`mercury_client_unit_test.dart`, VM and browser): HTTP
+    methods, URLs, statuses, credentials, `Authorization`, `HttpBody`,
+    `HttpRequest`, extensions, `HttpClient` / `HttpCall` / `HttpCache` /
+    `HttpRequester` with `HttpClientRequesterSimulation`.
+  - Integration tests against the test server (`echo`, `token`,
+    `504-once`): credentials as received, `autoChangeAuthorizationToBearerToken`,
+    headers, `PUT` / `PATCH` / `DELETE`, interceptor, `HttpCache`, and the
+    browser retries.
+  - VM line coverage: 46.5% → 78.0%.
 
 ## 2.3.1
 

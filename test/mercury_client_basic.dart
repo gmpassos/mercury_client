@@ -745,8 +745,11 @@ void doBasicTests(TestServerChannel testServerChannel) {
       expect(client.hasInterceptor, isTrue);
 
       var processed = <HttpResponse>[];
-      client.responseProcessor =
-          (client, request, response) => processed.add(response);
+      var requests = <Object>[];
+      client.responseProcessor = (client, request, response) {
+        requests.add(request);
+        processed.add(response);
+      };
 
       var echo = await client.getJSON('echo');
 
@@ -754,6 +757,10 @@ void doBasicTests(TestServerChannel testServerChannel) {
       expect(echo['x-test'], equals('intercepted'));
       expect(interceptor.filteredResponses, equals(1));
       expect(processed, hasLength(1));
+
+      // The platform's request (an `XMLHttpRequest` in a browser, the
+      // response of `dart:io` in the VM):
+      expect(requests, hasLength(1));
     });
 
     test('HttpCache: cached responses', () async {

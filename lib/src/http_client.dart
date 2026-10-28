@@ -299,7 +299,7 @@ class HttpBody {
       if (mimeType.isCharsetUTF8) {
         return utf8.decode(bytes);
       } else if (mimeType.isCharsetLATIN1) {
-        return utf8.decode(bytes);
+        return latin1.decode(bytes);
       } else if (mimeType.isCharsetUTF16) {
         return utf16.decode(bytes);
       } else {
@@ -1423,7 +1423,7 @@ class HttpRequest {
 
   /// Returns the header: Accept
   String? get headerAccept =>
-      _getMapValueKeyIgnoreCase(requestHeaders, 'Content-Accept');
+      _getMapValueKeyIgnoreCase(requestHeaders, 'Accept');
 
   static const _headerKeyContentType = 'Content-Type';
 
