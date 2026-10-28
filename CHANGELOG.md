@@ -1,3 +1,10 @@
+## 2.3.3
+
+- CI (GitHub Actions):
+  - `actions/checkout`: `v3` -> `v7`.
+  - `codecov/codecov-action`: `v3` -> `v7` (token passed as the `token`
+    input).
+
 ## 2.3.2
 
 - Browser client retries:
