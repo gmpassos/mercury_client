@@ -55,9 +55,12 @@ class HttpStatus {
   /// Returns [true] if is a server error status: from range 500 to 599.
   bool get isStatusServerError => isStatusInRange(500, 599);
 
-  /// Returns [true] if is a Access Error status: 405..418 OR IN [400, 403, 431, 451].
+  /// Returns [true] if is a Access Error status: 405..418 OR IN [400, 401, 403, 431, 451].
+  ///
+  /// A `401` (not authenticated, see [isStatusUnauthenticated]) is an access
+  /// error too, like a `403`.
   bool get isStatusAccessError =>
-      isStatusInRange(405, 418) || isStatusInList([400, 403, 431, 451]);
+      isStatusInRange(405, 418) || isStatusInList([400, 401, 403, 431, 451]);
 
   /// Returns [true] if any error happens: [isStatusNetworkError] || [isStatusServerError] || [isStatusAccessError]
   bool get isStatusError =>

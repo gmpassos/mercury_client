@@ -1,3 +1,10 @@
+## 2.3.1
+
+- `HttpStatus.isStatusAccessError`: a `401` (not authenticated) is now an
+  access error, like a `403`, so `isStatusError` / `isError` are `true` for it.
+  A client treating only `isError` responses as errors took a `401` as a
+  successful response with no content.
+
 ## 2.3.0
 
 - Change use of `dart:html` to package `web`.

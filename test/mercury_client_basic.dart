@@ -339,6 +339,27 @@ void doBasicTests(TestServerChannel testServerChannel) {
       expect(responseJSON, isNull);
     });
 
+    test('Method GET - 401', () async {
+      await testServerChannel.waitOpen();
+
+      var client =
+          HttpClient('http://localhost:${testServerChannel.serverPort}/tests');
+
+      var response = await client.get('foo/401');
+
+      expect(response.isOK, isFalse);
+      expect(response.isNotOK, isTrue);
+      expect(response.isError, isTrue);
+      expect(response.status, equals(401));
+
+      expect(response.isStatusUnauthenticated, isTrue);
+      expect(response.isStatusForbidden, isFalse);
+      expect(response.isStatusError, isTrue);
+      expect(response.isStatusAccessError, isTrue);
+      expect(response.isStatusServerError, isFalse);
+      expect(response.isStatusNetworkError, isFalse);
+    });
+
     test('Method GET - 500', () async {
       await testServerChannel.waitOpen();
 
