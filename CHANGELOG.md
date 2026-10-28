@@ -1,3 +1,41 @@
+## 2.3.2
+
+- Browser client retries:
+  - A network error (status `0`) is retried again, up to 3 times (after 200,
+    400 and 600 ms), but only for a `GET`, `HEAD` or `OPTIONS`
+    (`networkErrorRetryMethods`): a `0` may be a connection lost after the
+    server processed the request, and a `POST`, `PUT`, `PATCH` or `DELETE`
+    sent again could be applied twice. It was sent only to the authorization
+    retry, which doesn't retry without an authorization provider (or with a
+    static credential), so it was never retried.
+    - With an authorization provider, a `0` of any method is still retried
+      once by the authorization retry (a `401` without CORS headers is also a
+      `0` in a browser).
+  - A `401` with an authorization provider (`Authorization.fromProvider`):
+    its retry uses a new credential. `resolveCredential` returned the cached,
+    rejected one, so the provider was never called again.
+  - Concurrent requests rejected (`401`) with the same credential: resolved
+    again only once. A retry uses the credential already resolved again by
+    another request (compared with its `Authorization` header), instead of
+    discarding it and calling the provider again.
+- `Authorization.resolveCredential`: a `lastError` with status `401` (a
+  rejected credential) resolves it again (a resolvable `Authorization`),
+  calling the provider with it.
+- Fix: `HttpBody.bytesToString`: a `LATIN-1` charset decoded the bytes as
+  UTF-8 (wrong characters, or an error, for bytes above `0x7F`).
+- Fix: `HttpRequest.headerAccept`: read the header `Content-Accept` (always
+  `null`) instead of `Accept`.
+- Tests:
+  - Unit tests (`mercury_client_unit_test.dart`, VM and browser): HTTP
+    methods, URLs, statuses, credentials, `Authorization`, `HttpBody`,
+    `HttpRequest`, extensions, `HttpClient` / `HttpCall` / `HttpCache` /
+    `HttpRequester` with `HttpClientRequesterSimulation`.
+  - Integration tests against the test server (`echo`, `token`,
+    `504-once`): credentials as received, `autoChangeAuthorizationToBearerToken`,
+    headers, `PUT` / `PATCH` / `DELETE`, interceptor, `HttpCache`, and the
+    browser retries.
+  - VM line coverage: 46.5% → 78.0%.
+
 ## 2.3.1
 
 - `HttpStatus.isStatusAccessError`: now also `401` (not authenticated), `402`,

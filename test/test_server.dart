@@ -54,16 +54,75 @@ class TestServer {
     await request.response.close();
   }
 
+  /// The IDs already answered by `504-once`.
+  final Set<String> _answered504 = {};
+
   Future _processTestRequest(io.HttpRequest request) async {
+    var path = request.uri.path;
+
+    if (request.method != 'OPTIONS') {
+      if (path.endsWith('/echo')) {
+        return _processTestRequestEcho(request);
+      } else if (path.endsWith('/token')) {
+        return _processTestRequestToken(request);
+      } else if (path.endsWith('/504-once')) {
+        // A `504` the first time for an `id`, then OK.
+        var id = request.uri.queryParameters['id'] ?? '';
+        if (_answered504.add(id)) {
+          return _processTestRequestStatus(request, 504);
+        }
+        return _processTestRequestOK(request);
+      }
+    }
+
     if (request.method == 'GET' && request.uri.path.contains('404')) {
       return _processTestRequestStatus(request, 404);
     } else if (request.method == 'GET' && request.uri.path.contains('401')) {
+      // `401-slow`: answered later (e.g. after another request's `401`).
+      if (request.uri.path.contains('slow')) {
+        await Future.delayed(Duration(milliseconds: 400));
+      }
       return _processTestRequestStatus(request, 401);
     } else if (request.method == 'GET' && request.uri.path.contains('500')) {
       return _processTestRequestStatus(request, 500);
     } else {
       return _processTestRequestOK(request);
     }
+  }
+
+  /// Answers with the request: method, query parameters, the `Authorization`
+  /// and `X-Test` headers, the `Content-Type` and the body (JSON).
+  Future _processTestRequestEcho(io.HttpRequest request) async {
+    var contentType = request.headers.contentType;
+    var body = await _decodeBody(contentType, request);
+
+    var response = jsonEncode({
+      'method': request.method,
+      'query': request.uri.queryParameters,
+      'authorization': request.headers.value('Authorization'),
+      'x-test': request.headers.value('X-Test'),
+      'contentType': contentType?.mimeType,
+      'body': body,
+    });
+
+    request.response.statusCode = 200;
+    _setResponseCORS(request);
+    request.response.headers
+        .add('Content-Type', 'application/json', preserveHeaderCase: true);
+    request.response.write(response);
+    await request.response.close();
+  }
+
+  /// Answers with a token in the header `X-Access-Token`.
+  Future _processTestRequestToken(io.HttpRequest request) async {
+    request.response.statusCode = 200;
+    _setResponseCORS(request);
+    request.response.headers
+        .add('X-Access-Token', 'TK-SERVER', preserveHeaderCase: true);
+    request.response.headers
+        .add('Content-Type', 'text/plain', preserveHeaderCase: true);
+    request.response.write('token');
+    await request.response.close();
   }
 
   Future _processTestRequestOK(io.HttpRequest request) async {
@@ -135,7 +194,7 @@ class TestServer {
     request.response.headers.add('Access-Control-Allow-Credentials', 'true');
 
     request.response.headers.add('Access-Control-Allow-Headers',
-        'Content-Type, Access-Control-Allow-Headers, Authorization, x-ijt');
+        'Content-Type, Access-Control-Allow-Headers, Authorization, x-ijt, X-Test');
     request.response.headers.add('Access-Control-Expose-Headers',
         'Content-Length, Content-Type, Last-Modified, X-Access-Token, X-Access-Token-Expiration');
   }

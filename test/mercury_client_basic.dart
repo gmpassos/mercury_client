@@ -50,6 +50,36 @@ void doBasicTests(TestServerChannel testServerChannel) {
       }
     });
 
+    test('Authorization.fromProvider: resolved again after a 401', () async {
+      var calls = 0;
+      var authorization = Authorization.fromProvider((client, lastError) async {
+        calls++;
+        return BearerCredential('token-$calls');
+      });
+
+      var client = HttpClient('http://localhost/');
+
+      HttpError error(int status) => HttpError(
+          'http://localhost/', 'http://localhost/', status, 'error', null);
+
+      var credential = await authorization.resolveCredential(client, null);
+      expect((credential as BearerCredential).token, equals('token-1'));
+
+      // Cached: no error, or an error that isn't a rejected credential.
+      expect(await authorization.resolveCredential(client, null),
+          same(credential));
+      expect(await authorization.resolveCredential(client, error(500)),
+          same(credential));
+      expect(calls, equals(1));
+
+      // A `401`: the credential was rejected, resolved again.
+      var credential2 =
+          await authorization.resolveCredential(client, error(401));
+      expect((credential2 as BearerCredential).token, equals('token-2'));
+      expect(calls, equals(2));
+      expect(authorization.resolvedCredential, same(credential2));
+    });
+
     test('HttpRequest', () async {
       {
         var client = HttpClient('http://foo.com/');
@@ -608,4 +638,175 @@ void doBasicTests(TestServerChannel testServerChannel) {
       }
     });
   });
+
+  // Against the test server: what the server actually receives (`echo`).
+  group('HttpClient (integration)', () {
+    setUp(() async {
+      await testServerChannel.initialize();
+      await testServerChannel.start();
+    });
+
+    tearDown(() async {
+      await testServerChannel.close();
+    });
+
+    Future<HttpClient> newClient() async {
+      await testServerChannel.waitOpen();
+      return HttpClient(
+          'http://localhost:${testServerChannel.serverPort}/tests');
+    }
+
+    test('credentials: header, query string and JSON body', () async {
+      var client = await newClient();
+
+      var basic = await client.getJSON('echo',
+          authorization: BasicCredential('joe', 'p4ss'));
+      expect(
+          basic['authorization'],
+          equals(
+              BasicCredential('joe', 'p4ss').buildAuthorizationHeaderLine()));
+
+      var bearer =
+          await client.getJSON('echo', authorization: BearerCredential('TK1'));
+      expect(bearer['authorization'], equals('Bearer TK1'));
+
+      var query = await client.getJSON('echo',
+          authorization: QueryStringCredential({'api_key': 'K1'}));
+      expect(query['authorization'], isNull);
+      expect(query['query'], equals({'api_key': 'K1'}));
+
+      var jsonBody = await client.postJSON('echo',
+          authorization: JSONBodyCredential('auth', 'S1'), body: {'a': 1});
+      expect(jsonBody['authorization'], isNull);
+      expect(jsonDecode(jsonBody['body']), equals({'a': 1, 'auth': 'S1'}));
+
+      // The client's authorization, for every request:
+      client.authorization =
+          Authorization.fromCredential(BearerCredential('TK2'));
+      var clientAuth = await client.getJSON('echo');
+      expect(clientAuth['authorization'], equals('Bearer TK2'));
+    });
+
+    test('autoChangeAuthorizationToBearerToken', () async {
+      var client = (await newClient())
+          .autoChangeAuthorizationToBearerToken('X-Access-Token');
+      expect(client.responseHeaderWithToken, equals('X-Access-Token'));
+
+      var resolved = <Authorization?>[];
+      client.authorizationResolutionInterceptor = resolved.add;
+
+      var response = await client.get('token');
+      expect(response.isOK, isTrue);
+      expect(response.getResponseHeader('X-Access-Token'), equals('TK-SERVER'));
+
+      // The token of the response, from now on:
+      expect(client.authorization?.resolvedCredential, isA<BearerCredential>());
+      var echo = await client.getJSON('echo');
+      expect(echo['authorization'], equals('Bearer TK-SERVER'));
+      expect(resolved, isNotEmpty);
+    });
+
+    test('headers: per request and requestHeadersBuilder', () async {
+      var client = await newClient();
+
+      var perRequest =
+          await client.getJSON('echo', headers: {'X-Test': 'request'});
+      expect(perRequest['x-test'], equals('request'));
+
+      client.requestHeadersBuilder = (client, url) => {'X-Test': 'builder'};
+      var built = await client.getJSON('echo');
+      expect(built['x-test'], equals('builder'));
+    });
+
+    test('methods: PUT, PATCH and DELETE with a body', () async {
+      var client = await newClient();
+
+      for (var method in [
+        HttpMethod.PUT,
+        HttpMethod.PATCH,
+        HttpMethod.DELETE
+      ]) {
+        var response = await client.request(method, 'echo',
+            body: '{"m":"${method.name}"}', contentType: 'application/json');
+        expect(response.isOK, isTrue, reason: method.name);
+
+        var echo = response.json;
+        expect(echo['method'], equals(method.name));
+        expect(echo['contentType'], equals('application/json'));
+        expect(echo['body'], equals('{"m":"${method.name}"}'));
+      }
+    });
+
+    test('interceptor and responseProcessor', () async {
+      var client = await newClient();
+
+      var interceptor = _TestInterceptor();
+      client.interceptor = interceptor;
+      expect(client.hasInterceptor, isTrue);
+
+      var processed = <HttpResponse>[];
+      var requests = <Object>[];
+      client.responseProcessor = (client, request, response) {
+        requests.add(request);
+        processed.add(response);
+      };
+
+      var echo = await client.getJSON('echo');
+
+      // The header added by the interceptor was sent:
+      expect(echo['x-test'], equals('intercepted'));
+      expect(interceptor.filteredResponses, equals(1));
+      expect(processed, hasLength(1));
+
+      // The platform's request (an `XMLHttpRequest` in a browser, the
+      // response of `dart:io` in the VM):
+      expect(requests, hasLength(1));
+    });
+
+    test('HttpCache: cached responses', () async {
+      var client = await newClient();
+      var cache = HttpCache(maxCacheMemory: 1024 * 64);
+
+      expect(cache.getCachedRequest(client, HttpMethod.GET, 'echo'), isNull);
+
+      var response1 = await cache.get(client, 'echo');
+      expect(response1.isOK, isTrue);
+
+      var cached = cache.getCachedRequest(client, HttpMethod.GET, 'echo');
+      expect(cached, same(response1));
+
+      var response2 = await cache.get(client, 'echo');
+      expect(response2, same(response1));
+
+      expect(cache.calculateCacheUsedMemory(), greaterThan(0));
+
+      var json = await cache.getJSON(client, 'json', parameters: {'x': '1'});
+      expect(
+          json,
+          equals({
+            'parameters': {'x': '1'}
+          }));
+
+      expect(cache.clearCache(), greaterThan(0));
+      expect(cache.getCachedRequest(client, HttpMethod.GET, 'echo'), isNull);
+    });
+  });
+}
+
+/// Adds the header `X-Test` to every request, and counts the responses.
+class _TestInterceptor extends HttpClientInterceptor {
+  int filteredResponses = 0;
+
+  @override
+  String? filterRequest(HttpClient client, HttpMethod method, String url,
+      Map<String, String>? headers) {
+    headers?['X-Test'] = 'intercepted';
+    return null;
+  }
+
+  @override
+  HttpResponse? filterResponse(HttpClient client, HttpResponse response) {
+    filteredResponses++;
+    return null;
+  }
 }
