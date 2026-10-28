@@ -1,9 +1,11 @@
 ## 2.3.1
 
-- `HttpStatus.isStatusAccessError`: a `401` (not authenticated) is now an
-  access error, like a `403`, so `isStatusError` / `isError` are `true` for it.
-  A client treating only `isError` responses as errors took a `401` as a
-  successful response with no content.
+- `HttpStatus.isStatusAccessError`: now also `401` (not authenticated), `402`,
+  `421`, `422`, `423`, `424`, `425`, `426` and `428`, so `isStatusError` /
+  `isError` are `true` for them. A client treating only `isError` responses as
+  errors took them as a successful response with no content (e.g. a `401` of
+  a lost login).
+  - Still not errors: `404` (an absent resource) and `429`.
 
 ## 2.3.0
 
