@@ -707,6 +707,10 @@ abstract class Authorization {
   /// Resolves the actual [Credential] for the [HttpRequest].
   /// This method should cache the last resolved [Credential]
   /// and avoid unnecessary resolving procedures.
+  ///
+  /// A [lastError] of a rejected credential (`401`) means the cached one is
+  /// no longer valid: a resolvable (not static) [Authorization] resolves it
+  /// again.
   Future<Credential?> resolveCredential(
       HttpClient client, HttpError? lastError);
 
@@ -798,10 +802,20 @@ class _AuthorizationResolvable extends Authorization {
   bool get isResolvingCredential => _resolveFuture != null;
 
   /// Resolve the actual [Credential] for the [HttpRequest].
+  ///
+  /// The cached [Credential] is returned, unless [lastError] is a `401` (the
+  /// credential was rejected): then the [authorizationProvider] is called
+  /// again (with [lastError]), instead of retrying with the same credential.
   @override
   Future<Credential?> resolveCredential(
       HttpClient client, HttpError? lastError) async {
-    if (_resolvedCredential != null) return _resolvedCredential;
+    if (_resolvedCredential != null) {
+      if (lastError == null || !lastError.isStatusUnauthenticated) {
+        return _resolvedCredential;
+      }
+
+      _resolvedCredential = null;
+    }
 
     if (_resolveFuture != null) {
       try {

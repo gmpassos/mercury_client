@@ -50,6 +50,36 @@ void doBasicTests(TestServerChannel testServerChannel) {
       }
     });
 
+    test('Authorization.fromProvider: resolved again after a 401', () async {
+      var calls = 0;
+      var authorization = Authorization.fromProvider((client, lastError) async {
+        calls++;
+        return BearerCredential('token-$calls');
+      });
+
+      var client = HttpClient('http://localhost/');
+
+      HttpError error(int status) => HttpError(
+          'http://localhost/', 'http://localhost/', status, 'error', null);
+
+      var credential = await authorization.resolveCredential(client, null);
+      expect((credential as BearerCredential).token, equals('token-1'));
+
+      // Cached: no error, or an error that isn't a rejected credential.
+      expect(await authorization.resolveCredential(client, null),
+          same(credential));
+      expect(await authorization.resolveCredential(client, error(500)),
+          same(credential));
+      expect(calls, equals(1));
+
+      // A `401`: the credential was rejected, resolved again.
+      var credential2 =
+          await authorization.resolveCredential(client, error(401));
+      expect((credential2 as BearerCredential).token, equals('token-2'));
+      expect(calls, equals(2));
+      expect(authorization.resolvedCredential, same(credential2));
+    });
+
     test('HttpRequest', () async {
       {
         var client = HttpClient('http://foo.com/');

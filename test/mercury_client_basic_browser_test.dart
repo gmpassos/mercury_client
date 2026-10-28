@@ -4,6 +4,7 @@ library;
 import 'dart:async';
 
 import 'package:async/async.dart';
+import 'package:mercury_client/mercury_client.dart';
 import 'package:stream_channel/stream_channel.dart';
 import 'package:test/test.dart';
 
@@ -93,5 +94,42 @@ class BrowserTestServerChannel implements TestServerChannel {
 }
 
 void main() {
-  doBasicTests(BrowserTestServerChannel());
+  var testServerChannel = BrowserTestServerChannel();
+
+  doBasicTests(testServerChannel);
+
+  // Only the browser client retries a request.
+  group('HttpClient (browser retries)', () {
+    setUp(() async {
+      await testServerChannel.initialize();
+      await testServerChannel.start();
+    });
+
+    tearDown(() async {
+      await testServerChannel.close();
+    });
+
+    test('401 with an authorization provider: a new credential per retry',
+        () async {
+      await testServerChannel.waitOpen();
+
+      var lastErrorsStatus = <int?>[];
+
+      var client =
+          HttpClient('http://localhost:${testServerChannel.serverPort}/tests')
+            ..authorization =
+                Authorization.fromProvider((client, lastError) async {
+              lastErrorsStatus.add(lastError?.status);
+              return BearerCredential('token-${lastErrorsStatus.length}');
+            });
+
+      var response = await client.get('foo/401');
+      expect(response.status, equals(401));
+
+      // Resolved for the request, then again (with the `401`) for its retry:
+      // a new credential, not the rejected one. The retried request has a
+      // static copy of it, so a `401` again isn't retried.
+      expect(lastErrorsStatus, equals([null, 401]));
+    });
+  });
 }

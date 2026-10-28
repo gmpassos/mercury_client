@@ -230,13 +230,23 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
 
     if (httpError.isOAuthAuthorizationError) return false;
 
+    // A `0` can also be a `401` without CORS headers (the browser hides it):
+    // first the authorization provider. A `401` is only for it; a `0` not
+    // handled by it (no provider, or a static credential) is a network issue:
+    // a network retry (`0` or `504`).
     if (status == 0 || status == 401) {
-      return _checkForRetryAuthorizationProvider(originalRequestCompleter,
-          client, request, progressListener, log, httpError);
-    } else {
-      return _checkForRetryNetworkIssue(originalRequestCompleter, client,
-          request, progressListener, log, status, httpError);
+      var handled = await _checkForRetryAuthorizationProvider(
+          originalRequestCompleter,
+          client,
+          request,
+          progressListener,
+          log,
+          httpError);
+      if (handled || status == 401) return handled;
     }
+
+    return _checkForRetryNetworkIssue(originalRequestCompleter, client, request,
+        progressListener, log, status, httpError);
   }
 
   Future<bool> _checkForRetryNetworkIssue(

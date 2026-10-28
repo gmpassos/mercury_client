@@ -1,3 +1,17 @@
+## 2.3.2
+
+- Browser client retries:
+  - A network error (status `0`) is retried again (up to 3 times, like a
+    `504`). It was sent only to the authorization retry, which doesn't retry
+    without an authorization provider (or with a static credential), so it
+    was never retried.
+  - A `401` with an authorization provider (`Authorization.fromProvider`):
+    its retry uses a new credential. `resolveCredential` returned the cached,
+    rejected one, so the provider was never called again.
+- `Authorization.resolveCredential`: a `lastError` with status `401` (a
+  rejected credential) resolves it again (a resolvable `Authorization`),
+  calling the provider with it.
+
 ## 2.3.1
 
 - `HttpStatus.isStatusAccessError`: now also `401` (not authenticated), `402`,
