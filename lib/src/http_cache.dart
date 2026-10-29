@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -156,8 +157,19 @@ class _CacheEntry {
   /// Computed once: [request] and [response] don't change.
   final int memory;
 
+  static int _idCount = 0;
+
+  /// Orders entries of the same [memory] (in [HttpCache._bySize]).
+  final int _id = ++_idCount;
+
   _CacheEntry(this.request, this.response)
     : memory = request.memorySize() + response.memorySize();
+
+  /// The largest first.
+  static int compareBySize(_CacheEntry a, _CacheEntry b) {
+    var c = b.memory.compareTo(a.memory);
+    return c != 0 ? c : a._id.compareTo(b._id);
+  }
 
   int get accessTime => max(request.accessTime, response.accessTime ?? 0);
 }
@@ -227,18 +239,31 @@ class HttpCache {
   /// the one of the entry, not the (equal) key used to find it.
   final Map<_CacheRequest, _CacheEntry> _cache = {};
 
+  /// The entries, the largest first: the ones removed first by [cleanCache]
+  /// (without sorting all the entries for each one stored).
+  final SplayTreeSet<_CacheEntry> _bySize = SplayTreeSet(
+    _CacheEntry.compareBySize,
+  );
+
   /// The sum of the [_CacheEntry.memory] of all entries.
   int _usedMemory = 0;
+
+  /// When [cleanCache] last called [cleanCacheTimedOut].
+  int _lastCleanTimedOut = 0;
 
   void _putEntry(_CacheEntry entry) {
     _removeEntry(entry.request);
     _cache[entry.request] = entry;
+    _bySize.add(entry);
     _usedMemory += entry.memory;
   }
 
   _CacheEntry? _removeEntry(_CacheRequest request) {
     var entry = _cache.remove(request);
-    if (entry != null) _usedMemory -= entry.memory;
+    if (entry != null) {
+      _bySize.remove(entry);
+      _usedMemory -= entry.memory;
+    }
     return entry;
   }
 
@@ -249,6 +274,7 @@ class HttpCache {
   int clearCache() {
     var usedMemory = _usedMemory;
     _cache.clear();
+    _bySize.clear();
     _usedMemory = 0;
     return usedMemory;
   }
@@ -274,21 +300,27 @@ class HttpCache {
   int cleanCache(int maxMemory) {
     if (maxMemory <= 0) return -1;
 
+    if (_usedMemory <= maxMemory) return 0;
+
+    // Over the limit: the timed out entries first. At most once per second
+    // (all the entries are checked), the minimal [timeout].
     if (hasTimeout) {
-      cleanCacheTimedOut();
+      var now = DateTime.now().millisecondsSinceEpoch;
+      if (now - _lastCleanTimedOut >= 1000) {
+        _lastCleanTimedOut = now;
+        cleanCacheTimedOut();
+      }
     }
 
     var usedMemory = _usedMemory;
     if (usedMemory <= maxMemory) return 0;
 
-    // The largest first.
-    var entries = _cache.values.toList()
-      ..sort((e1, e2) => e2.memory.compareTo(e1.memory));
-
     var removeNeeded = usedMemory - maxMemory;
 
     var removed = 0;
-    for (var entry in entries) {
+    while (_bySize.isNotEmpty) {
+      // The largest first.
+      var entry = _bySize.first;
       var memory = entry.memory;
       _removeEntry(entry.request);
       removed += memory;

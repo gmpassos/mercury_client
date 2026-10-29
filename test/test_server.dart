@@ -75,6 +75,8 @@ class TestServer {
         return _processTestRequestMultiHeader(request);
       } else if (path.endsWith('/bytes')) {
         return _processTestRequestBytes(request);
+      } else if (path.endsWith('/text')) {
+        return _processTestRequestText(request);
       } else if (path.endsWith('/token')) {
         return _processTestRequestToken(request);
       } else if (path.endsWith('/504-once')) {
@@ -160,6 +162,24 @@ class TestServer {
     request.response.statusCode = 200;
     _setResponseCORS(request);
     request.response.headers.contentType = io.ContentType.binary;
+    request.response.contentLength = bytes.length;
+    request.response.add(bytes);
+    await request.response.close();
+  }
+
+  /// Answers with `?size=n` characters of UTF-8 text (with non-ASCII ones).
+  Future _processTestRequestText(io.HttpRequest request) async {
+    var size = int.tryParse(request.uri.queryParameters['size'] ?? '') ?? 0;
+    var text = ('açaí, ' * (size ~/ 6 + 1)).substring(0, size);
+    var bytes = utf8.encode(text);
+
+    request.response.statusCode = 200;
+    _setResponseCORS(request);
+    request.response.headers.contentType = io.ContentType(
+      'text',
+      'plain',
+      charset: 'utf-8',
+    );
     request.response.contentLength = bytes.length;
     request.response.add(bytes);
     await request.response.close();

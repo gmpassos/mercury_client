@@ -66,7 +66,9 @@ class HttpStatus {
       isStatusInRange(400, 403) ||
       isStatusInRange(405, 418) ||
       isStatusInRange(421, 426) ||
-      isStatusInList([428, 431, 451]);
+      status == 428 ||
+      status == 431 ||
+      status == 451;
 
   /// Returns [true] if any error happens: [isStatusNetworkError] || [isStatusServerError] || [isStatusAccessError]
   bool get isStatusError =>
@@ -84,7 +86,7 @@ class HttpStatus {
 
   /// Returns [true] if this status is in [statusList].
   bool isStatusInList(List<int> statusList) {
-    return (statusList.firstWhereOrNull((id) => id == status) != null);
+    return statusList.contains(status);
   }
 }
 
@@ -1217,19 +1219,63 @@ String buildURLWithQueryParameters(
   if (uri.query.isEmpty) {
     queryParameters = parameters;
   } else {
-    queryParameters = Map<String, Object?>.from(uri.queryParametersAll)
+    queryParameters = Map<String, Object?>.from(_queryParametersOf(uri))
       ..addAll(parameters);
   }
 
-  // The path as is: decoding it would also decode an escaped `/` (`%2F`).
-  uri = uri.replace(queryParameters: queryParameters);
+  var fragment = uri.fragment;
 
-  if (removeFragment || uri.fragment.isEmpty) {
-    uri = uri.removeFragment();
-  }
-
-  return uri.toString();
+  return _uriWith(
+    uri,
+    queryParameters: queryParameters,
+    fragment: removeFragment || fragment.isEmpty ? null : fragment,
+  ).toString();
 }
+
+/// The query parameters of [uri]: a `List<String>` only for a repeated one.
+///
+/// Without a repeated parameter (as many parameters as `&`-separated parts)
+/// it's the (cheaper) [Uri.queryParameters], not [Uri.queryParametersAll].
+Map<String, Object?> _queryParametersOf(Uri uri) {
+  var queryParameters = uri.queryParameters;
+
+  var query = uri.query;
+  var parts = 1;
+  for (var i = 0; i < query.length; ++i) {
+    if (query.codeUnitAt(i) == 0x26 /* & */ ) parts++;
+  }
+  if (parts == queryParameters.length) return queryParameters;
+
+  return {
+    for (var e in uri.queryParametersAll.entries)
+      e.key: e.value.length == 1 ? e.value.first : e.value,
+  };
+}
+
+/// Whether [uri] has a repeated query parameter (`?a=1&a=2`).
+bool _hasRepeatedQueryParameter(Uri uri) =>
+    uri.hasQuery && _queryParametersOf(uri).values.any((v) => v is List);
+
+/// [uri] with [query] or [queryParameters], and [fragment] (one [Uri]
+/// instance, not one per `replace`).
+///
+/// The path as is: decoding it would also decode an escaped `/` (`%2F`).
+/// A default port (`80` for `http`, `443` for `https`) is omitted.
+Uri _uriWith(
+  Uri uri, {
+  String? query,
+  Map<String, Object?>? queryParameters,
+  String? fragment,
+}) => Uri(
+  scheme: uri.scheme,
+  userInfo: uri.userInfo,
+  host: uri.host,
+  port: uri.hasPort ? uri.port : null,
+  path: uri.path,
+  query: query,
+  queryParameters: queryParameters,
+  fragment: fragment,
+);
 
 /// HTTP Method
 enum HttpMethod {
@@ -1845,11 +1891,16 @@ abstract class HttpClientRequester {
       accept: accept,
     );
 
-    requestURL = await client._interceptRequest(
+    var requestURLOr = client._interceptRequest(
       HttpMethod.GET,
       requestURL,
       requestHeaders,
     );
+
+    // Awaited only with an interceptor (no asynchronous step without it).
+    requestURL = requestURLOr is Future<String>
+        ? await requestURLOr
+        : requestURLOr;
 
     return submitHttpRequest(
       client,
@@ -1894,11 +1945,16 @@ abstract class HttpClientRequester {
       authorization: authorization,
     );
 
-    requestURL = await client._interceptRequest(
+    var requestURLOr = client._interceptRequest(
       HttpMethod.HEAD,
       requestURL,
       requestHeaders,
     );
+
+    // Awaited only with an interceptor (no asynchronous step without it).
+    requestURL = requestURLOr is Future<String>
+        ? await requestURLOr
+        : requestURLOr;
 
     return submitHttpRequest(
       client,
@@ -1942,11 +1998,16 @@ abstract class HttpClientRequester {
       authorization: authorization,
     );
 
-    requestURL = await client._interceptRequest(
+    var requestURLOr = client._interceptRequest(
       HttpMethod.OPTIONS,
       requestURL,
       requestHeaders,
     );
+
+    // Awaited only with an interceptor (no asynchronous step without it).
+    requestURL = requestURLOr is Future<String>
+        ? await requestURLOr
+        : requestURLOr;
 
     return submitHttpRequest(
       client,
@@ -2003,11 +2064,16 @@ abstract class HttpClientRequester {
         noQueryString: noQueryString,
       );
 
-      requestURL = await client._interceptRequest(
+      var requestURLOr = client._interceptRequest(
         HttpMethod.POST,
         requestURL,
         requestHeaders,
       );
+
+      // Awaited only with an interceptor (no asynchronous step without it).
+      requestURL = requestURLOr is Future<String>
+          ? await requestURLOr
+          : requestURLOr;
 
       return submitHttpRequest(
         client,
@@ -2045,11 +2111,16 @@ abstract class HttpClientRequester {
         noQueryString: noQueryString,
       );
 
-      requestURL = await client._interceptRequest(
+      var requestURLOr = client._interceptRequest(
         HttpMethod.POST,
         requestURL,
         requestHeaders,
       );
+
+      // Awaited only with an interceptor (no asynchronous step without it).
+      requestURL = requestURLOr is Future<String>
+          ? await requestURLOr
+          : requestURLOr;
 
       return submitHttpRequest(
         client,
@@ -2105,11 +2176,16 @@ abstract class HttpClientRequester {
       accept: accept,
     );
 
-    requestURL = await client._interceptRequest(
+    var requestURLOr = client._interceptRequest(
       HttpMethod.PUT,
       requestURL,
       requestHeaders,
     );
+
+    // Awaited only with an interceptor (no asynchronous step without it).
+    requestURL = requestURLOr is Future<String>
+        ? await requestURLOr
+        : requestURLOr;
 
     return submitHttpRequest(
       client,
@@ -2177,11 +2253,16 @@ abstract class HttpClientRequester {
       accept: accept,
     );
 
-    requestURL = await client._interceptRequest(
+    var requestURLOr = client._interceptRequest(
       HttpMethod.PATCH,
       requestURL,
       requestHeaders,
     );
+
+    // Awaited only with an interceptor (no asynchronous step without it).
+    requestURL = requestURLOr is Future<String>
+        ? await requestURLOr
+        : requestURLOr;
 
     return submitHttpRequest(
       client,
@@ -2236,11 +2317,16 @@ abstract class HttpClientRequester {
       accept: accept,
     );
 
-    requestURL = await client._interceptRequest(
+    var requestURLOr = client._interceptRequest(
       HttpMethod.DELETE,
       requestURL,
       requestHeaders,
     );
+
+    // Awaited only with an interceptor (no asynchronous step without it).
+    requestURL = requestURLOr is Future<String>
+        ? await requestURLOr
+        : requestURLOr;
 
     return submitHttpRequest(
       client,
@@ -2846,11 +2932,21 @@ class HttpClient {
     print('$now> HttpClient> $json');
   }
 
-  Future<Authorization?> _buildRequestAuthorization(
-    Credential? credential,
-  ) async {
+  /// The [Authorization] of a request: synchronous (not a [Future]) when
+  /// there's nothing to resolve, avoiding an asynchronous step per request.
+  FutureOr<Authorization?> _buildRequestAuthorization(Credential? credential) {
     if (credential != null) {
       return Authorization.fromCredential(credential);
+    }
+
+    var authorization = _authorization;
+    if (authorization == null) return null;
+
+    // Already resolved: `resolveCredential` would return it.
+    if (authorization.isCredentialResolved &&
+        !authorization.isResolvingCredential) {
+      _notifyResolvedAuthorization();
+      return authorization;
     }
 
     return _resolveAuthorization();
@@ -2940,7 +3036,10 @@ class HttpClient {
     String? accept,
     ProgressListener? progressListener,
   }) async {
-    var requestAuthorization = await _buildRequestAuthorization(authorization);
+    var authorizationOr = _buildRequestAuthorization(authorization);
+    var requestAuthorization = authorizationOr is Future<Authorization?>
+        ? await authorizationOr
+        : authorizationOr;
     return _clientRequester.request(
       this,
       method,
@@ -2971,7 +3070,10 @@ class HttpClient {
   }) async {
     var parametersMapStr = _toParametersMapOfString(parameters);
     var url = _buildURL(path, fullPath, parametersMapStr, true);
-    var requestAuthorization = await _buildRequestAuthorization(authorization);
+    var authorizationOr = _buildRequestAuthorization(authorization);
+    var requestAuthorization = authorizationOr is Future<Authorization?>
+        ? await authorizationOr
+        : authorizationOr;
     return _clientRequester.requestGET(
       this,
       url,
@@ -2994,7 +3096,10 @@ class HttpClient {
   }) async {
     var parametersMapStr = _toParametersMapOfString(parameters);
     var url = _buildURL(path, fullPath, parametersMapStr, true);
-    var requestAuthorization = await _buildRequestAuthorization(authorization);
+    var authorizationOr = _buildRequestAuthorization(authorization);
+    var requestAuthorization = authorizationOr is Future<Authorization?>
+        ? await authorizationOr
+        : authorizationOr;
     return _clientRequester.requestHEAD(
       this,
       url,
@@ -3015,7 +3120,10 @@ class HttpClient {
   }) async {
     var parametersMapStr = _toParametersMapOfString(parameters);
     var url = _buildURL(path, fullPath, parametersMapStr, true);
-    var requestAuthorization = await _buildRequestAuthorization(authorization);
+    var authorizationOr = _buildRequestAuthorization(authorization);
+    var requestAuthorization = authorizationOr is Future<Authorization?>
+        ? await authorizationOr
+        : authorizationOr;
     return _clientRequester.requestOPTIONS(
       this,
       url,
@@ -3050,7 +3158,10 @@ class HttpClient {
     url = retUrlParameters.key;
     parametersMapStr = retUrlParameters.value;
 
-    var requestAuthorization = await _buildRequestAuthorization(authorization);
+    var authorizationOr = _buildRequestAuthorization(authorization);
+    var requestAuthorization = authorizationOr is Future<Authorization?>
+        ? await authorizationOr
+        : authorizationOr;
     return _clientRequester.requestPOST(
       this,
       url,
@@ -3090,7 +3201,10 @@ class HttpClient {
     url = retUrlParameters.key;
     parametersMapStr = retUrlParameters.value;
 
-    var requestAuthorization = await _buildRequestAuthorization(authorization);
+    var authorizationOr = _buildRequestAuthorization(authorization);
+    var requestAuthorization = authorizationOr is Future<Authorization?>
+        ? await authorizationOr
+        : authorizationOr;
     return _clientRequester.requestPUT(
       this,
       url,
@@ -3130,7 +3244,10 @@ class HttpClient {
     url = retUrlParameters.key;
     parametersMapStr = retUrlParameters.value;
 
-    var requestAuthorization = await _buildRequestAuthorization(authorization);
+    var authorizationOr = _buildRequestAuthorization(authorization);
+    var requestAuthorization = authorizationOr is Future<Authorization?>
+        ? await authorizationOr
+        : authorizationOr;
     return _clientRequester.requestPATCH(
       this,
       url,
@@ -3165,7 +3282,10 @@ class HttpClient {
     url = retUrlParameters.key;
     parameters = retUrlParameters.value;
 
-    var requestAuthorization = await _buildRequestAuthorization(authorization);
+    var authorizationOr = _buildRequestAuthorization(authorization);
+    var requestAuthorization = authorizationOr is Future<Authorization?>
+        ? await authorizationOr
+        : authorizationOr;
     return _clientRequester.requestDELETE(
       this,
       url,
@@ -3182,28 +3302,10 @@ class HttpClient {
 
   //////////////
 
-  /// [uri] with [query] (and without fragment).
-  ///
-  /// The path as is: decoding it would also decode an escaped `/` (`%2F`).
-  /// A default port (`80` for `http`, `443` for `https`) is omitted.
-  static Uri _uriWithQuery(
-    Uri uri, {
-    String? query,
-    Map<String, Object?>? queryParameters,
-  }) => Uri(
-    scheme: uri.scheme,
-    userInfo: uri.userInfo,
-    host: uri.host,
-    port: uri.hasPort ? uri.port : null,
-    path: uri.path,
-    query: query,
-    queryParameters: queryParameters,
-  );
-
-  Uri _removeURIQueryParameters(Uri uri) => _uriWithQuery(uri);
+  Uri _removeURIQueryParameters(Uri uri) => _uriWith(uri);
 
   Uri _setURIQueryString(Uri uri, String? queryString) =>
-      _uriWithQuery(uri, query: queryString);
+      _uriWith(uri, query: queryString);
 
   MapEntry<String, Map<String, String?>?> _buildURLAndParameters(
     String url,
@@ -3214,8 +3316,7 @@ class HttpClient {
 
     // A parameter repeated in the URL (`?a=1&a=2`) can't be in a
     // `Map<String, String?>`: the URL query is kept as is.
-    var repeatedParameter =
-        uri.hasQuery && uri.queryParametersAll.values.any((v) => v.length > 1);
+    var repeatedParameter = _hasRepeatedQueryParameter(uri);
 
     if (uri.queryParameters.isNotEmpty && !repeatedParameter) {
       if (parameters != null && parameters.isNotEmpty) {
@@ -3348,12 +3449,8 @@ class HttpClient {
     if (uri.hasQuery && uri.query.isNotEmpty) {
       // A copy: the caller's map (maybe unmodifiable) is not changed.
       allParameters = <String, Object?>{...?queryParameters};
-      for (var e in uri.queryParametersAll.entries) {
-        var values = e.value;
-        allParameters.putIfAbsent(
-          e.key,
-          () => values.length == 1 ? values.first : values,
-        );
+      for (var e in _queryParametersOf(uri).entries) {
+        allParameters.putIfAbsent(e.key, () => e.value);
       }
     }
 
@@ -3361,7 +3458,7 @@ class HttpClient {
       allParameters = null;
     }
 
-    return _uriWithQuery(uri, queryParameters: allParameters).toString();
+    return _uriWith(uri, queryParameters: allParameters).toString();
   }
 
   /// Function that processes any request response.

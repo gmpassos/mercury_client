@@ -61,9 +61,26 @@
     text body.
   - Browser client: a `3xx` response without body could throw.
   - The `HttpError` of a JSON request has the requested URL.
+- Performance (see `benchmark/HISTORY.md`):
+  - VM: the response body is read in chunks (`BytesBuilder`), not one byte at
+    a time: a 1MB download 4.4x faster, a 256KB upload (echoed) 3.6x.
+  - `HttpCache`: entries ordered by size (`SplayTreeSet`) and a running total
+    of the used memory (no sort of all entries per stored response); one map
+    access per lookup; timed out entries checked at most once per second
+    when over the memory limit: a miss with a memory limit 105x (JS) to 265x
+    (Wasm) faster.
+  - Requests: no asynchronous step for an already resolved authorization or
+    without an interceptor: 30% (VM), 35% (JS) and 41% (Wasm) faster.
+  - `HttpStatus` checks without allocating lists.
+  - Browser: forbidden request headers looked up in a set; the request body
+    converted with `toJS` (not `jsify`): a 256KB upload ~18% faster on Wasm.
+  - URLs: `Uri.queryParameters` (not `queryParametersAll`) unless a parameter
+    is repeated.
+- Benchmarks: `benchmark/` (VM, Chrome JS and Chrome Wasm), with the results
+  history in `benchmark/HISTORY.md`.
 - Tests: regression tests, and integration tests (`OPTIONS`, the `401`
   retry, binary bodies, progress, many-valued headers). Coverage (VM):
-  76.6% -> 91.8%.
+  76.6% -> 92.1%.
 
 ## 2.3.3
 

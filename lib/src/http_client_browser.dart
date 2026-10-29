@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:collection/collection.dart';
 import 'package:js_interop_utils/js_interop_utils.dart';
 import 'package:swiss_knife/swiss_knife.dart';
 import 'package:web/web.dart' as web;
@@ -32,12 +31,13 @@ const _forbiddenRequestHeaders = <String>{
   'Via',
 };
 
-bool _isForbiddenRequestHeader(String header) {
-  for (var h in _forbiddenRequestHeaders) {
-    if (equalsIgnoreAsciiCase(h, header)) return true;
-  }
-  return false;
-}
+/// [_forbiddenRequestHeaders] in lower case: a set lookup per header.
+final _forbiddenRequestHeadersLC = {
+  for (var h in _forbiddenRequestHeaders) h.toLowerCase(),
+};
+
+bool _isForbiddenRequestHeader(String header) =>
+    _forbiddenRequestHeadersLC.contains(header.toLowerCase());
 
 /// HttpClientRequester implementation for Browser.
 class HttpClientRequesterBrowser extends HttpClientRequester {
@@ -203,13 +203,36 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       );
     });
 
-    if (request.sendData != null) {
-      xhr.send(request.sendData?.jsify());
+    var sendData = request.sendData;
+    if (sendData != null) {
+      xhr.send(_toSendData(sendData));
     } else {
       xhr.send();
     }
 
     return completer.future;
+  }
+
+  /// The `XMLHttpRequest.send` body for [sendData]: bytes and strings are
+  /// converted directly (`toJS`), not by the generic (deep) `jsify`.
+  static JSAny? _toSendData(Object sendData) {
+    if (sendData is HttpBlob) return (sendData.blob as Object?).asJSAny;
+
+    if (sendData is String) {
+      return sendData.toJS;
+    } else if (sendData is Uint8List) {
+      return sendData.toJS;
+    } else if (sendData is ByteBuffer) {
+      return sendData.toJS;
+    } else if (sendData is TypedData) {
+      return sendData.buffer
+          .asUint8List(sendData.offsetInBytes, sendData.lengthInBytes)
+          .toJS;
+    } else if (sendData is List<int>) {
+      return Uint8List.fromList(sendData).toJS;
+    }
+
+    return sendData.asJSAny ?? sendData.jsify();
   }
 
   /// `null` if the total is unknown (not `lengthComputable`).
