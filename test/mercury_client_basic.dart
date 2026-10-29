@@ -922,6 +922,123 @@ void doBasicTests(TestServerChannel testServerChannel) {
       expect(cache.clearCache(), greaterThan(0));
       expect(cache.getCachedRequest(client, HttpMethod.GET, 'echo'), isNull);
     });
+
+    test('HttpCache: a server error is not cached', () async {
+      var client = await newClient();
+      var cache = HttpCache();
+
+      var response1 = await cache.get(client, '500');
+      expect(response1.status, equals(500));
+      expect(cache.getCachedRequest(client, HttpMethod.GET, '500'), isNull);
+
+      var response2 = await cache.get(client, '500');
+      expect(response2, isNot(same(response1)));
+    });
+
+    test('OPTIONS', () async {
+      var client = await newClient();
+
+      var response = await client.options(
+        'options-echo',
+        parameters: {'a': '1'},
+      );
+      expect(response.status, equals(200));
+      expect(response.json['method'], equals('OPTIONS'));
+      expect(response.json['query'], equals({'a': '1'}));
+    });
+
+    test('Basic credential: standard Base64 of UTF-8', () async {
+      var client = await newClient();
+
+      var credential = BasicCredential('jöe', 'p>>?€');
+      var echo = await client.getJSON('echo', authorization: credential);
+
+      var line = echo['authorization'] as String;
+      expect(line, startsWith('Basic '));
+      expect(
+        utf8.decode(base64.decode(line.substring(6))),
+        equals('jöe:p>>?€'),
+      );
+    });
+
+    test(
+      'Authorization.fromProvider: a 401 retried with the new credential',
+      () async {
+        var client = await newClient();
+
+        var tokens = ['BAD', 'GOOD'];
+        var calls = 0;
+        client.authorization = Authorization.fromProvider(
+          (client, lastError) async => BearerCredential(tokens[calls++]),
+        );
+
+        var response = await client.get('auth');
+        expect(response.status, equals(200));
+        expect(response.json['authorization'], equals('Bearer GOOD'));
+        expect(calls, equals(2));
+      },
+      // Only the browser client retries a `401`.
+      testOn: 'browser',
+    );
+
+    test('a response header with many values', () async {
+      var client = await newClient();
+
+      var response = await client.get('multi-header');
+      expect(response.isOK, isTrue);
+      expect(response.getResponseHeader('X-Multi'), equals('a, b'));
+    });
+
+    test('PATCH: parameters as a JSON body', () async {
+      var client = await newClient();
+
+      var response = await client.patch('echo', parameters: {'a': '1'});
+      expect(response.json['method'], equals('PATCH'));
+      expect(response.json['contentType'], equals('application/json'));
+      expect(jsonDecode(response.json['body']), equals({'a': '1'}));
+    });
+
+    test('binary bodies and progress', () async {
+      var client = await newClient();
+
+      var all = Uint8List.fromList(List.generate(10, (i) => i));
+      var view = Uint8List.sublistView(all, 2, 6);
+
+      var echo = await client.post(
+        'bytes',
+        body: view,
+        contentType: 'application/octet-stream',
+      );
+      expect(echo.body!.asByteArray, equals([2, 3, 4, 5]));
+
+      var buffer = await client.put(
+        'bytes',
+        body: Uint8List.fromList([7, 8, 9]).buffer,
+        contentType: 'application/octet-stream',
+      );
+      expect(buffer.body!.asByteArray, equals([7, 8, 9]));
+
+      var progress = <(int?, int?, double?)>[];
+      var response = await client.get(
+        'bytes',
+        parameters: {'size': '100000'},
+        progressListener: (request, loaded, total, ratio, upload) {
+          if (!upload) progress.add((loaded, total, ratio));
+        },
+      );
+      expect(response.bodyLength, equals(100000));
+      expect(response.body!.asByteArray![300], equals(300 % 256));
+
+      expect(progress, isNotEmpty);
+      for (var (loaded, total, ratio) in progress) {
+        expect(total, anyOf(isNull, equals(100000)));
+        if (ratio != null) {
+          expect(ratio, inInclusiveRange(0, 1));
+          expect(ratio, equals(loaded! / total!));
+        }
+      }
+      expect(progress.last.$1, equals(100000));
+    });
   });
 }
 

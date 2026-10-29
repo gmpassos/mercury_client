@@ -57,9 +57,24 @@ class TestServer {
   Future _processTestRequest(io.HttpRequest request) async {
     var path = request.uri.path;
 
+    if (path.endsWith('/options-echo') && request.method == 'OPTIONS') {
+      // A CORS preflight (no `X-Test`) or the actual `OPTIONS` request.
+      return _processTestRequestEcho(request);
+    }
+
     if (request.method != 'OPTIONS') {
       if (path.endsWith('/echo')) {
         return _processTestRequestEcho(request);
+      } else if (path.endsWith('/auth')) {
+        // A `401` unless the credential is `Bearer GOOD`.
+        if (request.headers.value('Authorization') != 'Bearer GOOD') {
+          return _processTestRequestStatus(request, 401);
+        }
+        return _processTestRequestEcho(request);
+      } else if (path.endsWith('/multi-header')) {
+        return _processTestRequestMultiHeader(request);
+      } else if (path.endsWith('/bytes')) {
+        return _processTestRequestBytes(request);
       } else if (path.endsWith('/token')) {
         return _processTestRequestToken(request);
       } else if (path.endsWith('/504-once')) {
@@ -110,6 +125,38 @@ class TestServer {
       preserveHeaderCase: true,
     );
     request.response.write(response);
+    await request.response.close();
+  }
+
+  /// Answers with the header `X-Multi` with 2 values.
+  Future _processTestRequestMultiHeader(io.HttpRequest request) async {
+    request.response.statusCode = 200;
+    _setResponseCORS(request);
+    request.response.headers.add('X-Multi', 'a');
+    request.response.headers.add('X-Multi', 'b');
+    request.response.headers.contentType = io.ContentType.text;
+    request.response.write('multi');
+    await request.response.close();
+  }
+
+  /// Answers with the request body bytes (`application/octet-stream`), and
+  /// `?size=n`: `n` bytes (`i % 256`).
+  Future _processTestRequestBytes(io.HttpRequest request) async {
+    var bytes = <int>[];
+    await for (var chunk in request) {
+      bytes.addAll(chunk);
+    }
+
+    var size = int.tryParse(request.uri.queryParameters['size'] ?? '');
+    if (size != null) {
+      bytes = List<int>.generate(size, (i) => i % 256);
+    }
+
+    request.response.statusCode = 200;
+    _setResponseCORS(request);
+    request.response.headers.contentType = io.ContentType.binary;
+    request.response.contentLength = bytes.length;
+    request.response.add(bytes);
     await request.response.close();
   }
 
@@ -216,7 +263,7 @@ class TestServer {
     );
     request.response.headers.add(
       'Access-Control-Expose-Headers',
-      'Content-Length, Content-Type, Last-Modified, X-Access-Token, X-Access-Token-Expiration',
+      'Content-Length, Content-Type, Last-Modified, X-Access-Token, X-Access-Token-Expiration, X-Multi',
     );
   }
 

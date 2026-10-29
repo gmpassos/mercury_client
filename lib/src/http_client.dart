@@ -622,7 +622,10 @@ class HttpRequestBody {
       _content = null;
     } else if (content is HttpBody) {
       _content = content;
-    } else if (!isJSONType && content is List<int>) {
+    } else if (!isJSONType &&
+        (content is List<int> ||
+            content is ByteBuffer ||
+            isHttpBlob(content))) {
       _content = HttpBody.from(content, MimeType.parse(_contentType));
     } else if (content is String) {
       _content = HttpBody.from(content, MimeType.parse(_contentType));
@@ -1459,6 +1462,9 @@ class HttpRequest {
       return sendData.lengthInBytes;
     } else if (sendData is HttpBlob) {
       return sendData.size();
+    } else if (isHttpBlob(sendData)) {
+      // A platform blob (a browser `Blob`).
+      return createHttpBlob([sendData], null)?.size();
     } else if (sendData is String) {
       var bytes = sendData.toUint8List(
         encoding: MimeType.parse(mimeType)?.preferredStringEncoding,

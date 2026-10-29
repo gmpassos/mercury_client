@@ -595,6 +595,16 @@ HttpBlob? createHttpBlobImpl(Object? content, MimeType? mimeType) {
     content = [content];
   }
 
+  // A single `Blob` (without another type): no new `Blob`.
+  if (content.length == 1 && (mimeType == null || content.first is HttpBlob)) {
+    Object? single = content.first;
+    if (single is HttpBlob) return single;
+    var jsAny = single.asJSAny;
+    if (jsAny != null && jsAny.isA<web.Blob>()) {
+      return HttpBlobBrowser(jsAny as web.Blob, mimeType);
+    }
+  }
+
   var parts = content.map(_toBlobPart).toList().toJS;
 
   var blob = mimeType != null

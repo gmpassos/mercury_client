@@ -1,3 +1,61 @@
+## 2.4.0
+
+- SDK: `>=3.13.0 <4.0.0`.
+  - `dart format` (tall style).
+  - Private named parameters as initializing formals (`this._error`):
+    `prefer_initializing_formals` and `strict_top_level_inference` fixes.
+- Dependencies:
+  - `swiss_knife: ^3.3.14`, `collection: ^1.19.1`, `web: ^1.1.2`,
+    `js_interop_utils: ^1.1.1`.
+  - Dev: `lints: ^6.1.0`, `test: ^1.33.0`, `async: ^2.13.1`,
+    `dependency_validator: ^5.1.0`, `coverage: ^1.16.0`.
+- Fixes:
+  - Browser client: a `401` retried with a new credential (from an
+    `Authorization.fromProvider`) sent the rejected credential again:
+    `HttpRequest.copyWithAuthorization` kept the previous `Authorization`
+    header, applied after the new one.
+    - A `POST` form retried: its parameters stay in the body (not also added
+      to the URL), and `noQueryString` is kept.
+  - VM client: an `OPTIONS` request threw `UnsupportedError`.
+  - `BasicCredential`: the `Authorization` header uses the standard Base64
+    alphabet (it used the URL-safe one: `-` and `_` instead of `+` and `/`),
+    and UTF-8 (a character above `0xFF` threw an `ArgumentError`).
+  - `HttpCache`:
+    - An expired entry was never valid again (the stored request kept its
+      old access time): every later request was sent again.
+    - A response is cached per credential (`authorization`): a response for
+      one credential was returned for another.
+    - A network error (status `0`) or a server error (`5xx`) is not cached.
+    - The `queryParameters` are copied: changed by the caller, the entry was
+      lost.
+    - A `body` without `length` (e.g. an `int`) threw computing the memory
+      size.
+    - `getURL` ignored the `authorization`.
+  - `HttpRequester`: the `body` was lower-cased.
+  - `HttpBody` and `List<int>.toByteBuffer`: a byte view
+    (`Uint8List.sublistView`) returned its whole buffer.
+  - `HttpBody.asBlob` threw (VM) or built a wrong `Blob` (browser) for a
+    `ByteBuffer`, bytes or `String` body; `createHttpBlob` accepts a list of
+    parts (`String`, `ByteBuffer`, `TypedData`, bytes or blobs).
+  - A `ByteBuffer` or blob request body was sent as its `toString()`.
+  - `HttpRequest`: no `Content-Length` with a `chunked`
+    `Transfer-Encoding` (it was only set with one).
+  - `PATCH` with parameters and no body: the JSON body has a `Content-Type`.
+  - The `parameters` map passed to a request is no longer changed (an
+    unmodifiable map threw).
+  - `buildURLWithQueryParameters`: keeps an escaped path (`%2F`) and repeated
+    query parameters.
+  - VM client: a response header with many values is joined with `, ` (as
+    in a browser), instead of only its first value.
+  - Progress listeners: the `ratio` is `null` when the total is unknown (it
+    was negative or `NaN`), and the VM counts bytes (not characters) of a
+    text body.
+  - Browser client: a `3xx` response without body could throw.
+  - The `HttpError` of a JSON request has the requested URL.
+- Tests: regression tests, and integration tests (`OPTIONS`, the `401`
+  retry, binary bodies, progress, many-valued headers). Coverage (VM):
+  76.6% -> 91.8%.
+
 ## 2.3.3
 
 - CI (GitHub Actions):
