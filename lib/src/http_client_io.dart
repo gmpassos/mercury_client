@@ -36,8 +36,9 @@ class HttpClientRequesterIO extends HttpClientRequester {
     } else {
       var dartAgent = _initialUserAgent;
       var mercuryAgent = 'mercury_client';
-      _ioClient.userAgent =
-          dartAgent.isNotEmpty ? '$dartAgent ($mercuryAgent)' : mercuryAgent;
+      _ioClient.userAgent = dartAgent.isNotEmpty
+          ? '$dartAgent ($mercuryAgent)'
+          : mercuryAgent;
     }
   }
 
@@ -47,8 +48,12 @@ class HttpClientRequesterIO extends HttpClientRequester {
   }
 
   @override
-  Future<HttpResponse> doHttpRequest(HttpClient client, HttpRequest request,
-      ProgressListener? progressListener, bool log) async {
+  Future<HttpResponse> doHttpRequest(
+    HttpClient client,
+    HttpRequest request,
+    ProgressListener? progressListener,
+    bool log,
+  ) async {
     var uri = Uri.parse(request.requestURL);
 
     if (log) {
@@ -59,31 +64,47 @@ class HttpClientRequesterIO extends HttpClientRequester {
     var response = await req.close();
 
     return _processResponse(
-        client, request, uri, response, progressListener, log);
+      client,
+      request,
+      uri,
+      response,
+      progressListener,
+      log,
+    );
   }
 
   Future<HttpResponse> _processResponse(
-      HttpClient client,
-      HttpRequest request,
-      Uri requestURI,
-      io.HttpClientResponse response,
-      ProgressListener? progressListener,
-      bool log) async {
+    HttpClient client,
+    HttpRequest request,
+    Uri requestURI,
+    io.HttpClientResponse response,
+    ProgressListener? progressListener,
+    bool log,
+  ) async {
     var contentType = response.headers.contentType;
 
-    var body =
-        await _decodeBody(request, response, contentType, progressListener);
+    var body = await _decodeBody(
+      request,
+      response,
+      contentType,
+      progressListener,
+    );
 
     var responseHeaders = await _decodeHeaders(response);
 
     var redirects = response.redirects.map((e) => e.location).toList();
 
-    var resp = HttpResponse(request.method, request.url, requestURI.toString(),
-        response.statusCode, body,
-        responseHeaderGetter: (key) => responseHeaders[key.toLowerCase()],
-        request: response,
-        redirects: redirects,
-        jsonDecoder: client.jsonDecoder);
+    var resp = HttpResponse(
+      request.method,
+      request.url,
+      requestURI.toString(),
+      response.statusCode,
+      body,
+      responseHeaderGetter: (key) => responseHeaders[key.toLowerCase()],
+      request: response,
+      redirects: redirects,
+      jsonDecoder: client.jsonDecoder,
+    );
 
     if (log) {
       this.log('RESPONSE: $resp');
@@ -94,8 +115,9 @@ class HttpClientRequesterIO extends HttpClientRequester {
     if (responseHeaderWithToken != null) {
       var accessToken = resp.getResponseHeader(responseHeaderWithToken);
       if (accessToken != null && accessToken.isNotEmpty) {
-        client.authorization =
-            Authorization.fromCredential(BearerCredential(accessToken));
+        client.authorization = Authorization.fromCredential(
+          BearerCredential(accessToken),
+        );
       }
     }
 
@@ -115,12 +137,14 @@ class HttpClientRequesterIO extends HttpClientRequester {
   ////////////////////////////////
 
   Future<HttpBody?> _decodeBody(
-      HttpRequest request,
-      io.HttpClientResponse response,
-      io.ContentType? contentType,
-      ProgressListener? progressListener) async {
-    var mimeType =
-        contentType != null ? MimeType.parse(contentType.toString()) : null;
+    HttpRequest request,
+    io.HttpClientResponse response,
+    io.ContentType? contentType,
+    ProgressListener? progressListener,
+  ) async {
+    var mimeType = contentType != null
+        ? MimeType.parse(contentType.toString())
+        : null;
     var statusCode = response.statusCode;
 
     var irrelevantContent = (statusCode >= 300 && statusCode < 600);
@@ -128,7 +152,11 @@ class HttpClientRequesterIO extends HttpClientRequester {
     if (mimeType != null &&
         (mimeType.isStringType || mimeType.charset != null)) {
       String? s = await _decodeBodyAsString(
-          request, response, mimeType, progressListener);
+        request,
+        response,
+        mimeType,
+        progressListener,
+      );
 
       if (statusCode == 204 || (irrelevantContent && s.isEmpty)) {
         s = null;
@@ -137,8 +165,11 @@ class HttpClientRequesterIO extends HttpClientRequester {
       return HttpBody.from(s, mimeType);
     }
 
-    List<int>? bytes =
-        await _decodeBodyAsBytes(request, response, progressListener);
+    List<int>? bytes = await _decodeBodyAsBytes(
+      request,
+      response,
+      progressListener,
+    );
 
     if (statusCode == 204 || (irrelevantContent && bytes.isEmpty)) {
       bytes = null;
@@ -148,9 +179,10 @@ class HttpClientRequesterIO extends HttpClientRequester {
   }
 
   Future<List<int>> _decodeBodyAsBytes(
-      HttpRequest request,
-      io.HttpClientResponse response,
-      ProgressListener? progressListener) async {
+    HttpRequest request,
+    io.HttpClientResponse response,
+    ProgressListener? progressListener,
+  ) async {
     if (progressListener != null) {
       var total = response.contentLength;
       var loaded = 0;
@@ -171,10 +203,11 @@ class HttpClientRequesterIO extends HttpClientRequester {
   }
 
   Future<String> _decodeBodyAsString(
-      HttpRequest request,
-      io.HttpClientResponse response,
-      MimeType mimeType,
-      ProgressListener? progressListener) async {
+    HttpRequest request,
+    io.HttpClientResponse response,
+    MimeType mimeType,
+    ProgressListener? progressListener,
+  ) async {
     var decoder = contentTypeToDecoder(mimeType);
 
     if (progressListener != null) {
@@ -209,7 +242,10 @@ class HttpClientRequesterIO extends HttpClientRequester {
   ////////////////////////////////
 
   Future<io.HttpClientRequest> _request(
-      HttpClient client, HttpRequest request, Uri uri) async {
+    HttpClient client,
+    HttpRequest request,
+    Uri uri,
+  ) async {
     var method = request.method;
 
     switch (method) {
@@ -230,47 +266,71 @@ class HttpClientRequesterIO extends HttpClientRequester {
     }
   }
 
-  Future<io.HttpClientRequest> _requestGET(io.HttpClient ioClient,
-      HttpClient client, HttpRequest request, Uri url) async {
+  Future<io.HttpClientRequest> _requestGET(
+    io.HttpClient ioClient,
+    HttpClient client,
+    HttpRequest request,
+    Uri url,
+  ) async {
     var req = await ioClient.getUrl(url);
     _putRequestHeaders(request, req);
     return req;
   }
 
-  Future<io.HttpClientRequest> _requestPOST(io.HttpClient ioClient,
-      HttpClient client, HttpRequest request, Uri url) async {
+  Future<io.HttpClientRequest> _requestPOST(
+    io.HttpClient ioClient,
+    HttpClient client,
+    HttpRequest request,
+    Uri url,
+  ) async {
     var req = await ioClient.postUrl(url);
     _putRequestHeaders(request, req);
     _putSendData(request, req);
     return req;
   }
 
-  Future<io.HttpClientRequest> _requestPUT(io.HttpClient ioClient,
-      HttpClient client, HttpRequest request, Uri url) async {
+  Future<io.HttpClientRequest> _requestPUT(
+    io.HttpClient ioClient,
+    HttpClient client,
+    HttpRequest request,
+    Uri url,
+  ) async {
     var req = await ioClient.putUrl(url);
     _putRequestHeaders(request, req);
     _putSendData(request, req);
     return req;
   }
 
-  Future<io.HttpClientRequest> _requestPATCH(io.HttpClient ioClient,
-      HttpClient client, HttpRequest request, Uri url) async {
+  Future<io.HttpClientRequest> _requestPATCH(
+    io.HttpClient ioClient,
+    HttpClient client,
+    HttpRequest request,
+    Uri url,
+  ) async {
     var req = await ioClient.patchUrl(url);
     _putRequestHeaders(request, req);
     _putSendData(request, req);
     return req;
   }
 
-  Future<io.HttpClientRequest> _requestDELETE(io.HttpClient ioClient,
-      HttpClient client, HttpRequest request, Uri url) async {
+  Future<io.HttpClientRequest> _requestDELETE(
+    io.HttpClient ioClient,
+    HttpClient client,
+    HttpRequest request,
+    Uri url,
+  ) async {
     var req = await ioClient.deleteUrl(url);
     _putRequestHeaders(request, req);
     _putSendData(request, req);
     return req;
   }
 
-  Future<io.HttpClientRequest> _requestHEAD(io.HttpClient ioClient,
-      HttpClient client, HttpRequest request, Uri url) async {
+  Future<io.HttpClientRequest> _requestHEAD(
+    io.HttpClient ioClient,
+    HttpClient client,
+    HttpRequest request,
+    Uri url,
+  ) async {
     var req = await ioClient.headUrl(url);
     _putRequestHeaders(request, req);
     return req;

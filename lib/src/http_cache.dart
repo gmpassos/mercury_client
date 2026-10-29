@@ -22,8 +22,14 @@ class _CacheRequest implements Comparable<_CacheRequest> {
 
   late int _accessTime;
 
-  _CacheRequest(this._method, this._url, this._queryParameters, this._body,
-      this._contentType, this._accept) {
+  _CacheRequest(
+    this._method,
+    this._url,
+    this._queryParameters,
+    this._body,
+    this._contentType,
+    this._accept,
+  ) {
     _accessTime = instanceTime;
   }
 
@@ -47,16 +53,18 @@ class _CacheRequest implements Comparable<_CacheRequest> {
 
   _CacheRequest copy() {
     return _CacheRequest(
-        _method,
-        _url,
-        _queryParameters != null ? Map.from(_queryParameters) : null,
-        _body,
-        _contentType,
-        _accept);
+      _method,
+      _url,
+      _queryParameters != null ? Map.from(_queryParameters) : null,
+      _body,
+      _contentType,
+      _accept,
+    );
   }
 
   int memorySize() {
-    var memory = 1 +
+    var memory =
+        1 +
         4 +
         _url.length +
         (_body != null ? _body.length : 0) +
@@ -116,10 +124,11 @@ class HttpCache {
   /// If [true] shows cached requests in console.
   late bool verbose;
 
-  HttpCache(
-      {int maxCacheMemory = 0,
-      Duration timeout = _noDuration,
-      this.verbose = false}) {
+  HttpCache({
+    int maxCacheMemory = 0,
+    Duration timeout = _noDuration,
+    this.verbose = false,
+  }) {
     this.maxCacheMemory = maxCacheMemory;
     this.timeout = timeout;
   }
@@ -219,8 +228,9 @@ class HttpCache {
     var usedMemory = calculateCacheUsedMemory();
     if (usedMemory <= maxMemory) return 0;
 
-    var entries =
-        List<MapEntry<_CacheRequest, HttpResponse>>.from(_cache.entries);
+    var entries = List<MapEntry<_CacheRequest, HttpResponse>>.from(
+      _cache.entries,
+    );
 
     entries.sort((e1, e2) {
       var m1 = e1.key.memorySize() + e1.value.memorySize();
@@ -250,8 +260,9 @@ class HttpCache {
     timeout ??= this.timeout;
     if (timeout.inMilliseconds <= 0) return 0;
 
-    var entries =
-        List<MapEntry<_CacheRequest, HttpResponse>>.from(_cache.entries);
+    var entries = List<MapEntry<_CacheRequest, HttpResponse>>.from(
+      _cache.entries,
+    );
 
     entries.sort((e1, e2) {
       var t1 = max(e1.key.accessTime, e1.value.accessTime!);
@@ -272,7 +283,8 @@ class HttpCache {
       removed += memory;
 
       _log(
-          'Removed cached entry> memory: $memory ; timeout: $elapsedTime / $timeout');
+        'Removed cached entry> memory: $memory ; timeout: $elapsedTime / $timeout',
+      );
     }
 
     _log('Total removed memory: $removed');
@@ -284,25 +296,36 @@ class HttpCache {
   ///
   /// - See [requestURL] documentation.
   Future<HttpResponse> request(
-      HttpClient httpClient, HttpMethod method, String? path,
-      {bool fullPath = false,
-      Credential? authorization,
-      Map<String, String?>? queryParameters,
-      Object? body,
-      String? contentType,
-      String? accept,
-      OnCachedResponse? onStaleResponse,
-      Duration? staleResponseDelay}) async {
+    HttpClient httpClient,
+    HttpMethod method,
+    String? path, {
+    bool fullPath = false,
+    Credential? authorization,
+    Map<String, String?>? queryParameters,
+    Object? body,
+    String? contentType,
+    String? accept,
+    OnCachedResponse? onStaleResponse,
+    Duration? staleResponseDelay,
+  }) async {
     var requestURL = httpClient.buildMethodRequestURL(
-        method, path, fullPath, queryParameters);
-    return this.requestURL(httpClient, method, requestURL,
-        authorization: authorization,
-        queryParameters: queryParameters,
-        body: body,
-        contentType: contentType,
-        accept: accept,
-        onStaleResponse: onStaleResponse,
-        staleResponseDelay: staleResponseDelay);
+      method,
+      path,
+      fullPath,
+      queryParameters,
+    );
+    return this.requestURL(
+      httpClient,
+      method,
+      requestURL,
+      authorization: authorization,
+      queryParameters: queryParameters,
+      body: body,
+      contentType: contentType,
+      accept: accept,
+      onStaleResponse: onStaleResponse,
+      staleResponseDelay: staleResponseDelay,
+    );
   }
 
   /// Does a cached request using [httpClient] and [requestURL].
@@ -318,18 +341,27 @@ class HttpCache {
   ///   new response arrives before this delay, no call to [onStaleResponse] will
   ///   be performed.
   Future<HttpResponse> requestURL(
-      HttpClient? httpClient, HttpMethod method, String requestURL,
-      {Credential? authorization,
-      Map<String, String?>? queryParameters,
-      Object? body,
-      String? contentType,
-      String? accept,
-      OnCachedResponse? onStaleResponse,
-      Duration? staleResponseDelay}) async {
+    HttpClient? httpClient,
+    HttpMethod method,
+    String requestURL, {
+    Credential? authorization,
+    Map<String, String?>? queryParameters,
+    Object? body,
+    String? contentType,
+    String? accept,
+    OnCachedResponse? onStaleResponse,
+    Duration? staleResponseDelay,
+  }) async {
     httpClient ??= HttpClient(requestURL);
 
     var cacheRequest = _CacheRequest(
-        method, requestURL, queryParameters, body, contentType, accept);
+      method,
+      requestURL,
+      queryParameters,
+      body,
+      contentType,
+      accept,
+    );
 
     var cachedEntry = _getCacheEntry(cacheRequest);
 
@@ -369,12 +401,15 @@ class HttpCache {
       }
     }
 
-    var ret = httpClient.requestURL(method, requestURL,
-        authorization: authorization,
-        queryParameters: queryParameters,
-        body: body,
-        contentType: contentType,
-        accept: accept);
+    var ret = httpClient.requestURL(
+      method,
+      requestURL,
+      authorization: authorization,
+      queryParameters: queryParameters,
+      body: body,
+      contentType: contentType,
+      accept: accept,
+    );
 
     var response = await ret;
 
@@ -397,32 +432,51 @@ class HttpCache {
   ///
   /// - See [getCachedRequestURL].
   HttpResponse? getCachedRequest(
-      HttpClient httpClient, HttpMethod method, String path,
-      {bool fullPath = false,
-      Credential? authorization,
-      Map<String, String?>? queryParameters,
-      Object? body,
-      String? contentType,
-      String? accept}) {
+    HttpClient httpClient,
+    HttpMethod method,
+    String path, {
+    bool fullPath = false,
+    Credential? authorization,
+    Map<String, String?>? queryParameters,
+    Object? body,
+    String? contentType,
+    String? accept,
+  }) {
     var requestURL = httpClient.buildMethodRequestURL(
-        method, path, fullPath, queryParameters);
-    return getCachedRequestURL(method, requestURL,
-        authorization: authorization,
-        queryParameters: queryParameters,
-        body: body,
-        contentType: contentType,
-        accept: accept);
+      method,
+      path,
+      fullPath,
+      queryParameters,
+    );
+    return getCachedRequestURL(
+      method,
+      requestURL,
+      authorization: authorization,
+      queryParameters: queryParameters,
+      body: body,
+      contentType: contentType,
+      accept: accept,
+    );
   }
 
   /// Gets a request already in cache using [httpClient] and [requestURL].
-  HttpResponse? getCachedRequestURL(HttpMethod method, String requestURL,
-      {Credential? authorization,
-      Map<String, String?>? queryParameters,
-      Object? body,
-      String? contentType,
-      String? accept}) {
+  HttpResponse? getCachedRequestURL(
+    HttpMethod method,
+    String requestURL, {
+    Credential? authorization,
+    Map<String, String?>? queryParameters,
+    Object? body,
+    String? contentType,
+    String? accept,
+  }) {
     var cacheRequest = _CacheRequest(
-        method, requestURL, queryParameters, body, contentType, accept);
+      method,
+      requestURL,
+      queryParameters,
+      body,
+      contentType,
+      accept,
+    );
     var cachedResponse = _cache[cacheRequest];
 
     if (cachedResponse != null) {
@@ -436,14 +490,16 @@ class HttpCache {
   /// Does a GET request using [url].
   ///
   /// - See [requestURL] documentation.
-  Future<HttpResponse> getURL(String url,
-      {HttpClient? httpClient,
-      bool fullPath = false,
-      Credential? authorization,
-      Map<String, String?>? parameters,
-      String? accept,
-      OnCachedResponse? onStaleResponse,
-      Duration? staleResponseDelay}) async {
+  Future<HttpResponse> getURL(
+    String url, {
+    HttpClient? httpClient,
+    bool fullPath = false,
+    Credential? authorization,
+    Map<String, String?>? parameters,
+    String? accept,
+    OnCachedResponse? onStaleResponse,
+    Duration? staleResponseDelay,
+  }) async {
     return get(
       httpClient ?? HttpClient(url),
       httpClient != null ? url : null,
@@ -458,213 +514,274 @@ class HttpCache {
   /// Does a GET request.
   ///
   /// - See [requestURL] documentation.
-  Future<HttpResponse> get(HttpClient httpClient, String? path,
-      {bool fullPath = false,
-      Credential? authorization,
-      Map<String, String?>? parameters,
-      String? accept,
-      OnCachedResponse? onStaleResponse,
-      Duration? staleResponseDelay}) async {
-    return request(httpClient, HttpMethod.GET, path,
-        fullPath: fullPath,
-        authorization: authorization,
-        queryParameters: parameters,
-        accept: accept,
-        onStaleResponse: onStaleResponse,
-        staleResponseDelay: staleResponseDelay);
+  Future<HttpResponse> get(
+    HttpClient httpClient,
+    String? path, {
+    bool fullPath = false,
+    Credential? authorization,
+    Map<String, String?>? parameters,
+    String? accept,
+    OnCachedResponse? onStaleResponse,
+    Duration? staleResponseDelay,
+  }) async {
+    return request(
+      httpClient,
+      HttpMethod.GET,
+      path,
+      fullPath: fullPath,
+      authorization: authorization,
+      queryParameters: parameters,
+      accept: accept,
+      onStaleResponse: onStaleResponse,
+      staleResponseDelay: staleResponseDelay,
+    );
   }
 
   /// Does a HEAD request.
   ///
   /// - See [requestURL] documentation.
-  Future<HttpResponse> head(HttpClient httpClient, String? path,
-      {bool fullPath = false,
-      Credential? authorization,
-      Map<String, String?>? parameters,
-      String? accept,
-      OnCachedResponse? onStaleResponse,
-      Duration? staleResponseDelay}) async {
-    return request(httpClient, HttpMethod.HEAD, path,
-        fullPath: fullPath,
-        authorization: authorization,
-        queryParameters: parameters,
-        accept: accept,
-        onStaleResponse: onStaleResponse,
-        staleResponseDelay: staleResponseDelay);
+  Future<HttpResponse> head(
+    HttpClient httpClient,
+    String? path, {
+    bool fullPath = false,
+    Credential? authorization,
+    Map<String, String?>? parameters,
+    String? accept,
+    OnCachedResponse? onStaleResponse,
+    Duration? staleResponseDelay,
+  }) async {
+    return request(
+      httpClient,
+      HttpMethod.HEAD,
+      path,
+      fullPath: fullPath,
+      authorization: authorization,
+      queryParameters: parameters,
+      accept: accept,
+      onStaleResponse: onStaleResponse,
+      staleResponseDelay: staleResponseDelay,
+    );
   }
 
   /// Does an OPTIONS request.
   ///
   /// - See [requestURL] documentation.
-  Future<HttpResponse> options(HttpClient httpClient, String path,
-      {bool fullPath = false,
-      Credential? authorization,
-      Map<String, String?>? parameters,
-      String? accept,
-      OnCachedResponse? onStaleResponse,
-      Duration? staleResponseDelay}) async {
-    return request(httpClient, HttpMethod.OPTIONS, path,
-        fullPath: fullPath,
-        authorization: authorization,
-        queryParameters: parameters,
-        accept: accept,
-        onStaleResponse: onStaleResponse,
-        staleResponseDelay: staleResponseDelay);
+  Future<HttpResponse> options(
+    HttpClient httpClient,
+    String path, {
+    bool fullPath = false,
+    Credential? authorization,
+    Map<String, String?>? parameters,
+    String? accept,
+    OnCachedResponse? onStaleResponse,
+    Duration? staleResponseDelay,
+  }) async {
+    return request(
+      httpClient,
+      HttpMethod.OPTIONS,
+      path,
+      fullPath: fullPath,
+      authorization: authorization,
+      queryParameters: parameters,
+      accept: accept,
+      onStaleResponse: onStaleResponse,
+      staleResponseDelay: staleResponseDelay,
+    );
   }
 
   /// Does a POST request.
   ///
   /// - See [requestURL] documentation.
-  Future<HttpResponse> post(HttpClient httpClient, String path,
-      {bool fullPath = false,
-      Credential? authorization,
-      Map<String, String?>? parameters,
-      Object? body,
-      String? contentType,
-      String? accept,
-      OnCachedResponse? onStaleResponse,
-      Duration? staleResponseDelay}) async {
-    return request(httpClient, HttpMethod.POST, path,
-        fullPath: fullPath,
-        authorization: authorization,
-        queryParameters: parameters,
-        body: body,
-        contentType: contentType,
-        accept: accept,
-        onStaleResponse: onStaleResponse,
-        staleResponseDelay: staleResponseDelay);
+  Future<HttpResponse> post(
+    HttpClient httpClient,
+    String path, {
+    bool fullPath = false,
+    Credential? authorization,
+    Map<String, String?>? parameters,
+    Object? body,
+    String? contentType,
+    String? accept,
+    OnCachedResponse? onStaleResponse,
+    Duration? staleResponseDelay,
+  }) async {
+    return request(
+      httpClient,
+      HttpMethod.POST,
+      path,
+      fullPath: fullPath,
+      authorization: authorization,
+      queryParameters: parameters,
+      body: body,
+      contentType: contentType,
+      accept: accept,
+      onStaleResponse: onStaleResponse,
+      staleResponseDelay: staleResponseDelay,
+    );
   }
 
   /// Does a PUT request.
   ///
   /// - See [requestURL] documentation.
-  Future<HttpResponse> put(HttpClient httpClient, String path,
-      {bool fullPath = false,
-      Credential? authorization,
-      Object? body,
-      String? contentType,
-      String? accept,
-      OnCachedResponse? onStaleResponse,
-      Duration? staleResponseDelay}) async {
-    return request(httpClient, HttpMethod.PUT, path,
-        fullPath: fullPath,
-        authorization: authorization,
-        body: body,
-        contentType: contentType,
-        accept: accept,
-        onStaleResponse: onStaleResponse,
-        staleResponseDelay: staleResponseDelay);
+  Future<HttpResponse> put(
+    HttpClient httpClient,
+    String path, {
+    bool fullPath = false,
+    Credential? authorization,
+    Object? body,
+    String? contentType,
+    String? accept,
+    OnCachedResponse? onStaleResponse,
+    Duration? staleResponseDelay,
+  }) async {
+    return request(
+      httpClient,
+      HttpMethod.PUT,
+      path,
+      fullPath: fullPath,
+      authorization: authorization,
+      body: body,
+      contentType: contentType,
+      accept: accept,
+      onStaleResponse: onStaleResponse,
+      staleResponseDelay: staleResponseDelay,
+    );
   }
 
   /// Does a request and decodes response to JSON.
   ///
   /// - See [requestURL] documentation.
   Future<dynamic> requestJSON(
-      HttpClient httpClient, HttpMethod method, String path,
-      {bool fullPath = false,
-      Credential? authorization,
-      Map<String, String?>? queryParameters,
-      Object? body,
-      String? contentType,
-      String? accept,
-      OnCachedResponse? onStaleResponse,
-      Duration? staleResponseDelay}) async {
-    return request(httpClient, method, path,
-            fullPath: fullPath,
-            authorization: authorization,
-            queryParameters: queryParameters,
-            body: body,
-            contentType: contentType,
-            accept: accept,
-            onStaleResponse: onStaleResponse,
-            staleResponseDelay: staleResponseDelay)
-        .then((r) => r.json);
+    HttpClient httpClient,
+    HttpMethod method,
+    String path, {
+    bool fullPath = false,
+    Credential? authorization,
+    Map<String, String?>? queryParameters,
+    Object? body,
+    String? contentType,
+    String? accept,
+    OnCachedResponse? onStaleResponse,
+    Duration? staleResponseDelay,
+  }) async {
+    return request(
+      httpClient,
+      method,
+      path,
+      fullPath: fullPath,
+      authorization: authorization,
+      queryParameters: queryParameters,
+      body: body,
+      contentType: contentType,
+      accept: accept,
+      onStaleResponse: onStaleResponse,
+      staleResponseDelay: staleResponseDelay,
+    ).then((r) => r.json);
   }
 
   /// Does a GET request and decodes response to JSON.
   ///
   /// - See [requestURL] documentation.
-  Future<dynamic> getJSON(HttpClient httpClient, String path,
-      {bool fullPath = false,
-      Credential? authorization,
-      Map<String, String?>? parameters,
-      String? accept,
-      OnCachedResponse? onStaleResponse,
-      Duration? staleResponseDelay}) async {
-    return get(httpClient, path,
-            fullPath: fullPath,
-            authorization: authorization,
-            parameters: parameters,
-            accept: accept,
-            onStaleResponse: onStaleResponse,
-            staleResponseDelay: staleResponseDelay)
-        .then((r) => r.json);
+  Future<dynamic> getJSON(
+    HttpClient httpClient,
+    String path, {
+    bool fullPath = false,
+    Credential? authorization,
+    Map<String, String?>? parameters,
+    String? accept,
+    OnCachedResponse? onStaleResponse,
+    Duration? staleResponseDelay,
+  }) async {
+    return get(
+      httpClient,
+      path,
+      fullPath: fullPath,
+      authorization: authorization,
+      parameters: parameters,
+      accept: accept,
+      onStaleResponse: onStaleResponse,
+      staleResponseDelay: staleResponseDelay,
+    ).then((r) => r.json);
   }
 
   /// Does an OPTIONS request and decodes response to JSON.
   ///
   /// - See [requestURL] documentation.
-  Future<dynamic> optionsJSON(HttpClient httpClient, String path,
-      {bool fullPath = false,
-      Credential? authorization,
-      Map<String, String?>? parameters,
-      String? accept,
-      OnCachedResponse? onStaleResponse,
-      Duration? staleResponseDelay}) async {
-    return options(httpClient, path,
-            fullPath: fullPath,
-            authorization: authorization,
-            parameters: parameters,
-            accept: accept,
-            onStaleResponse: onStaleResponse,
-            staleResponseDelay: staleResponseDelay)
-        .then((r) => r.json);
+  Future<dynamic> optionsJSON(
+    HttpClient httpClient,
+    String path, {
+    bool fullPath = false,
+    Credential? authorization,
+    Map<String, String?>? parameters,
+    String? accept,
+    OnCachedResponse? onStaleResponse,
+    Duration? staleResponseDelay,
+  }) async {
+    return options(
+      httpClient,
+      path,
+      fullPath: fullPath,
+      authorization: authorization,
+      parameters: parameters,
+      accept: accept,
+      onStaleResponse: onStaleResponse,
+      staleResponseDelay: staleResponseDelay,
+    ).then((r) => r.json);
   }
 
   /// Does a POST request and decodes response to JSON.
   ///
   /// - See [requestURL] documentation.
-  Future<dynamic> postJSON(HttpClient httpClient, String path,
-      {bool fullPath = false,
-      Credential? authorization,
-      Map<String, String?>? parameters,
-      Object? body,
-      String? contentType,
-      String? accept,
-      OnCachedResponse? onStaleResponse,
-      Duration? staleResponseDelay}) async {
-    return post(httpClient, path,
-            fullPath: fullPath,
-            authorization: authorization,
-            parameters: parameters,
-            body: body,
-            contentType: contentType,
-            accept: accept,
-            onStaleResponse: onStaleResponse,
-            staleResponseDelay: staleResponseDelay)
-        .then((r) => r.json);
+  Future<dynamic> postJSON(
+    HttpClient httpClient,
+    String path, {
+    bool fullPath = false,
+    Credential? authorization,
+    Map<String, String?>? parameters,
+    Object? body,
+    String? contentType,
+    String? accept,
+    OnCachedResponse? onStaleResponse,
+    Duration? staleResponseDelay,
+  }) async {
+    return post(
+      httpClient,
+      path,
+      fullPath: fullPath,
+      authorization: authorization,
+      parameters: parameters,
+      body: body,
+      contentType: contentType,
+      accept: accept,
+      onStaleResponse: onStaleResponse,
+      staleResponseDelay: staleResponseDelay,
+    ).then((r) => r.json);
   }
 
   /// Does a PUT request and decodes response to JSON.
   ///
   /// - See [requestURL] documentation.
-  Future<dynamic> putJSON(HttpClient httpClient, String path,
-      {bool fullPath = false,
-      Credential? authorization,
-      Object? body,
-      String? contentType,
-      String? accept,
-      OnCachedResponse? onStaleResponse,
-      Duration? staleResponseDelay}) async {
-    return put(httpClient, path,
-            fullPath: fullPath,
-            authorization: authorization,
-            body: body,
-            contentType: contentType,
-            accept: accept,
-            onStaleResponse: onStaleResponse,
-            staleResponseDelay: staleResponseDelay)
-        .then((r) => r.json);
+  Future<dynamic> putJSON(
+    HttpClient httpClient,
+    String path, {
+    bool fullPath = false,
+    Credential? authorization,
+    Object? body,
+    String? contentType,
+    String? accept,
+    OnCachedResponse? onStaleResponse,
+    Duration? staleResponseDelay,
+  }) async {
+    return put(
+      httpClient,
+      path,
+      fullPath: fullPath,
+      authorization: authorization,
+      body: body,
+      contentType: contentType,
+      accept: accept,
+      onStaleResponse: onStaleResponse,
+      staleResponseDelay: staleResponseDelay,
+    ).then((r) => r.json);
   }
 
   @override

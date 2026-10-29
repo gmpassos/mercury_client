@@ -23,10 +23,7 @@ class TestServer {
 
     _serverOpen = Completer();
 
-    server = await io.HttpServer.bind(
-      io.InternetAddress.loopbackIPv4,
-      9180,
-    );
+    server = await io.HttpServer.bind(io.InternetAddress.loopbackIPv4, 9180);
 
     print('[SERVER] STARTED>>> port: $port ; server: $server');
 
@@ -107,8 +104,11 @@ class TestServer {
 
     request.response.statusCode = 200;
     _setResponseCORS(request);
-    request.response.headers
-        .add('Content-Type', 'application/json', preserveHeaderCase: true);
+    request.response.headers.add(
+      'Content-Type',
+      'application/json',
+      preserveHeaderCase: true,
+    );
     request.response.write(response);
     await request.response.close();
   }
@@ -117,10 +117,16 @@ class TestServer {
   Future _processTestRequestToken(io.HttpRequest request) async {
     request.response.statusCode = 200;
     _setResponseCORS(request);
-    request.response.headers
-        .add('X-Access-Token', 'TK-SERVER', preserveHeaderCase: true);
-    request.response.headers
-        .add('Content-Type', 'text/plain', preserveHeaderCase: true);
+    request.response.headers.add(
+      'X-Access-Token',
+      'TK-SERVER',
+      preserveHeaderCase: true,
+    );
+    request.response.headers.add(
+      'Content-Type',
+      'text/plain',
+      preserveHeaderCase: true,
+    );
     request.response.write('token');
     await request.response.close();
   }
@@ -159,11 +165,17 @@ class TestServer {
     request.response.statusCode = 200;
     _setResponseCORS(request);
 
-    request.response.headers
-        .add('Content-Length', response.length, preserveHeaderCase: true);
+    request.response.headers.add(
+      'Content-Length',
+      response.length,
+      preserveHeaderCase: true,
+    );
 
-    request.response.headers
-        .add('Content-Type', responseType, preserveHeaderCase: true);
+    request.response.headers.add(
+      'Content-Type',
+      responseType,
+      preserveHeaderCase: true,
+    );
 
     request.response.write(response);
 
@@ -186,21 +198,32 @@ class TestServer {
     var origin =
         request.headers['Origin'] ?? 'http://${request.headers.host}:$port/';
 
-    request.response.headers
-        .add('Access-Control-Allow-Origin', origin, preserveHeaderCase: true);
+    request.response.headers.add(
+      'Access-Control-Allow-Origin',
+      origin,
+      preserveHeaderCase: true,
+    );
 
-    request.response.headers.add('Access-Control-Allow-Methods',
-        'GET,HEAD,PUT,POST,PATCH,DELETE,OPTIONS');
+    request.response.headers.add(
+      'Access-Control-Allow-Methods',
+      'GET,HEAD,PUT,POST,PATCH,DELETE,OPTIONS',
+    );
     request.response.headers.add('Access-Control-Allow-Credentials', 'true');
 
-    request.response.headers.add('Access-Control-Allow-Headers',
-        'Content-Type, Access-Control-Allow-Headers, Authorization, x-ijt, X-Test');
-    request.response.headers.add('Access-Control-Expose-Headers',
-        'Content-Length, Content-Type, Last-Modified, X-Access-Token, X-Access-Token-Expiration');
+    request.response.headers.add(
+      'Access-Control-Allow-Headers',
+      'Content-Type, Access-Control-Allow-Headers, Authorization, x-ijt, X-Test',
+    );
+    request.response.headers.add(
+      'Access-Control-Expose-Headers',
+      'Content-Length, Content-Type, Last-Modified, X-Access-Token, X-Access-Token-Expiration',
+    );
   }
 
   Future<String> _decodeBody(
-      io.ContentType? contentType, io.HttpRequest r) async {
+    io.ContentType? contentType,
+    io.HttpRequest r,
+  ) async {
     if (contentType != null) {
       var charset = contentType.charset;
 
@@ -241,7 +264,8 @@ void hybridMain(StreamChannel channel) async {
     var op = '$msg';
 
     print(
-        '[VM:CHANNEL] OP MSG>>>> msg: $msg > op: $op >> allMessages: $allMessages');
+      '[VM:CHANNEL] OP MSG>>>> msg: $msg > op: $op >> allMessages: $allMessages',
+    );
 
     switch (op) {
       case 'start':

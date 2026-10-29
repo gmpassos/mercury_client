@@ -6,8 +6,10 @@ void main() async {
   var client = HttpClient('https://www.google.com/');
 
   // GET: https://www.google.com/search?q=mercury_client
-  var response =
-      await client.get('search', parameters: {'q': 'mercury_client'});
+  var response = await client.get(
+    'search',
+    parameters: {'q': 'mercury_client'},
+  );
 
   if (response.isOK) {
     var body = response.bodyAsString!;
@@ -25,8 +27,10 @@ void main() async {
 
   print('------------------------------------------------');
 
-  var responsePost =
-      await client.post('search', parameters: {'q': 'mercury_client'});
+  var responsePost = await client.post(
+    'search',
+    parameters: {'q': 'mercury_client'},
+  );
   assert(responsePost.isError);
 
   print('Google rejects POST requests!');
@@ -37,8 +41,11 @@ void main() async {
   var cache = HttpCache(verbose: true);
 
   {
-    var response =
-        await cache.get(client, 'search', parameters: {'q': 'mercury_client'});
+    var response = await cache.get(
+      client,
+      'search',
+      parameters: {'q': 'mercury_client'},
+    );
 
     var status = response.status;
     var title = _catchTitle(response);
@@ -47,8 +54,11 @@ void main() async {
   }
 
   {
-    var response =
-        await cache.get(client, 'search', parameters: {'q': 'mercury_client'});
+    var response = await cache.get(
+      client,
+      'search',
+      parameters: {'q': 'mercury_client'},
+    );
 
     var status = response.status;
     var title = _catchTitle(response);
@@ -59,8 +69,11 @@ void main() async {
   {
     var client = HttpClient('https://www.google.com/');
 
-    var response =
-        await cache.get(client, 'searchX', parameters: {'q': 'mercury_client'});
+    var response = await cache.get(
+      client,
+      'searchX',
+      parameters: {'q': 'mercury_client'},
+    );
 
     var status = response.status;
 

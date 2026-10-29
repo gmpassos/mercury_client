@@ -24,26 +24,40 @@ void main() {
     });
 
     test('canHttpMethodHaveBody / methodAcceptsQueryString', () {
-      expect(HttpMethod.values.where(canHttpMethodHaveBody),
-          unorderedEquals([HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH]));
-      expect(HttpMethod.values.where(methodAcceptsQueryString),
-          unorderedEquals([HttpMethod.GET, HttpMethod.OPTIONS]));
+      expect(
+        HttpMethod.values.where(canHttpMethodHaveBody),
+        unorderedEquals([HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH]),
+      );
+      expect(
+        HttpMethod.values.where(methodAcceptsQueryString),
+        unorderedEquals([HttpMethod.GET, HttpMethod.OPTIONS]),
+      );
     });
   });
 
   test('buildURLWithQueryParameters', () {
-    expect(buildURLWithQueryParameters('http://a.com/x', {}),
-        equals('http://a.com/x'));
-    expect(buildURLWithQueryParameters('http://a.com/x', {'b': '2'}),
-        equals('http://a.com/x?b=2'));
-    expect(buildURLWithQueryParameters('http://a.com/x?a=1', {'b': '2'}),
-        equals('http://a.com/x?a=1&b=2'));
-    expect(buildURLWithQueryParameters('http://a.com/x?a=1#f', {'a': '3'}),
-        equals('http://a.com/x?a=3#f'));
     expect(
-        buildURLWithQueryParameters('http://a.com/x#f', {'a': '1'},
-            removeFragment: true),
-        equals('http://a.com/x?a=1'));
+      buildURLWithQueryParameters('http://a.com/x', {}),
+      equals('http://a.com/x'),
+    );
+    expect(
+      buildURLWithQueryParameters('http://a.com/x', {'b': '2'}),
+      equals('http://a.com/x?b=2'),
+    );
+    expect(
+      buildURLWithQueryParameters('http://a.com/x?a=1', {'b': '2'}),
+      equals('http://a.com/x?a=1&b=2'),
+    );
+    expect(
+      buildURLWithQueryParameters('http://a.com/x?a=1#f', {'a': '3'}),
+      equals('http://a.com/x?a=3#f'),
+    );
+    expect(
+      buildURLWithQueryParameters('http://a.com/x#f', {
+        'a': '1',
+      }, removeFragment: true),
+      equals('http://a.com/x?a=1'),
+    );
   });
 
   group('HttpStatus / HttpError', () {
@@ -62,8 +76,13 @@ void main() {
     });
 
     test('HttpError', () {
-      var error = HttpError('http://a/x', 'http://a/x?y=1', 401,
-          '{"error":"invalid_grant"}', null);
+      var error = HttpError(
+        'http://a/x',
+        'http://a/x?y=1',
+        401,
+        '{"error":"invalid_grant"}',
+        null,
+      );
 
       expect(error.status, equals(401));
       expect(error.url, equals('http://a/x'));
@@ -74,8 +93,13 @@ void main() {
       expect(error.isOAuthAuthorizationError, isTrue);
       expect(error.toString(), contains('401'));
 
-      var other =
-          HttpError('http://a/', 'http://a/', 500, '{"error":"x"}', null);
+      var other = HttpError(
+        'http://a/',
+        'http://a/',
+        500,
+        '{"error":"x"}',
+        null,
+      );
       expect(other.isOAuthAuthorizationError, isFalse);
     });
   });
@@ -88,8 +112,10 @@ void main() {
 
       var header = c.buildAuthorizationHeaderLine();
       expect(header, startsWith('Basic '));
-      expect(utf8.decode(base64Url.decode(header.substring(6))),
-          equals('joe:p4ss'));
+      expect(
+        utf8.decode(base64Url.decode(header.substring(6))),
+        equals('joe:p4ss'),
+      );
 
       var fromBase64 = BasicCredential.base64(header.substring(6));
       expect(fromBase64.username, equals('joe'));
@@ -132,27 +158,36 @@ void main() {
       expect(c.usesAuthorizationHeader, isTrue);
       expect(c.buildAuthorizationHeaderLine(), equals('Bearer TK'));
 
-      expect(BearerCredential.fromJSONToken({'access_token': 'A'})?.token,
-          equals('A'));
-      expect(BearerCredential.fromJSONToken({'accessToken': 'B'})?.token,
-          equals('B'));
       expect(
-          BearerCredential.fromJSONToken({
-            'accessToken': {'token': 'C'}
-          })?.token,
-          equals('C'));
-      expect(BearerCredential.fromJSONToken({'access_token': 123})?.token,
-          equals('123'));
+        BearerCredential.fromJSONToken({'access_token': 'A'})?.token,
+        equals('A'),
+      );
+      expect(
+        BearerCredential.fromJSONToken({'accessToken': 'B'})?.token,
+        equals('B'),
+      );
+      expect(
+        BearerCredential.fromJSONToken({
+          'accessToken': {'token': 'C'},
+        })?.token,
+        equals('C'),
+      );
+      expect(
+        BearerCredential.fromJSONToken({'access_token': 123})?.token,
+        equals('123'),
+      );
       expect(BearerCredential.fromJSONToken({'access_token': ' '}), isNull);
       expect(BearerCredential.fromJSONToken({'other': 'x'}), isNull);
       expect(BearerCredential.fromJSONToken('x'), isNull);
       expect(
-          BearerCredential.fromJSONToken({'t': 'D'}, 't')?.token, equals('D'));
+        BearerCredential.fromJSONToken({'t': 'D'}, 't')?.token,
+        equals('D'),
+      );
 
       var json = {
         'a': {
-          'b': ['x', 'y']
-        }
+          'b': ['x', 'y'],
+        },
       };
       expect(BearerCredential.findToken(json, 'a/b/1'), equals('y'));
       expect(BearerCredential.findToken(json, 'a/c'), isNull);
@@ -167,7 +202,9 @@ void main() {
       expect(c.usesAuthorizationHeader, isFalse);
       expect(c.buildAuthorizationHeaderLine(), isNull);
       expect(
-          c.buildURL('http://a.com/x?y=1#f'), equals('http://a.com/x?y=1&k=v'));
+        c.buildURL('http://a.com/x?y=1#f'),
+        equals('http://a.com/x?y=1&k=v'),
+      );
     });
 
     test('JSONBodyCredential', () {
@@ -181,29 +218,38 @@ void main() {
       expect(c.buildURL('http://a/'), equals('http://a/'));
 
       expect(
-          jsonDecode(c.buildBody(HttpRequestBody(null, null)).contentAsString!),
-          equals({'auth': 'S'}));
-      expect(jsonDecode(c.buildBody(json('{"a":1}')).contentAsString!),
-          equals({'a': 1, 'auth': 'S'}));
+        jsonDecode(c.buildBody(HttpRequestBody(null, null)).contentAsString!),
+        equals({'auth': 'S'}),
+      );
+      expect(
+        jsonDecode(c.buildBody(json('{"a":1}')).contentAsString!),
+        equals({'a': 1, 'auth': 'S'}),
+      );
 
       // No field: the authorization merged into the body.
       var map = JSONBodyCredential(' ', {'auth': 'S'});
       expect(map.field, isNull);
-      expect(jsonDecode(map.buildBody(json('{"a":1}')).contentAsString!),
-          equals({'a': 1, 'auth': 'S'}));
       expect(
-          jsonDecode(
-              map.buildBody(HttpRequestBody(null, null)).contentAsString!),
-          equals({'auth': 'S'}));
+        jsonDecode(map.buildBody(json('{"a":1}')).contentAsString!),
+        equals({'a': 1, 'auth': 'S'}),
+      );
+      expect(
+        jsonDecode(map.buildBody(HttpRequestBody(null, null)).contentAsString!),
+        equals({'auth': 'S'}),
+      );
 
       var list = JSONBodyCredential('', ['S']);
-      expect(jsonDecode(list.buildBody(json('[1]')).contentAsString!),
-          equals([1, 'S']));
+      expect(
+        jsonDecode(list.buildBody(json('[1]')).contentAsString!),
+        equals([1, 'S']),
+      );
 
       expect(() => map.buildBody(json('[1]')), throwsStateError);
       expect(() => list.buildBody(json('{"a":1}')), throwsStateError);
-      expect(() => JSONBodyCredential('', 'S').buildBody(json('{"a":1}')),
-          throwsStateError);
+      expect(
+        () => JSONBodyCredential('', 'S').buildBody(json('{"a":1}')),
+        throwsStateError,
+      );
     });
   });
 
@@ -243,10 +289,14 @@ void main() {
   });
 
   test('HttpRequest', () {
-    var request = HttpRequest(HttpMethod.POST, 'http://a/x', 'http://a/x?y=1',
-        queryParameters: {'y': '1'},
-        requestHeaders: {'Accept': 'application/json'},
-        sendData: 'abc');
+    var request = HttpRequest(
+      HttpMethod.POST,
+      'http://a/x',
+      'http://a/x?y=1',
+      queryParameters: {'y': '1'},
+      requestHeaders: {'Accept': 'application/json'},
+      sendData: 'abc',
+    );
 
     expect(request.retries, equals(0));
     request.incrementRetries();
@@ -305,13 +355,19 @@ void main() {
       var utf = Uint8List.fromList(utf8.encode('ação'));
 
       expect(
-          HttpBody.bytesToString(
-              utf, MimeType.parse('text/plain; charset=utf-8')),
-          equals('ação'));
+        HttpBody.bytesToString(
+          utf,
+          MimeType.parse('text/plain; charset=utf-8'),
+        ),
+        equals('ação'),
+      );
       expect(
-          HttpBody.bytesToString(
-              latin, MimeType.parse('text/plain; charset=iso-8859-1')),
-          equals('ação'));
+        HttpBody.bytesToString(
+          latin,
+          MimeType.parse('text/plain; charset=iso-8859-1'),
+        ),
+        equals('ação'),
+      );
 
       // No charset: UTF-8, else LATIN-1.
       expect(HttpBody.bytesToString(utf), equals('ação'));
@@ -348,8 +404,10 @@ void main() {
       var simulation = HttpClientRequesterSimulation()
         ..replyGET(RegExp(r'/json'), '{"a":1}')
         // The query parameters are in the requested URL:
-        ..simulateGET(RegExp(r'/params'),
-            (url, params) => jsonEncode(Uri.parse(url).queryParameters))
+        ..simulateGET(
+          RegExp(r'/params'),
+          (url, params) => jsonEncode(Uri.parse(url).queryParameters),
+        )
         ..replyPOST(RegExp(r'/post'), '{"posted":true}')
         ..replyPUT(RegExp(r'/put'), '{"put":true}')
         ..replyOPTIONS(RegExp(r'/options'), '{"options":true}')
@@ -365,15 +423,23 @@ void main() {
       expect(client.toString(), contains('baseURL'));
 
       expect(await client.getJSON('json'), equals({'a': 1}));
-      expect(await client.getJSON('params', parameters: {'x': '1'}),
-          equals({'x': '1'}));
-      expect(await client.postJSON('post', body: {'a': 1}),
-          equals({'posted': true}));
       expect(
-          await client.putJSON('put', body: {'a': 1}), equals({'put': true}));
+        await client.getJSON('params', parameters: {'x': '1'}),
+        equals({'x': '1'}),
+      );
+      expect(
+        await client.postJSON('post', body: {'a': 1}),
+        equals({'posted': true}),
+      );
+      expect(
+        await client.putJSON('put', body: {'a': 1}),
+        equals({'put': true}),
+      );
       expect(await client.optionsJSON('options'), equals({'options': true}));
       expect(
-          await client.requestJSON(HttpMethod.GET, 'json'), equals({'a': 1}));
+        await client.requestJSON(HttpMethod.GET, 'json'),
+        equals({'a': 1}),
+      );
 
       expect((await client.delete('any')).bodyAsString, equals('ANY'));
       expect((await client.patch('any')).bodyAsString, equals('ANY'));
@@ -385,12 +451,15 @@ void main() {
       var client = newClient();
 
       expect(
-          client.buildURL('x', false), equals('http://localhost:8080/api/x'));
+        client.buildURL('x', false),
+        equals('http://localhost:8080/api/x'),
+      );
       // A full path: from the root of the base URL's host.
       expect(client.buildURL('/x', true), equals('http://localhost:8080/x'));
       expect(
-          client.buildRequestURL(HttpMethod.GET, 'x', parameters: {'a': '1'}),
-          equals('http://localhost:8080/api/x?a=1'));
+        client.buildRequestURL(HttpMethod.GET, 'x', parameters: {'a': '1'}),
+        equals('http://localhost:8080/api/x?a=1'),
+      );
 
       var other = client.withBaseURL('http://example.com/');
       // Without the trailing `/`:
@@ -400,13 +469,15 @@ void main() {
       var withPath = client.withBasePath('/v2/');
       expect(withPath.baseURL, contains('/v2'));
 
-      client.authorization =
-          Authorization.fromCredential(BearerCredential('T'));
+      client.authorization = Authorization.fromCredential(
+        BearerCredential('T'),
+      );
       expect(
-          client
-              .withBaseURL('http://b/', preserveAuthorization: true)
-              .authorization,
-          isNotNull);
+        client
+            .withBaseURL('http://b/', preserveAuthorization: true)
+            .authorization,
+        isNotNull,
+      );
       expect(client.withBaseURL('http://b/').authorization, isNull);
 
       client.urlFilter = (url, queryParameters) => '$url-filtered';
@@ -417,7 +488,10 @@ void main() {
       var client = newClient();
 
       var call = HttpCall<dynamic>(
-          client: client, method: HttpMethod.GET, path: 'params');
+        client: client,
+        method: HttpMethod.GET,
+        path: 'params',
+      );
       expect(call.toString(), contains('params'));
 
       var response = await call.call({'a': 1, 'b': true});
@@ -428,8 +502,10 @@ void main() {
       expect(resolved, equals('{"c":"x"}'));
 
       expect(HttpCall.toQueryParameters(null), isNull);
-      expect(HttpCall.toQueryParameters({'a': 1, 'b': null}),
-          equals({'a': '1', 'b': ''}));
+      expect(
+        HttpCall.toQueryParameters({'a': 1, 'b': null}),
+        equals({'a': '1', 'b': ''}),
+      );
       expect(HttpCall.toQueryParameterValue([1, 2]), equals('1,2'));
     });
 
@@ -451,8 +527,10 @@ void main() {
       var r1 = await cache.get(client, 'json');
       expect(await cache.get(client, 'json'), same(r1));
       expect(await cache.getJSON(client, 'json'), equals({'a': 1}));
-      expect(await cache.postJSON(client, 'post', body: '{}'),
-          equals({'posted': true}));
+      expect(
+        await cache.postJSON(client, 'post', body: '{}'),
+        equals({'posted': true}),
+      );
 
       expect(cache.cleanCacheTimedOut(Duration(hours: 1)), equals(0));
       // No limit: nothing to clean.
@@ -464,18 +542,19 @@ void main() {
 
   group('HttpRequester', () {
     test('config', () {
-      var requester = HttpRequester({
-        'host': 'example.com',
-        'secure': true,
-        'method': 'post',
-        'path': '/items/{{id}}',
-        'parameters': {'a': '1'},
-        'body_type': 'application/json',
-        'body': '{"id":"{{id}}"}',
-        'response_type': 'JSON',
-      }, {
-        'id': '7'
-      });
+      var requester = HttpRequester(
+        {
+          'host': 'example.com',
+          'secure': true,
+          'method': 'post',
+          'path': '/items/{{id}}',
+          'parameters': {'a': '1'},
+          'body_type': 'application/json',
+          'body': '{"id":"{{id}}"}',
+          'response_type': 'JSON',
+        },
+        {'id': '7'},
+      );
 
       expect(requester.scheme, equals('https'));
       expect(requester.host, equals('example.com'));
@@ -500,17 +579,21 @@ void main() {
         ..replyGET(RegExp(r'/text'), 'hello');
       var client = HttpClient('http://example.com/', simulation);
 
-      var json = HttpRequester(
-          {'host': 'example.com', 'path': '/json', 'response_type': 'json'});
+      var json = HttpRequester({
+        'host': 'example.com',
+        'path': '/json',
+        'response_type': 'json',
+      });
       expect(await json.doRequestWithClient(client), equals({'a': 1}));
 
       var text = HttpRequester({'host': 'example.com', 'path': '/text'});
       expect(await text.doRequestWithClient(client), equals('hello'));
 
       var cached = HttpRequester(
-          {'host': 'example.com', 'path': '/json', 'response_type': 'json'},
-          null,
-          HttpCache());
+        {'host': 'example.com', 'path': '/json', 'response_type': 'json'},
+        null,
+        HttpCache(),
+      );
       expect(await cached.doRequestWithClient(client), equals({'a': 1}));
     });
   });

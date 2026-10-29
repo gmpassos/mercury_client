@@ -51,11 +51,17 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
   void stderr(Object? o) => web.console.error(o?.jsify());
 
   @override
-  Future<HttpResponse> doHttpRequest(HttpClient client, HttpRequest request,
-      ProgressListener? progressListener, bool log) {
+  Future<HttpResponse> doHttpRequest(
+    HttpClient client,
+    HttpRequest request,
+    ProgressListener? progressListener,
+    bool log,
+  ) {
     var methodName = getHttpMethodName(request.method, HttpMethod.GET)!;
-    assert(RegExp(r'^(?:GET|OPTIONS|POST|PUT|DELETE|PATCH|HEAD)$')
-        .hasMatch(methodName));
+    assert(
+      RegExp(r'^(?:GET|OPTIONS|POST|PUT|DELETE|PATCH|HEAD)$')
+          .hasMatch(methodName),
+    );
 
     var url = request.requestURL;
     if (log) {
@@ -92,8 +98,9 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     }
 
     if (progressListener != null) {
-      var uploadOnProgress =
-          web.EventStreamProviders.progressEvent.forTarget(xhr.upload);
+      var uploadOnProgress = web.EventStreamProviders.progressEvent.forTarget(
+        xhr.upload,
+      );
 
       uploadOnProgress.listen((e) {
         try {
@@ -107,7 +114,12 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       xhr.onProgress.listen((e) {
         try {
           progressListener(
-              request, e.loaded, e.total, _calcLoadRatio(e), false);
+            request,
+            e.loaded,
+            e.total,
+            _calcLoadRatio(e),
+            false,
+          );
         } catch (e, s) {
           print(e);
           print(s);
@@ -119,7 +131,12 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       if (progressListener != null) {
         try {
           progressListener(
-              request, e.loaded, e.total, _calcLoadRatio(e), false);
+            request,
+            e.loaded,
+            e.total,
+            _calcLoadRatio(e),
+            false,
+          );
         } catch (e, s) {
           print(e);
           print(s);
@@ -139,8 +156,13 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       var unknownRedirect = status > 307 && status < 400;
 
       if (accepted || fileUri || notModified || unknownRedirect) {
-        var response =
-            _processResponse(client, request, request.method, request.url, xhr);
+        var response = _processResponse(
+          client,
+          request,
+          request.method,
+          request.url,
+          xhr,
+        );
         if (log) {
           this.log('RESPONSE: $response');
         }
@@ -151,8 +173,16 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
         }
 
         var errorBody = HttpBody.from(xhr.response?.dartify());
-        _completeOnError(completer, client, request, progressListener, log,
-            status, errorBody?.asString, e);
+        _completeOnError(
+          completer,
+          client,
+          request,
+          progressListener,
+          log,
+          status,
+          errorBody?.asString,
+          e,
+        );
       }
     });
 
@@ -161,8 +191,16 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
         logError('REQUEST: $request > status: ${xhr.status}', e);
       }
       var errorResponse = HttpBody.from(xhr.response?.dartify());
-      _completeOnError(completer, client, request, progressListener, log,
-          xhr.status, errorResponse?.asString, e);
+      _completeOnError(
+        completer,
+        client,
+        request,
+        progressListener,
+        log,
+        xhr.status,
+        errorResponse?.asString,
+        e,
+      );
     });
 
     if (request.sendData != null) {
@@ -177,28 +215,47 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
   double? _calcLoadRatio(web.ProgressEvent e) => e.loaded / e.total;
 
   void _completeOnError(
-      Completer<HttpResponse> originalRequestCompleter,
-      HttpClient client,
-      HttpRequest request,
-      ProgressListener? progressListener,
-      bool log,
-      int status,
-      String? responseBody,
-      dynamic error) async {
+    Completer<HttpResponse> originalRequestCompleter,
+    HttpClient client,
+    HttpRequest request,
+    ProgressListener? progressListener,
+    bool log,
+    int status,
+    String? responseBody,
+    dynamic error,
+  ) async {
     var message = responseBody ?? _errorToString(error);
 
-    var httpError =
-        HttpError(request.url, request.requestURL, status, message, error);
+    var httpError = HttpError(
+      request.url,
+      request.requestURL,
+      status,
+      message,
+      error,
+    );
 
-    var requestCompleted = await _checkForRetry(originalRequestCompleter,
-        client, request, progressListener, log, status, httpError);
+    var requestCompleted = await _checkForRetry(
+      originalRequestCompleter,
+      client,
+      request,
+      progressListener,
+      log,
+      status,
+      httpError,
+    );
 
     if (!requestCompleted) {
       var bodyError = HttpBody.from(message);
 
       var response = HttpResponse(
-          request.method, request.url, request.requestURL, status, bodyError,
-          error: httpError, jsonDecoder: client.jsonDecoder);
+        request.method,
+        request.url,
+        request.requestURL,
+        status,
+        bodyError,
+        error: httpError,
+        jsonDecoder: client.jsonDecoder,
+      );
 
       originalRequestCompleter.complete(response);
     }
@@ -217,13 +274,14 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
   }
 
   Future<bool> _checkForRetry(
-      Completer<HttpResponse> originalRequestCompleter,
-      HttpClient client,
-      HttpRequest request,
-      ProgressListener? progressListener,
-      bool log,
-      int status,
-      HttpError httpError) async {
+    Completer<HttpResponse> originalRequestCompleter,
+    HttpClient client,
+    HttpRequest request,
+    ProgressListener? progressListener,
+    bool log,
+    int status,
+    HttpError httpError,
+  ) async {
     if (request.retries >= 3) {
       return false;
     }
@@ -237,17 +295,25 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     // is a network issue ([_checkForRetryNetworkIssue]).
     if (status == 0 || status == 401) {
       var handled = await _checkForRetryAuthorizationProvider(
-          originalRequestCompleter,
-          client,
-          request,
-          progressListener,
-          log,
-          httpError);
+        originalRequestCompleter,
+        client,
+        request,
+        progressListener,
+        log,
+        httpError,
+      );
       if (handled || status == 401) return handled;
     }
 
-    return _checkForRetryNetworkIssue(originalRequestCompleter, client, request,
-        progressListener, log, status, httpError);
+    return _checkForRetryNetworkIssue(
+      originalRequestCompleter,
+      client,
+      request,
+      progressListener,
+      log,
+      status,
+      httpError,
+    );
   }
 
   /// The [HttpMethod]s retried after a network error (status `0`): only the
@@ -261,17 +327,23 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
   };
 
   Future<bool> _checkForRetryNetworkIssue(
-      Completer<HttpResponse> originalRequestCompleter,
-      HttpClient client,
-      HttpRequest request,
-      ProgressListener? progressListener,
-      bool log,
-      int status,
-      HttpError httpError) async {
+    Completer<HttpResponse> originalRequestCompleter,
+    HttpClient client,
+    HttpRequest request,
+    ProgressListener? progressListener,
+    bool log,
+    int status,
+    HttpError httpError,
+  ) async {
     if (status == 504) {
       request.incrementRetries();
       return _retryRequest(
-          originalRequestCompleter, client, request, progressListener, log);
+        originalRequestCompleter,
+        client,
+        request,
+        progressListener,
+        log,
+      );
     }
 
     if (status == 0 && networkErrorRetryMethods.contains(request.method)) {
@@ -279,19 +351,25 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       // Not at once: a network error usually lasts a moment.
       await Future.delayed(Duration(milliseconds: 200 * request.retries));
       return _retryRequest(
-          originalRequestCompleter, client, request, progressListener, log);
+        originalRequestCompleter,
+        client,
+        request,
+        progressListener,
+        log,
+      );
     }
 
     return false;
   }
 
   Future<bool> _checkForRetryAuthorizationProvider(
-      Completer<HttpResponse> originalRequestCompleter,
-      HttpClient client,
-      HttpRequest request,
-      ProgressListener? progressListener,
-      bool log,
-      HttpError httpError) async {
+    Completer<HttpResponse> originalRequestCompleter,
+    HttpClient client,
+    HttpRequest request,
+    ProgressListener? progressListener,
+    bool log,
+    HttpError httpError,
+  ) async {
     var authorization = request.authorization;
 
     if (authorization != null && !authorization.isStaticCredential) {
@@ -310,7 +388,12 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
         var request2 = request.copyWithAuthorization(client, authorization2);
 
         return _retryRequest(
-            originalRequestCompleter, client, request2, progressListener, log);
+          originalRequestCompleter,
+          client,
+          request2,
+          progressListener,
+          log,
+        );
       } else {
         var bodyError = HttpBody.from(httpError.message);
 
@@ -318,8 +401,14 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
         if (status == 0) status = 401;
 
         var response = HttpResponse(
-            request.method, request.url, request.requestURL, status, bodyError,
-            error: httpError, jsonDecoder: client.jsonDecoder);
+          request.method,
+          request.url,
+          request.requestURL,
+          status,
+          bodyError,
+          error: httpError,
+          jsonDecoder: client.jsonDecoder,
+        );
         originalRequestCompleter.complete(response);
         return true;
       }
@@ -339,18 +428,23 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
   }
 
   Future<bool> _retryRequest(
-      Completer<HttpResponse> originalRequestCompleter,
-      HttpClient client,
-      HttpRequest request,
-      ProgressListener? progressListener,
-      bool log) async {
+    Completer<HttpResponse> originalRequestCompleter,
+    HttpClient client,
+    HttpRequest request,
+    ProgressListener? progressListener,
+    bool log,
+  ) async {
     try {
       if (log) {
         this.log('RETRY: ${request.retries} ; REQUEST: $request');
       }
 
-      var response =
-          await doHttpRequest(client, request, progressListener, log);
+      var response = await doHttpRequest(
+        client,
+        request,
+        progressListener,
+        log,
+      );
       originalRequestCompleter.complete(response);
     } catch (error) {
       if (log) {
@@ -361,8 +455,13 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     return true;
   }
 
-  HttpResponse _processResponse(HttpClient client, HttpRequest request,
-      HttpMethod method, String url, web.XMLHttpRequest xhr) {
+  HttpResponse _processResponse(
+    HttpClient client,
+    HttpRequest request,
+    HttpMethod method,
+    String url,
+    web.XMLHttpRequest xhr,
+  ) {
     var contentType = xhr.getResponseHeader('Content-Type');
     var status = xhr.status;
     var body = xhr.response?.dartify();
@@ -380,18 +479,25 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
       httpBody = HttpBody.from(null, MimeType.parse(contentType));
     }
 
-    var response = HttpResponse(method, url, xhr.responseURL, status, httpBody,
-        responseHeaderGetter: (key) => xhr.getResponseHeader(key),
-        request: xhr,
-        jsonDecoder: client.jsonDecoder);
+    var response = HttpResponse(
+      method,
+      url,
+      xhr.responseURL,
+      status,
+      httpBody,
+      responseHeaderGetter: (key) => xhr.getResponseHeader(key),
+      request: xhr,
+      jsonDecoder: client.jsonDecoder,
+    );
 
     var responseHeaderWithToken = client.responseHeaderWithToken;
 
     if (responseHeaderWithToken != null) {
       var accessToken = response.getResponseHeader(responseHeaderWithToken);
       if (accessToken != null && accessToken.isNotEmpty) {
-        client.authorization =
-            Authorization.fromCredential(BearerCredential(accessToken));
+        client.authorization = Authorization.fromCredential(
+          BearerCredential(accessToken),
+        );
       }
     }
 
@@ -437,9 +543,9 @@ class HttpBlobBrowser extends HttpBlob<web.Blob> {
       if (result.isA<JSArrayBuffer>()) {
         data = (result as JSArrayBuffer).toDart;
       } else if (result.isA<JSString>()) {
-        data = (result as JSString)
-            .toDart
-            .toByteBuffer(encoding: mimeType?.preferredStringEncoding);
+        data = (result as JSString).toDart.toByteBuffer(
+          encoding: mimeType?.preferredStringEncoding,
+        );
       } else if (result.isA<JSArray>()) {
         if (result.isA<JSUint8Array>()) {
           data = (result as JSUint8Array).toDart.buffer;
@@ -448,19 +554,20 @@ class HttpBlobBrowser extends HttpBlob<web.Blob> {
         } else if (result.isA<JSUint8ClampedArray>()) {
           data = (result as JSUint8ClampedArray).toDart.buffer;
         } else if (result.isA<JSArray<JSNumber>>()) {
-          data = Uint8List.fromList((result as JSArray<JSNumber>)
-                  .toDart
-                  .map((e) => e.toDartInt)
-                  .toList())
-              .buffer;
+          data = Uint8List.fromList(
+            (result as JSArray<JSNumber>).toDart
+                .map((e) => e.toDartInt)
+                .toList(),
+          ).buffer;
         } else {
-          data = Uint8List.fromList((result as JSArray)
-                  .toDart
-                  .map((e) =>
-                      e.isA<JSNumber>() ? (e as JSNumber).toDartInt : null)
-                  .nonNulls
-                  .toList())
-              .buffer;
+          data = Uint8List.fromList(
+            (result as JSArray).toDart
+                .map(
+                  (e) => e.isA<JSNumber>() ? (e as JSNumber).toDartInt : null,
+                )
+                .nonNulls
+                .toList(),
+          ).buffer;
         }
       }
       completer.complete(data);

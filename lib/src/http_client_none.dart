@@ -10,14 +10,21 @@ class HttpClientRequesterNone extends HttpClientRequester {
   bool setupUserAgent(String? userAgent) => false;
 
   @override
-  Future<HttpResponse> doHttpRequest(HttpClient client, HttpRequest request,
-      ProgressListener? progressListener, bool log) {
-    return Future.error(HttpError(
+  Future<HttpResponse> doHttpRequest(
+    HttpClient client,
+    HttpRequest request,
+    ProgressListener? progressListener,
+    bool log,
+  ) {
+    return Future.error(
+      HttpError(
         request.url,
         request.requestURL,
         0,
         'No HttpClientRequester for ${request.method} request: ${request.requestURL}',
-        null));
+        null,
+      ),
+    );
   }
 }
 
