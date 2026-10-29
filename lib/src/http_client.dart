@@ -327,11 +327,7 @@ class HttpBody {
     if (body is ByteBuffer) {
       return body;
     } else if (body is List<int>) {
-      if (body is TypedData) {
-        return (body as TypedData).buffer;
-      } else {
-        return Uint8List.fromList(body).buffer;
-      }
+      return body.toByteBuffer();
     } else if (body is String) {
       return body.toByteBuffer(encoding: mimeType?.preferredStringEncoding);
     } else if (isMap) {
@@ -359,15 +355,12 @@ class HttpBody {
   }
 
   HttpBlob? get asBlob {
-    if (isBlob) {
-      if (_body is HttpBlob) return _body;
-      return createHttpBlob(_body as List<dynamic>, mimeType);
-    } else if (isByteBuffer) {
-      return createHttpBlob([_body], mimeType);
-    } else if (isBytesArray) {
-      return createHttpBlob([_body], mimeType);
-    } else if (isString) {
-      return createHttpBlob([_body], mimeType);
+    final body = _body;
+
+    if (body is HttpBlob) {
+      return body;
+    } else if (isBlob || isByteBuffer || isBytesArray || isString) {
+      return createHttpBlob([body], mimeType);
     } else if (isMap) {
       return createHttpBlob([asString], mimeType);
     }
@@ -380,8 +373,7 @@ class HttpBody {
     if (byteBuffer != null) return byteBuffer;
 
     if (isBlob) {
-      var blob = _body as HttpBlob;
-      return blob.readByteBuffer();
+      return asBlob?.readByteBuffer();
     }
 
     return null;
@@ -979,10 +971,14 @@ class BasicCredential extends Credential {
   bool get usesAuthorizationHeader => true;
 
   /// Builds the `Authorization` header.
+  /// Uses the standard Base64 alphabet (not the URL-safe one) and encodes
+  /// the [username] and [password] as UTF-8 ([RFC 7617]).
+  ///
+  /// [RFC 7617]: https://www.rfc-editor.org/rfc/rfc7617
   @override
   String buildAuthorizationHeaderLine() {
     var payload = '$username:$password';
-    var encode = Base64Codec.urlSafe().encode(payload.codeUnits);
+    var encode = base64.encode(utf8.encode(payload));
     return 'Basic $encode';
   }
 }
@@ -1209,30 +1205,25 @@ String buildURLWithQueryParameters(
 
   var uri = Uri.parse(url);
 
-  Map<String, String?> queryParameters;
+  // `Object?`: a `String`, a `List<String>` (a repeated parameter of [url])
+  // or `null` (a parameter without value).
+  Map<String, Object?> queryParameters;
 
   if (uri.query.isEmpty) {
-    queryParameters = Map<String, String?>.from(parameters);
+    queryParameters = parameters;
   } else {
-    queryParameters = uri.queryParameters;
-    queryParameters = Map<String, String?>.from(queryParameters);
-    queryParameters.addAll(parameters);
+    queryParameters = Map<String, Object?>.from(uri.queryParametersAll)
+      ..addAll(parameters);
   }
 
-  String? fragment = uri.fragment;
-  if (removeFragment || fragment.isEmpty) {
-    fragment = null;
+  // The path as is: decoding it would also decode an escaped `/` (`%2F`).
+  uri = uri.replace(queryParameters: queryParameters);
+
+  if (removeFragment || uri.fragment.isEmpty) {
+    uri = uri.removeFragment();
   }
 
-  return Uri(
-    scheme: uri.scheme,
-    userInfo: uri.userInfo,
-    host: uri.host,
-    port: uri.port,
-    path: Uri.decodeComponent(uri.path),
-    queryParameters: queryParameters,
-    fragment: fragment,
-  ).toString();
+  return uri.toString();
 }
 
 /// HTTP Method
@@ -1350,6 +1341,10 @@ class HttpRequest {
 
   int _retries = 0;
 
+  /// Whether the [queryParameters] were sent as the body (a `POST` form),
+  /// not in the [requestURL].
+  bool _queryParametersAsBody = false;
+
   HttpRequest(
     this.method,
     this.url,
@@ -1377,11 +1372,19 @@ class HttpRequest {
       return this;
     }
 
+    // Without the `Authorization` header of the previous credential: the
+    // headers passed are applied last, and it would replace the new one.
+    var headers = this.requestHeaders != null
+        ? Map<String, String>.from(this.requestHeaders!)
+        : null;
+    var authorizationKey = _getMapKeyIgnoreCase(headers, 'Authorization');
+    if (authorizationKey != null) headers!.remove(authorizationKey);
+
     var requestHeaders = client.clientRequester.buildRequestHeaders(
       client,
       method,
       url,
-      headers: this.requestHeaders,
+      headers: headers,
       authorization: authorization,
       contentType: headerContentType,
       accept: headerAccept,
@@ -1395,7 +1398,7 @@ class HttpRequest {
       client,
       url,
       authorization: authorization,
-      queryParameters: queryParameters,
+      queryParameters: _queryParametersAsBody ? null : queryParameters,
       noQueryString: noQueryString,
     );
 
@@ -1414,6 +1417,7 @@ class HttpRequest {
     );
 
     copy._retries = _retries;
+    copy._queryParametersAsBody = _queryParametersAsBody;
 
     return copy;
   }
@@ -1421,13 +1425,16 @@ class HttpRequest {
   /// Headers of the request.
   Map<String, String>? get requestHeaders => _requestHeaders;
 
+  /// Sets the `Content-Length` header to the [sendDataLength], if not set.
+  /// Not for a `chunked` `Transfer-Encoding`: a request can't have both.
   void updateContentLength() {
     var sendDataLength = _sendDataLength(updateToBytes: true);
     if (sendDataLength != null) {
       var contentLength = headerContentLength;
       var transferEncoding = headerTransferEncoding;
       if (contentLength == null &&
-          (transferEncoding == null || transferEncoding.contains('chunked'))) {
+          (transferEncoding == null ||
+              !transferEncoding.toLowerCase().contains('chunked'))) {
         var requestHeaders = _requestHeaders ??= <String, String>{};
         requestHeaders[HttpRequest._headerKeyContentLength] = '$sendDataLength';
       }
@@ -1841,6 +1848,7 @@ abstract class HttpClientRequester {
         requestURL,
         authorization: authorization,
         queryParameters: queryParameters,
+        noQueryString: noQueryString,
         withCredentials: _withCredentials(client, authorization),
         requestHeaders: requestHeaders,
         responseType: responseType,
@@ -1889,6 +1897,7 @@ abstract class HttpClientRequester {
         requestURL,
         authorization: authorization,
         queryParameters: queryParameters,
+        noQueryString: noQueryString,
         withCredentials: _withCredentials(client, authorization),
         requestHeaders: requestHeaders,
       ),
@@ -1936,6 +1945,7 @@ abstract class HttpClientRequester {
         requestURL,
         authorization: authorization,
         queryParameters: queryParameters,
+        noQueryString: noQueryString,
         withCredentials: _withCredentials(client, authorization),
         requestHeaders: requestHeaders,
       ),
@@ -1996,11 +2006,12 @@ abstract class HttpClientRequester {
           requestURL,
           authorization: authorization,
           queryParameters: queryParameters,
+          noQueryString: noQueryString,
           withCredentials: _withCredentials(client, authorization),
           requestHeaders: requestHeaders,
           sendData: formData,
           responseType: responseType,
-        ),
+        ).._queryParametersAsBody = true,
         progressListener,
         client.logRequests,
       );
@@ -2037,6 +2048,7 @@ abstract class HttpClientRequester {
           requestURL,
           authorization: authorization,
           queryParameters: queryParameters,
+          noQueryString: noQueryString,
           withCredentials: _withCredentials(client, authorization),
           requestHeaders: requestHeaders,
           sendData: requestBody.contentAsSendData,
@@ -2096,6 +2108,7 @@ abstract class HttpClientRequester {
         requestURL,
         authorization: authorization,
         queryParameters: queryParameters,
+        noQueryString: noQueryString,
         withCredentials: _withCredentials(client, authorization),
         requestHeaders: requestHeaders,
         sendData: requestBody.contentAsSendData,
@@ -2127,7 +2140,11 @@ abstract class HttpClientRequester {
         requestBody.isNull) {
       var mimeType = MimeType.parse(MimeType.applicationJson);
       var body = HttpBody.from(queryParameters, mimeType);
-      httpBody = HttpRequestBody(body, contentType, queryParameters);
+      httpBody = HttpRequestBody(
+        body,
+        contentType ?? MimeType.applicationJson,
+        queryParameters,
+      );
       requestBody = buildRequestBody(client, httpBody, authorization);
     }
 
@@ -2163,6 +2180,7 @@ abstract class HttpClientRequester {
         requestURL,
         authorization: authorization,
         queryParameters: queryParameters,
+        noQueryString: noQueryString,
         withCredentials: _withCredentials(client, authorization),
         requestHeaders: requestHeaders,
         sendData: requestBody.contentAsSendData,
@@ -2221,6 +2239,7 @@ abstract class HttpClientRequester {
         requestURL,
         authorization: authorization,
         queryParameters: queryParameters,
+        noQueryString: noQueryString,
         withCredentials: _withCredentials(client, authorization),
         requestHeaders: requestHeaders,
         sendData: requestBody.contentAsSendData,
@@ -2265,11 +2284,14 @@ abstract class HttpClientRequester {
   ]) {
     var formData = buildQueryString(data);
 
-    if (requestHeaders != null) {
-      requestHeaders.putIfAbsent(
-        HttpRequest._headerKeyContentType,
-        () => 'application/x-www-form-urlencoded; charset=UTF-8',
-      );
+    if (requestHeaders != null &&
+        _getMapKeyIgnoreCase(
+              requestHeaders,
+              HttpRequest._headerKeyContentType,
+            ) ==
+            null) {
+      requestHeaders[HttpRequest._headerKeyContentType] =
+          'application/x-www-form-urlencoded; charset=UTF-8';
     }
 
     return formData;
@@ -2761,7 +2783,7 @@ class HttpClient {
 
       var httpError = HttpError(
         r.url,
-        r.url,
+        r.requestedURL,
         status,
         errorMessage,
         errorMessage,
@@ -2901,7 +2923,7 @@ class HttpClient {
     Map<String, String>? headers,
     Credential? authorization,
     Map<String, Object?>? queryParameters,
-    noQueryString = false,
+    bool noQueryString = false,
     Object? body,
     String? contentType,
     String? accept,
@@ -3185,6 +3207,8 @@ class HttpClient {
 
     if (uri.queryParameters.isNotEmpty) {
       if (parameters != null && parameters.isNotEmpty) {
+        // A copy: the caller's map (maybe unmodifiable) is not changed.
+        parameters = Map<String, String?>.from(parameters);
         uri.queryParameters.forEach(
           (k, v) => parameters!.putIfAbsent(k, () => v),
         );
@@ -3311,6 +3335,8 @@ class HttpClient {
       if (queryParameters == null || queryParameters.isEmpty) {
         queryParameters = uriParameters;
       } else {
+        // A copy: the caller's map (maybe unmodifiable) is not changed.
+        queryParameters = Map<String, String?>.from(queryParameters);
         for (var e in uriParameters.entries) {
           queryParameters.putIfAbsent(e.key, () => e.value);
         }

@@ -8,12 +8,19 @@ extension ListIntExtension on List<int> {
     return Uint8List.fromList(this);
   }
 
+  /// The bytes of this list as a [ByteBuffer].
+  ///
+  /// The [ByteBuffer] of a [Uint8List] is returned only when the list views
+  /// all of it: a view of a part of a buffer (`Uint8List.sublistView`) is
+  /// copied, otherwise its buffer would also hold the bytes outside the view.
   ByteBuffer toByteBuffer() {
     var self = this;
-    if (self is TypedData) {
-      return (self as TypedData).buffer;
+    if (self is Uint8List &&
+        self.offsetInBytes == 0 &&
+        self.lengthInBytes == self.buffer.lengthInBytes) {
+      return self.buffer;
     } else {
-      return toUint8List().buffer;
+      return Uint8List.fromList(this).buffer;
     }
   }
 

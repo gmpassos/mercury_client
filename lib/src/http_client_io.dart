@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' as io;
 import 'dart:typed_data';
 
@@ -165,7 +166,7 @@ class HttpClientRequesterIO extends HttpClientRequester {
       return HttpBody.from(s, mimeType);
     }
 
-    List<int>? bytes = await _decodeBodyAsBytes(
+    Uint8List? bytes = await _decodeBodyAsBytes(
       request,
       response,
       progressListener,
@@ -178,28 +179,37 @@ class HttpClientRequesterIO extends HttpClientRequester {
     return HttpBody.from(bytes, mimeType);
   }
 
-  Future<List<int>> _decodeBodyAsBytes(
+  /// Reads the body bytes, in chunks (not copied), calling [progressListener]
+  /// with the bytes loaded and the `Content-Length` (`null` if unknown).
+  Future<Uint8List> _decodeBodyAsBytes(
     HttpRequest request,
     io.HttpClientResponse response,
     ProgressListener? progressListener,
   ) async {
-    if (progressListener != null) {
-      var total = response.contentLength;
-      var loaded = 0;
+    var bytes = BytesBuilder(copy: false);
 
-      return await response.expand((e) {
+    if (progressListener != null) {
+      var contentLength = response.contentLength;
+      var total = contentLength >= 0 ? contentLength : null;
+
+      await for (var chunk in response) {
+        bytes.add(chunk);
         try {
-          loaded += e.length;
-          progressListener(request, loaded, total, loaded / total, false);
+          var loaded = bytes.length;
+          var ratio = total != null && total > 0 ? loaded / total : null;
+          progressListener(request, loaded, total, ratio, false);
         } catch (ex, st) {
           print(ex);
           print(st);
         }
-        return e;
-      }).toList();
+      }
     } else {
-      return await response.expand((e) => e).toList();
+      await for (var chunk in response) {
+        bytes.add(chunk);
+      }
     }
+
+    return bytes.takeBytes();
   }
 
   Future<String> _decodeBodyAsString(
@@ -208,32 +218,17 @@ class HttpClientRequesterIO extends HttpClientRequester {
     MimeType mimeType,
     ProgressListener? progressListener,
   ) async {
-    var decoder = contentTypeToDecoder(mimeType);
-
-    if (progressListener != null) {
-      var total = response.contentLength;
-      var loaded = 0;
-
-      return decoder.bind(response).map((e) {
-        try {
-          loaded += e.length;
-          progressListener(request, loaded, total, loaded / total, false);
-        } catch (ex, st) {
-          print(ex);
-          print(st);
-        }
-        return e;
-      }).join();
-    } else {
-      return decoder.bind(response).join();
-    }
+    var bytes = await _decodeBodyAsBytes(request, response, progressListener);
+    if (bytes.isEmpty) return '';
+    return contentTypeToDecoder(mimeType).convert(bytes);
   }
 
   Future<Map<String, String>> _decodeHeaders(io.HttpClientResponse r) async {
     var headers = <String, String>{};
 
+    // A header with many values is joined with `, ` (as a browser does).
     r.headers.forEach((key, values) {
-      headers[key] = values.isNotEmpty ? values[0] : '';
+      headers[key] = values.length == 1 ? values[0] : values.join(', ');
     });
 
     return headers;
@@ -261,9 +256,20 @@ class HttpClientRequesterIO extends HttpClientRequester {
         return _requestDELETE(_ioClient, client, request, uri);
       case HttpMethod.HEAD:
         return _requestHEAD(_ioClient, client, request, uri);
-      default:
-        throw UnsupportedError("Can't handle method: $method");
+      case HttpMethod.OPTIONS:
+        return _requestOPTIONS(_ioClient, client, request, uri);
     }
+  }
+
+  Future<io.HttpClientRequest> _requestOPTIONS(
+    io.HttpClient ioClient,
+    HttpClient client,
+    HttpRequest request,
+    Uri url,
+  ) async {
+    var req = await ioClient.openUrl('OPTIONS', url);
+    _putRequestHeaders(request, req);
+    return req;
   }
 
   Future<io.HttpClientRequest> _requestGET(
@@ -340,8 +346,19 @@ class HttpClientRequesterIO extends HttpClientRequester {
 
   void _putSendData(HttpRequest request, io.HttpClientRequest req) {
     var sendData = request.sendData;
+    if (sendData is HttpBlob) sendData = sendData.blob;
+
     if (sendData != null) {
-      if (sendData is List<int>) {
+      if (sendData is Uint8List) {
+        req.add(sendData);
+      } else if (sendData is TypedData) {
+        req.add(
+          sendData.buffer.asUint8List(
+            sendData.offsetInBytes,
+            sendData.lengthInBytes,
+          ),
+        );
+      } else if (sendData is List<int>) {
         req.add(sendData);
       } else if (sendData is ByteBuffer) {
         req.add(sendData.asUint8List());
@@ -380,14 +397,48 @@ class HttpBlobIO extends HttpBlob<TypedData> {
 
   @override
   Future<ByteBuffer> readByteBuffer() async {
-    return blob.buffer;
+    var blob = this.blob;
+    if (blob.offsetInBytes == 0 &&
+        blob.lengthInBytes == blob.buffer.lengthInBytes) {
+      return blob.buffer;
+    }
+    return Uint8List.fromList(
+      blob.buffer.asUint8List(blob.offsetInBytes, blob.lengthInBytes),
+    ).buffer;
   }
 }
 
+/// Creates a [HttpBlobIO] from [content]: a [TypedData], or a [List] of
+/// parts ([HttpBlobIO], [String] (UTF-8), [ByteBuffer], [TypedData] or a
+/// [List] of bytes).
 HttpBlob? createHttpBlobImpl(Object? content, MimeType? mimeType) {
   if (content == null) return null;
   if (content is HttpBlob) return content;
-  return HttpBlobIO(content as TypedData, mimeType);
+  if (content is TypedData) return HttpBlobIO(content, mimeType);
+
+  var parts = content is List ? content : [content];
+  if (parts.length == 1 && parts.first is TypedData) {
+    return HttpBlobIO(parts.first as TypedData, mimeType);
+  }
+
+  var bytes = BytesBuilder(copy: false);
+  for (var part in parts) {
+    if (part is HttpBlob) part = part.blob;
+
+    if (part is TypedData) {
+      bytes.add(
+        part.buffer.asUint8List(part.offsetInBytes, part.lengthInBytes),
+      );
+    } else if (part is ByteBuffer) {
+      bytes.add(part.asUint8List());
+    } else if (part is List<int>) {
+      bytes.add(part);
+    } else if (part != null) {
+      bytes.add(utf8.encode('$part'));
+    }
+  }
+
+  return HttpBlobIO(bytes.takeBytes(), mimeType);
 }
 
 bool isHttpBlobImpl(Object? o) => o is HttpBlob;

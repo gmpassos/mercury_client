@@ -79,7 +79,8 @@ class HttpRequester {
       'contentType',
     ]);
 
-    var body = config.getPropertyAsStringTrimLC('body');
+    // Not lower-cased (as the other properties): the body content as is.
+    var body = config.getPropertyAsStringTrim('body');
 
     var responseType = config.findPropertyAsStringTrimLC([
       'response_type',

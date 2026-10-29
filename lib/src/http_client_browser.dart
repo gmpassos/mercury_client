@@ -212,7 +212,9 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
     return completer.future;
   }
 
-  double? _calcLoadRatio(web.ProgressEvent e) => e.loaded / e.total;
+  /// `null` if the total is unknown (not `lengthComputable`).
+  double? _calcLoadRatio(web.ProgressEvent e) =>
+      e.lengthComputable && e.total > 0 ? e.loaded / e.total : null;
 
   void _completeOnError(
     Completer<HttpResponse> originalRequestCompleter,
@@ -473,10 +475,9 @@ class HttpClientRequesterBrowser extends HttpClientRequester {
 
     var httpBody = HttpBody.from(body, MimeType.parse(contentType));
 
-    if (irrelevantContent &&
-        (httpBody!.isString || httpBody.isBytesArray) &&
-        httpBody.size == 0) {
-      httpBody = HttpBody.from(null, MimeType.parse(contentType));
+    // An empty body (also an empty `ArrayBuffer`) of a `3xx`: no body.
+    if (irrelevantContent && httpBody != null && httpBody.size == 0) {
+      httpBody = null;
     }
 
     var response = HttpResponse(
@@ -579,22 +580,50 @@ class HttpBlobBrowser extends HttpBlob<web.Blob> {
   }
 }
 
+/// Creates a [HttpBlobBrowser] from [content]: a `Blob`, or a [List] of
+/// parts (`Blob`, [HttpBlob], [String], [ByteBuffer], [TypedData] or a
+/// [List] of bytes). A [List] of bytes ([List<int>]) is one part.
 HttpBlob? createHttpBlobImpl(Object? content, MimeType? mimeType) {
   if (content == null) return null;
   if (content is HttpBlob) return content;
 
-  var jsAny = content.asJSAny;
-  if (jsAny == null) return null;
-
-  if (jsAny.isA<web.Blob>()) {
-    return HttpBlobBrowser(jsAny as web.Blob, mimeType);
+  if (content is! List || content is List<int>) {
+    var jsAny = content.asJSAny;
+    if (jsAny != null && jsAny.isA<web.Blob>()) {
+      return HttpBlobBrowser(jsAny as web.Blob, mimeType);
+    }
+    content = [content];
   }
 
+  var parts = content.map(_toBlobPart).toList().toJS;
+
   var blob = mimeType != null
-      ? web.Blob([jsAny].toJS, web.BlobPropertyBag(type: mimeType.toString()))
-      : web.Blob([jsAny].toJS);
+      ? web.Blob(parts, web.BlobPropertyBag(type: mimeType.toString()))
+      : web.Blob(parts);
 
   return HttpBlobBrowser(blob, mimeType);
+}
+
+/// Converts [part] to a `BlobPart`.
+JSAny _toBlobPart(Object? part) {
+  if (part is HttpBlob) part = part.blob;
+
+  if (part is String) {
+    return part.toJS;
+  } else if (part is ByteBuffer) {
+    return part.toJS;
+  } else if (part is Uint8List) {
+    return part.toJS;
+  } else if (part is TypedData) {
+    return part.buffer.asUint8List(part.offsetInBytes, part.lengthInBytes).toJS;
+  } else if (part is List<int>) {
+    return Uint8List.fromList(part).toJS;
+  }
+
+  var jsAny = part.asJSAny;
+  if (jsAny != null && jsAny.isA<web.Blob>()) return jsAny;
+
+  return '${part ?? ''}'.toJS;
 }
 
 bool isHttpBlobImpl(Object? o) => o is HttpBlob || o.asJSAny.isA<web.Blob>();
