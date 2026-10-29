@@ -583,25 +583,30 @@ class HttpBlobBrowser extends HttpBlob<web.Blob> {
 /// Creates a [HttpBlobBrowser] from [content]: a `Blob`, or a [List] of
 /// parts (`Blob`, [HttpBlob], [String], [ByteBuffer], [TypedData] or a
 /// [List] of bytes). A [List] of bytes ([List<int>]) is one part.
+///
+/// A single `Blob` is not copied, unless [mimeType] is not its `type`: the
+/// [HttpBlob.mimeType] is always the `type` of its `Blob`.
 HttpBlob? createHttpBlobImpl(Object? content, MimeType? mimeType) {
   if (content == null) return null;
   if (content is HttpBlob) return content;
 
-  if (content is! List || content is List<int>) {
-    var jsAny = content.asJSAny;
-    if (jsAny != null && jsAny.isA<web.Blob>()) {
-      return HttpBlobBrowser(jsAny as web.Blob, mimeType);
-    }
+  if (content is! List || _isBytes(content)) {
     content = [content];
   }
 
-  // A single `Blob` (without another type): no new `Blob`.
-  if (content.length == 1 && (mimeType == null || content.first is HttpBlob)) {
+  if (content.length == 1) {
     Object? single = content.first;
-    if (single is HttpBlob) return single;
+    if (single is HttpBlob && mimeType == null) return single;
+
+    if (single is HttpBlob) single = single.blob;
     var jsAny = single.asJSAny;
     if (jsAny != null && jsAny.isA<web.Blob>()) {
-      return HttpBlobBrowser(jsAny as web.Blob, mimeType);
+      var blob = jsAny as web.Blob;
+      if (mimeType == null) {
+        return HttpBlobBrowser(blob, MimeType.parse(blob.type));
+      } else if (blob.type == mimeType.toString()) {
+        return HttpBlobBrowser(blob, mimeType);
+      }
     }
   }
 
@@ -626,8 +631,8 @@ JSAny _toBlobPart(Object? part) {
     return part.toJS;
   } else if (part is TypedData) {
     return part.buffer.asUint8List(part.offsetInBytes, part.lengthInBytes).toJS;
-  } else if (part is List<int>) {
-    return Uint8List.fromList(part).toJS;
+  } else if (part is List && _isBytes(part)) {
+    return Uint8List.fromList(part.cast<int>()).toJS;
   }
 
   var jsAny = part.asJSAny;
@@ -637,3 +642,7 @@ JSAny _toBlobPart(Object? part) {
 }
 
 bool isHttpBlobImpl(Object? o) => o is HttpBlob || o.asJSAny.isA<web.Blob>();
+
+/// A [List<int>], or a (non-empty) list of only [int]s.
+bool _isBytes(List list) =>
+    list is List<int> || (list.isNotEmpty && list.every((e) => e is int));

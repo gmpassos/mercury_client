@@ -23,30 +23,39 @@
   - `HttpCache`:
     - An expired entry was never valid again (the stored request kept its
       old access time): every later request was sent again.
-    - A response is cached per credential (`authorization`): a response for
-      one credential was returned for another.
+    - A response is cached per credential (`authorization`: its header, URL
+      parameters or JSON body field): a response for one credential was
+      returned for another.
     - A network error (status `0`) or a server error (`5xx`) is not cached.
-    - The `queryParameters` are copied: changed by the caller, the entry was
-      lost.
+    - The `queryParameters` and a `Map`/`List` `body` are copied: changed by
+      the caller, the entry was lost.
+    - `getCachedRequest`/`getCachedRequestURL`: not an expired entry.
     - A `body` without `length` (e.g. an `int`) threw computing the memory
       size.
     - `getURL` ignored the `authorization`.
   - `HttpRequester`: the `body` was lower-cased.
   - `HttpBody` and `List<int>.toByteBuffer`: a byte view
     (`Uint8List.sublistView`) returned its whole buffer.
+  - A `TypedData` list is its bytes: `HttpBody` (`size`, `asByteArray`),
+    `toUint8List`, and the `Content-Length` of a request (an `Int16List` has
+    2 bytes per element; its elements were truncated, or counted as bytes).
   - `HttpBody.asBlob` threw (VM) or built a wrong `Blob` (browser) for a
     `ByteBuffer`, bytes or `String` body; `createHttpBlob` accepts a list of
-    parts (`String`, `ByteBuffer`, `TypedData`, bytes or blobs).
+    parts (`String`, `ByteBuffer`, `TypedData`, bytes or blobs), and a list
+    of `int`s is bytes (VM and browser). A browser blob's `mimeType` is its
+    `Blob` type.
   - A `ByteBuffer` or blob request body was sent as its `toString()`.
   - `HttpRequest`: no `Content-Length` with a `chunked`
     `Transfer-Encoding` (it was only set with one).
   - `PATCH` with parameters and no body: the JSON body has a `Content-Type`.
   - The `parameters` map passed to a request is no longer changed (an
     unmodifiable map threw).
-  - `buildURLWithQueryParameters`: keeps an escaped path (`%2F`) and repeated
-    query parameters.
+  - Request URLs (and `buildURLWithQueryParameters`) keep an escaped path
+    (`%2F` was sent as `/`) and repeated query parameters (`?a=1&a=2` was
+    sent as `?a=2`).
   - VM client: a response header with many values is joined with `, ` (as
-    in a browser), instead of only its first value.
+    in a browser), instead of only its first value (except `Set-Cookie`:
+    still its first value, since an `Expires` date has a `, `).
   - Progress listeners: the `ratio` is `null` when the total is unknown (it
     was negative or `NaN`), and the VM counts bytes (not characters) of a
     text body.

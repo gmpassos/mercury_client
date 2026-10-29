@@ -989,6 +989,21 @@ void doBasicTests(TestServerChannel testServerChannel) {
       expect(response.getResponseHeader('X-Multi'), equals('a, b'));
     });
 
+    test(
+      'Set-Cookie: not joined (an Expires date has a ", ")',
+      () async {
+        var client = await newClient();
+
+        var response = await client.get('multi-header');
+        expect(
+          response.getResponseHeader('Set-Cookie'),
+          equals('a=1; Expires=Wed, 21 Oct 2026 07:28:00 GMT'),
+        );
+      },
+      // A browser doesn't expose `Set-Cookie`.
+      testOn: 'vm',
+    );
+
     test('PATCH: parameters as a JSON body', () async {
       var client = await newClient();
 

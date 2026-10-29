@@ -267,6 +267,8 @@ class HttpBody {
       return body.length;
     } else if (body is ByteBuffer) {
       return body.lengthInBytes;
+    } else if (body is TypedData) {
+      return body.lengthInBytes;
     } else if (body is List<int>) {
       return body.length;
     } else if (isMap) {
@@ -1456,6 +1458,9 @@ class HttpRequest {
 
     if (sendData is Uint8List) {
       return sendData.length;
+    } else if (sendData is TypedData) {
+      // Sent as its bytes (e.g. 2 per element of an `Int16List`).
+      return sendData.lengthInBytes;
     } else if (sendData is List<int>) {
       return sendData.length;
     } else if (sendData is ByteBuffer) {
@@ -3177,32 +3182,28 @@ class HttpClient {
 
   //////////////
 
-  Uri _removeURIQueryParameters(Uri uri) {
-    if (uri.scheme.toLowerCase() == 'https') {
-      return Uri.https(uri.authority, Uri.decodeComponent(uri.path));
-    } else {
-      return Uri.http(uri.authority, Uri.decodeComponent(uri.path));
-    }
-  }
+  /// [uri] with [query] (and without fragment).
+  ///
+  /// The path as is: decoding it would also decode an escaped `/` (`%2F`).
+  /// A default port (`80` for `http`, `443` for `https`) is omitted.
+  static Uri _uriWithQuery(
+    Uri uri, {
+    String? query,
+    Map<String, Object?>? queryParameters,
+  }) => Uri(
+    scheme: uri.scheme,
+    userInfo: uri.userInfo,
+    host: uri.host,
+    port: uri.hasPort ? uri.port : null,
+    path: uri.path,
+    query: query,
+    queryParameters: queryParameters,
+  );
 
-  Uri _setURIQueryString(Uri uri, String? queryString) {
-    int? port = uri.port;
+  Uri _removeURIQueryParameters(Uri uri) => _uriWithQuery(uri);
 
-    if (uri.scheme == 'https' && uri.port == 443) {
-      port = null;
-    } else if (uri.scheme == 'http' && uri.port == 80) {
-      port = null;
-    }
-
-    return Uri(
-      scheme: uri.scheme,
-      userInfo: uri.userInfo,
-      host: uri.host,
-      port: port,
-      path: Uri.decodeComponent(uri.path),
-      query: queryString,
-    );
-  }
+  Uri _setURIQueryString(Uri uri, String? queryString) =>
+      _uriWithQuery(uri, query: queryString);
 
   MapEntry<String, Map<String, String?>?> _buildURLAndParameters(
     String url,
@@ -3211,7 +3212,12 @@ class HttpClient {
   ) {
     var uri = Uri.parse(url);
 
-    if (uri.queryParameters.isNotEmpty) {
+    // A parameter repeated in the URL (`?a=1&a=2`) can't be in a
+    // `Map<String, String?>`: the URL query is kept as is.
+    var repeatedParameter =
+        uri.hasQuery && uri.queryParametersAll.values.any((v) => v.length > 1);
+
+    if (uri.queryParameters.isNotEmpty && !repeatedParameter) {
       if (parameters != null && parameters.isNotEmpty) {
         // A copy: the caller's map (maybe unmodifiable) is not changed.
         parameters = Map<String, String?>.from(parameters);
@@ -3335,43 +3341,27 @@ class HttpClient {
   ) {
     var uri = Uri.parse(url);
 
-    var uriParameters = uri.queryParameters;
+    // `Object?`: a `String`, a `List<String>` (a repeated parameter of [url])
+    // or `null`. The [queryParameters] first, and over the [url] ones.
+    Map<String, Object?>? allParameters = queryParameters;
 
-    if (uriParameters.isNotEmpty) {
-      if (queryParameters == null || queryParameters.isEmpty) {
-        queryParameters = uriParameters;
-      } else {
-        // A copy: the caller's map (maybe unmodifiable) is not changed.
-        queryParameters = Map<String, String?>.from(queryParameters);
-        for (var e in uriParameters.entries) {
-          queryParameters.putIfAbsent(e.key, () => e.value);
-        }
+    if (uri.hasQuery && uri.query.isNotEmpty) {
+      // A copy: the caller's map (maybe unmodifiable) is not changed.
+      allParameters = <String, Object?>{...?queryParameters};
+      for (var e in uri.queryParametersAll.entries) {
+        var values = e.value;
+        allParameters.putIfAbsent(
+          e.key,
+          () => values.length == 1 ? values.first : values,
+        );
       }
     }
 
-    if (queryParameters != null && queryParameters.isEmpty) {
-      queryParameters = null;
+    if (allParameters != null && allParameters.isEmpty) {
+      allParameters = null;
     }
 
-    Uri uri2;
-
-    if (uri.scheme.toLowerCase() == 'https') {
-      uri2 = Uri.https(
-        uri.authority,
-        Uri.decodeComponent(uri.path),
-        queryParameters,
-      );
-    } else {
-      uri2 = Uri.http(
-        uri.authority,
-        Uri.decodeComponent(uri.path),
-        queryParameters,
-      );
-    }
-
-    var url2 = uri2.toString();
-
-    return url2;
+    return _uriWithQuery(uri, queryParameters: allParameters).toString();
   }
 
   /// Function that processes any request response.

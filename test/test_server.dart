@@ -134,6 +134,11 @@ class TestServer {
     _setResponseCORS(request);
     request.response.headers.add('X-Multi', 'a');
     request.response.headers.add('X-Multi', 'b');
+    request.response.headers.add(
+      'Set-Cookie',
+      'a=1; Expires=Wed, 21 Oct 2026 07:28:00 GMT',
+    );
+    request.response.headers.add('Set-Cookie', 'b=2');
     request.response.headers.contentType = io.ContentType.text;
     request.response.write('multi');
     await request.response.close();

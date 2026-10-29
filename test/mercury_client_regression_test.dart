@@ -281,6 +281,45 @@ void main() {
       expect(requester.lastRequest!.sendDataAsString, equals('e=5&x=1'));
     });
 
+    test('requests: escaped path and repeated params', () async {
+      var requester = _RecordingRequester();
+      var client = HttpClient('http://foo.com:8080/', requester);
+
+      await client.get('items/a%2Fb', parameters: {'p': '1'});
+      expect(
+        requester.lastRequest!.requestURL,
+        equals('http://foo.com:8080/items/a%2Fb?p=1'),
+      );
+
+      await client.get('items?x=1&x=2', parameters: {'p': '1'});
+      expect(
+        requester.lastRequest!.requestURL,
+        equals('http://foo.com:8080/items?p=1&x=1&x=2'),
+      );
+
+      await client.request(
+        HttpMethod.GET,
+        'items/a%2Fb?x=1&x=2',
+        parameters: {'p': '1'},
+      );
+      var uri = Uri.parse(requester.lastRequest!.requestURL);
+      expect(uri.path, equals('/items/a%2Fb'));
+      expect(uri.queryParametersAll['x'], equals(['1', '2']));
+      expect(uri.queryParameters['p'], equals('1'));
+
+      await client.post('items/a%2Fb?y=1', body: 'b');
+      expect(
+        requester.lastRequest!.requestURL,
+        equals('http://foo.com:8080/items/a%2Fb?y=1'),
+      );
+
+      await client.post('items/a%2Fb', queryString: 'q=1');
+      expect(
+        requester.lastRequest!.requestURL,
+        equals('http://foo.com:8080/items/a%2Fb?q=1'),
+      );
+    });
+
     test('queryString with a pattern', () async {
       var requester = _RecordingRequester();
       var client = HttpClient('http://foo.com/', requester);
@@ -382,6 +421,62 @@ void main() {
     });
   });
 
+  group('typed data (review of #12)', () {
+    test('a Uint16List: its bytes, not truncated elements', () {
+      var u16 = Uint16List.fromList([0x0102, 0x0304]);
+      var bytes = Uint8List.view(u16.buffer);
+
+      expect(u16.toByteBuffer().asUint8List(), equals(bytes));
+      expect(u16.toUint8List(), equals(bytes));
+
+      var body = HttpBody.from(u16)!;
+      expect(body.size, equals(4));
+      expect(body.asByteBuffer!.asUint8List(), equals(bytes));
+      expect(body.asByteArray, equals(bytes));
+
+      var view = Uint16List.sublistView(
+        Uint16List.fromList([1, 0x0506, 3]),
+        1,
+        2,
+      );
+      expect(view.toByteBuffer().lengthInBytes, equals(2));
+    });
+
+    test('Content-Length of an Int16List: its bytes', () {
+      var request = HttpRequest(
+        HttpMethod.POST,
+        'http://h/',
+        'http://h/',
+        sendData: Int16List.fromList([1, 2]),
+      );
+      expect(request.headerContentLength, equals('4'));
+      expect(request.sendDataLength, equals(4));
+    });
+
+    test('createHttpBlob: a list of ints is bytes', () async {
+      for (var content in <List>[
+        <int>[1, 2, 3],
+        <dynamic>[1, 2, 3],
+      ]) {
+        var blob = createHttpBlob(content, null)!;
+        expect(
+          (await blob.readByteBuffer()).asUint8List(),
+          equals([1, 2, 3]),
+          reason: '${content.runtimeType}',
+        );
+      }
+
+      var parts = createHttpBlob([
+        'a',
+        [98, 99],
+      ], null)!;
+      expect(
+        utf8.decode((await parts.readByteBuffer()).asUint8List()),
+        equals('abc'),
+      );
+    });
+  });
+
   group('HttpRequester', () {
     test('body is not lower-cased', () {
       var requester = HttpRequester({
@@ -479,6 +574,68 @@ void main() {
         requester.lastRequest!.requestHeaders!['Authorization'],
         equals('Bearer A'),
       );
+    });
+
+    test('a response per JSON body / query string credential', () async {
+      var requester = _RecordingRequester();
+      var client = HttpClient('http://foo.com/', requester);
+      var cache = HttpCache();
+
+      var a = await cache.post(
+        client,
+        'j',
+        authorization: JSONBodyCredential('auth', {'token': 'A'}),
+      );
+      var b = await cache.post(
+        client,
+        'j',
+        authorization: JSONBodyCredential('auth', {'token': 'B'}),
+      );
+      expect(identical(a, b), isFalse);
+
+      var a2 = await cache.post(
+        client,
+        'j',
+        authorization: JSONBodyCredential('auth', {'token': 'A'}),
+      );
+      expect(a2, same(a));
+
+      var q1 = await cache.get(
+        client,
+        'q',
+        authorization: QueryStringCredential({'k': '1'}),
+      );
+      var q2 = await cache.get(
+        client,
+        'q',
+        authorization: QueryStringCredential({'k': '2'}),
+      );
+      expect(identical(q1, q2), isFalse);
+      expect(requester.requests.length, equals(4));
+    });
+
+    test('a body changed by the caller: the entry is found', () async {
+      var requester = _RecordingRequester();
+      var client = HttpClient('http://foo.com/', requester);
+      var cache = HttpCache();
+
+      var body = <String, Object?>{'k': 'v1'};
+      var r1 = await cache.post(client, 'b', body: body);
+      body['k'] = 'v2';
+      var r2 = await cache.post(client, 'b', body: {'k': 'v1'});
+      expect(r2, same(r1));
+      expect(requester.requests.length, equals(1));
+    });
+
+    test('getCachedRequest: not an expired entry', () async {
+      var requester = _RecordingRequester();
+      var client = HttpClient('http://foo.com/', requester);
+      var cache = HttpCache(timeout: Duration(seconds: 1));
+
+      await cache.get(client, 'e');
+      expect(cache.getCachedRequest(client, HttpMethod.GET, 'e'), isNotNull);
+      await Future.delayed(Duration(milliseconds: 1100));
+      expect(cache.getCachedRequest(client, HttpMethod.GET, 'e'), isNull);
     });
 
     test('a body of any type', () async {

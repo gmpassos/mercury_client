@@ -212,23 +212,49 @@ class HttpClientRequesterIO extends HttpClientRequester {
     return bytes.takeBytes();
   }
 
+  /// Decodes the body while it's read (not all its bytes and then the text).
+  /// The [progressListener] gets the bytes loaded (not characters).
   Future<String> _decodeBodyAsString(
     HttpRequest request,
     io.HttpClientResponse response,
     MimeType mimeType,
     ProgressListener? progressListener,
-  ) async {
-    var bytes = await _decodeBodyAsBytes(request, response, progressListener);
-    if (bytes.isEmpty) return '';
-    return contentTypeToDecoder(mimeType).convert(bytes);
+  ) {
+    var decoder = contentTypeToDecoder(mimeType);
+
+    Stream<List<int>> stream = response;
+
+    if (progressListener != null) {
+      var contentLength = response.contentLength;
+      var total = contentLength >= 0 ? contentLength : null;
+      var loaded = 0;
+
+      stream = response.map((chunk) {
+        loaded += chunk.length;
+        try {
+          var ratio = total != null && total > 0 ? loaded / total : null;
+          progressListener(request, loaded, total, ratio, false);
+        } catch (ex, st) {
+          print(ex);
+          print(st);
+        }
+        return chunk;
+      });
+    }
+
+    return decoder.bind(stream).join();
   }
 
   Future<Map<String, String>> _decodeHeaders(io.HttpClientResponse r) async {
     var headers = <String, String>{};
 
-    // A header with many values is joined with `, ` (as a browser does).
+    // A header with many values is joined with `, ` (as a browser does),
+    // except `Set-Cookie`: a cookie (its `Expires` date) can have a `, `, so
+    // only its first value.
     r.headers.forEach((key, values) {
-      headers[key] = values.length == 1 ? values[0] : values.join(', ');
+      headers[key] = values.length == 1 || key == io.HttpHeaders.setCookieHeader
+          ? (values.isNotEmpty ? values[0] : '')
+          : values.join(', ');
     });
 
     return headers;
@@ -416,7 +442,8 @@ HttpBlob? createHttpBlobImpl(Object? content, MimeType? mimeType) {
   if (content is HttpBlob) return content;
   if (content is TypedData) return HttpBlobIO(content, mimeType);
 
-  var parts = content is List ? content : [content];
+  // A list of bytes is one part (as in the browser).
+  var parts = content is List && !_isBytes(content) ? content : [content];
   if (parts.length == 1 && parts.first is TypedData) {
     return HttpBlobIO(parts.first as TypedData, mimeType);
   }
@@ -431,8 +458,8 @@ HttpBlob? createHttpBlobImpl(Object? content, MimeType? mimeType) {
       );
     } else if (part is ByteBuffer) {
       bytes.add(part.asUint8List());
-    } else if (part is List<int>) {
-      bytes.add(part);
+    } else if (part is List && _isBytes(part)) {
+      bytes.add(part.cast<int>());
     } else if (part != null) {
       bytes.add(utf8.encode('$part'));
     }
@@ -442,3 +469,7 @@ HttpBlob? createHttpBlobImpl(Object? content, MimeType? mimeType) {
 }
 
 bool isHttpBlobImpl(Object? o) => o is HttpBlob;
+
+/// A [List<int>], or a (non-empty) list of only [int]s.
+bool _isBytes(List list) =>
+    list is List<int> || (list.isNotEmpty && list.every((e) => e is int));

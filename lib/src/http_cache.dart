@@ -31,24 +31,38 @@ class _CacheRequest implements Comparable<_CacheRequest> {
     this._method,
     this._url,
     Map<String, String?>? queryParameters,
-    this._body,
+    Object? body,
     this._contentType,
     this._accept, [
     Credential? authorization,
-  ]) : // A copy: a key changed by the caller would be lost in the cache.
+  ]) : // Copies: a key changed by the caller would be lost in the cache.
        _queryParameters = queryParameters != null
            ? Map<String, String?>.of(queryParameters)
            : null,
+       _body = body is Map || (body is List && body is! TypedData)
+           ? deepCopy(body)
+           : body,
        _authorization = _credentialKey(authorization) {
     _accessTime = instanceTime;
   }
 
+  /// The data the [credential] adds to a request: its `Authorization`
+  /// header, URL parameters or JSON body field (or its identity).
   static String? _credentialKey(Credential? credential) {
     if (credential == null) return null;
-    var key =
-        credential.buildAuthorizationHeaderLine() ??
-        credential.buildURL('') ??
-        identityHashCode(credential).toString();
+
+    String? key = credential.buildAuthorizationHeaderLine();
+    if (key == null) {
+      if (credential is JSONBodyCredential) {
+        key = encodeJSON({credential.field: credential.authorization});
+      } else {
+        var url = credential.buildURL('http://h/');
+        key = url != null && url != 'http://h/'
+            ? url
+            : identityHashCode(credential).toString();
+      }
+    }
+
     return '${credential.type}:$key';
   }
 
@@ -518,7 +532,14 @@ class HttpCache {
       accept,
       authorization,
     );
-    var cachedResponse = _cache[cacheRequest]?.response;
+    var cachedEntry = _cache[cacheRequest];
+
+    // An expired entry: not returned (as by [requestURL]).
+    var cachedResponse =
+        cachedEntry != null &&
+            cachedEntry.request.isValid(timeout.inMilliseconds)
+        ? cachedEntry.response
+        : null;
 
     if (cachedResponse != null) {
       if (verbose) {
