@@ -66,7 +66,9 @@ class HttpStatus {
       isStatusInRange(400, 403) ||
       isStatusInRange(405, 418) ||
       isStatusInRange(421, 426) ||
-      isStatusInList([428, 431, 451]);
+      status == 428 ||
+      status == 431 ||
+      status == 451;
 
   /// Returns [true] if any error happens: [isStatusNetworkError] || [isStatusServerError] || [isStatusAccessError]
   bool get isStatusError =>
@@ -84,7 +86,7 @@ class HttpStatus {
 
   /// Returns [true] if this status is in [statusList].
   bool isStatusInList(List<int> statusList) {
-    return (statusList.firstWhereOrNull((id) => id == status) != null);
+    return statusList.contains(status);
   }
 }
 
@@ -161,8 +163,12 @@ class HttpError extends Error with WithHttpStatus {
   final Object? error;
 
   HttpError(
-      String url, String requestedURL, int status, this.message, this.error)
-      : httpStatus = HttpStatus(url, requestedURL, status);
+    String url,
+    String requestedURL,
+    int status,
+    this.message,
+    this.error,
+  ) : httpStatus = HttpStatus(url, requestedURL, status);
 
   /// If has the field [message]
   bool get hasMessage => message.isNotEmpty;
@@ -178,8 +184,11 @@ class HttpError extends Error with WithHttpStatus {
     var authorizationCode = status == 0 || status == 400 || status == 401;
     if (!authorizationCode) return false;
 
-    return matchesAnyJSONEntry('error',
-        ['invalid_grant', 'invalid_client', 'unauthorized_client'], true);
+    return matchesAnyJSONEntry('error', [
+      'invalid_grant',
+      'invalid_client',
+      'unauthorized_client',
+    ], true);
   }
 
   bool matchesAnyJSONEntry(String key, List<String> values, bool text) {
@@ -211,10 +220,7 @@ abstract class HttpBlob<B> {
 
   final MimeType? mimeType;
 
-  HttpBlob(
-    this.blob,
-    this.mimeType,
-  );
+  HttpBlob(this.blob, this.mimeType);
 
   int size();
 
@@ -262,6 +268,8 @@ class HttpBody {
     if (body is String) {
       return body.length;
     } else if (body is ByteBuffer) {
+      return body.lengthInBytes;
+    } else if (body is TypedData) {
       return body.lengthInBytes;
     } else if (body is List<int>) {
       return body.length;
@@ -323,11 +331,7 @@ class HttpBody {
     if (body is ByteBuffer) {
       return body;
     } else if (body is List<int>) {
-      if (body is TypedData) {
-        return (body as TypedData).buffer;
-      } else {
-        return Uint8List.fromList(body).buffer;
-      }
+      return body.toByteBuffer();
     } else if (body is String) {
       return body.toByteBuffer(encoding: mimeType?.preferredStringEncoding);
     } else if (isMap) {
@@ -355,15 +359,12 @@ class HttpBody {
   }
 
   HttpBlob? get asBlob {
-    if (isBlob) {
-      if (_body is HttpBlob) return _body;
-      return createHttpBlob(_body as List<dynamic>, mimeType);
-    } else if (isByteBuffer) {
-      return createHttpBlob([_body], mimeType);
-    } else if (isBytesArray) {
-      return createHttpBlob([_body], mimeType);
-    } else if (isString) {
-      return createHttpBlob([_body], mimeType);
+    final body = _body;
+
+    if (body is HttpBlob) {
+      return body;
+    } else if (isBlob || isByteBuffer || isBytesArray || isString) {
+      return createHttpBlob([body], mimeType);
     } else if (isMap) {
       return createHttpBlob([asString], mimeType);
     }
@@ -376,8 +377,7 @@ class HttpBody {
     if (byteBuffer != null) return byteBuffer;
 
     if (isBlob) {
-      var blob = _body as HttpBlob;
-      return blob.readByteBuffer();
+      return asBlob?.readByteBuffer();
     }
 
     return null;
@@ -439,17 +439,19 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
   dynamic Function(String jsonEncoded)? jsonDecoder;
 
   HttpResponse(
-      this.method, String url, String requestedURL, int status, HttpBody? body,
-      {ResponseHeaderGetter? responseHeaderGetter,
-      this.request,
-      List<Uri>? redirects,
-      this.jsonDecoder,
-      HttpError? error})
-      : _body = body,
-        _error = error,
-        _responseHeaderGetter = responseHeaderGetter,
-        redirects = redirects ?? [],
-        super(url, requestedURL, status) {
+    this.method,
+    String url,
+    String requestedURL,
+    int status,
+    HttpBody? body, {
+    this._responseHeaderGetter,
+    this.request,
+    List<Uri>? redirects,
+    this.jsonDecoder,
+    this._error,
+  }) : _body = body,
+       redirects = redirects ?? [],
+       super(url, requestedURL, status) {
     _accessTime = instanceTime;
   }
 
@@ -462,7 +464,8 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
 
   /// Tries to determine the memory usage of this response.
   int memorySize() {
-    var memory = 1 +
+    var memory =
+        1 +
         8 +
         8 +
         4 +
@@ -579,7 +582,9 @@ class HttpResponse extends HttpStatus implements Comparable<HttpResponse> {
 /// Function to dynamically build a HTTP body.
 typedef HttpBodyBuilder = dynamic Function(Map<String, String?> parameters);
 typedef HttpBodyBuilderTyped = dynamic Function(
-    Map<String, String?> parameters, String? type);
+  Map<String, String?> parameters,
+  String? type,
+);
 
 /// Represents a body content, used by [HttpRequest].
 class HttpRequestBody {
@@ -597,8 +602,11 @@ class HttpRequestBody {
 
   String? _contentType;
 
-  HttpRequestBody(Object? content, String? type,
-      [Map<String, Object?>? parameters]) {
+  HttpRequestBody(
+    Object? content,
+    String? type, [
+    Map<String, Object?>? parameters,
+  ]) {
     _contentType = normalizeType(type);
 
     var parametersMapStr = _toParametersMapOfString(parameters);
@@ -618,7 +626,10 @@ class HttpRequestBody {
       _content = null;
     } else if (content is HttpBody) {
       _content = content;
-    } else if (!isJSONType && content is List<int>) {
+    } else if (!isJSONType &&
+        (content is List<int> ||
+            content is ByteBuffer ||
+            isHttpBlob(content))) {
       _content = HttpBody.from(content, MimeType.parse(_contentType));
     } else if (content is String) {
       _content = HttpBody.from(content, MimeType.parse(_contentType));
@@ -628,8 +639,10 @@ class HttpRequestBody {
       var jsonEncoded = encodeJSON(content);
       _content = HttpBody.from(jsonEncoded, MimeType.parse(_contentType));
     } else {
-      _content =
-          HttpBody.from(content.toString(), MimeType.parse(_contentType));
+      _content = HttpBody.from(
+        content.toString(),
+        MimeType.parse(_contentType),
+      );
     }
   }
 
@@ -669,13 +682,20 @@ class HttpRequestBody {
 }
 
 typedef RequestHeadersBuilder = Map<String, String> Function(
-    HttpClient client, String url);
+  HttpClient client,
+  String url,
+);
 
 typedef ResponseProcessor = void Function(
-    HttpClient client, Object request, HttpResponse response);
+  HttpClient client,
+  Object request,
+  HttpResponse response,
+);
 
 typedef AuthorizationProvider = Future<Credential?> Function(
-    HttpClient client, HttpError? lastError);
+  HttpClient client,
+  HttpError? lastError,
+);
 
 /// Represents a kind of HTTP Authorization.
 abstract class Authorization {
@@ -712,7 +732,9 @@ abstract class Authorization {
   /// no longer valid: a resolvable (not static) [Authorization] resolves it
   /// again.
   Future<Credential?> resolveCredential(
-      HttpClient client, HttpError? lastError);
+    HttpClient client,
+    HttpError? lastError,
+  );
 
   Authorization._();
 
@@ -754,8 +776,9 @@ class _AuthorizationStatic extends Authorization {
 
   @override
   Future<Credential> resolveCredential(
-          HttpClient client, HttpError? lastError) async =>
-      credential;
+    HttpClient client,
+    HttpError? lastError,
+  ) async => credential;
 
   @override
   String toString() {
@@ -808,7 +831,9 @@ class _AuthorizationResolvable extends Authorization {
   /// again (with [lastError]), instead of retrying with the same credential.
   @override
   Future<Credential?> resolveCredential(
-      HttpClient client, HttpError? lastError) async {
+    HttpClient client,
+    HttpError? lastError,
+  ) async {
     if (_resolvedCredential != null) {
       if (lastError == null || !lastError.isStatusUnauthenticated) {
         return _resolvedCredential;
@@ -896,10 +921,19 @@ class BasicCredential extends Credential {
     } else if (json is Map) {
       if (json.length < 2) return null;
 
-      var user = findKeyValue<dynamic, dynamic>(
-          json, ['username', 'user', 'login', 'email', 'account'], true);
-      var pass = findKeyValue<dynamic, dynamic>(
-          json, ['password', 'pass', 'secret', 'token'], true);
+      var user = findKeyValue<dynamic, dynamic>(json, [
+        'username',
+        'user',
+        'login',
+        'email',
+        'account',
+      ], true);
+      var pass = findKeyValue<dynamic, dynamic>(json, [
+        'password',
+        'pass',
+        'secret',
+        'token',
+      ], true);
 
       if (user is! String || pass is! String) return null;
 
@@ -944,10 +978,14 @@ class BasicCredential extends Credential {
   bool get usesAuthorizationHeader => true;
 
   /// Builds the `Authorization` header.
+  /// Uses the standard Base64 alphabet (not the URL-safe one) and encodes
+  /// the [username] and [password] as UTF-8 ([RFC 7617]).
+  ///
+  /// [RFC 7617]: https://www.rfc-editor.org/rfc/rfc7617
   @override
   String buildAuthorizationHeaderLine() {
     var payload = '$username:$password';
-    var encode = Base64Codec.urlSafe().encode(payload.codeUnits);
+    var encode = base64.encode(utf8.encode(payload));
     return 'Basic $encode';
   }
 }
@@ -991,19 +1029,24 @@ class BearerCredential extends Credential {
 
   static const List<String> _defaultExtraTokenKeys = [
     'accessToken',
-    'accessToken/token'
+    'accessToken/token',
   ];
 
   /// Instance from a JSON.
   ///
   /// [mainTokenKey] default: `access_token`.
   /// [extraTokenKeys]: `accessToken`, `accessToken/token`.
-  static BearerCredential? fromJSONToken(dynamic json,
-      [String mainTokenKey = 'access_token',
-      List<String> extraTokenKeys = _defaultExtraTokenKeys]) {
+  static BearerCredential? fromJSONToken(
+    dynamic json, [
+    String mainTokenKey = 'access_token',
+    List<String> extraTokenKeys = _defaultExtraTokenKeys,
+  ]) {
     if (json is Map) {
-      var token =
-          findKeyPathValue(json, mainTokenKey, isValidValue: isValidTokenValue);
+      var token = findKeyPathValue(
+        json,
+        mainTokenKey,
+        isValidValue: isValidTokenValue,
+      );
 
       if (token == null) {
         for (var key in extraTokenKeys) {
@@ -1022,7 +1065,7 @@ class BearerCredential extends Credential {
   }
 
   /// Returns [true] if the token is a valid value.
-  static bool isValidTokenValue(v) => v is String || v is num;
+  static bool isValidTokenValue(Object? v) => v is String || v is num;
 
   /// Returns type `Bearer`.
   @override
@@ -1110,7 +1153,9 @@ class JSONBodyCredential extends Credential {
 
   HttpRequestBody buildJSONAuthorizationBody(HttpRequestBody? body) {
     return HttpRequestBody(
-        buildJSONAuthorizationBodyJSON(body), 'application/json');
+      buildJSONAuthorizationBodyJSON(body),
+      'application/json',
+    );
   }
 
   String buildJSONAuthorizationBodyJSON(HttpRequestBody? body) {
@@ -1130,18 +1175,21 @@ class JSONBodyCredential extends Credential {
           bodyJson.addAll(authorization);
         } else {
           throw StateError(
-              "No specified field for authorization. Can't add authorization to current body! Current body is not a Map to receive a Map authorization.");
+            "No specified field for authorization. Can't add authorization to current body! Current body is not a Map to receive a Map authorization.",
+          );
         }
       } else if (authorization is List) {
         if (bodyJson is List) {
           bodyJson.addAll(authorization);
         } else {
           throw StateError(
-              "No specified field for authorization. Can't add authorization to current body! Current body is not a List to receive a List authorization.");
+            "No specified field for authorization. Can't add authorization to current body! Current body is not a List to receive a List authorization.",
+          );
         }
       } else {
         throw StateError(
-            "No specified field for authorization. Can't add authorization to current body! authorization is not a Map or List to add to any type of body.");
+          "No specified field for authorization. Can't add authorization to current body! authorization is not a Map or List to add to any type of body.",
+        );
       }
     } else {
       bodyJson[field] = authorization;
@@ -1155,37 +1203,79 @@ class JSONBodyCredential extends Credential {
 /// Query parameters.
 ///
 /// [removeFragment] If [true] will remove URL fragment.
-String buildURLWithQueryParameters(String url, Map<String, String?> parameters,
-    {bool removeFragment = false}) {
+String buildURLWithQueryParameters(
+  String url,
+  Map<String, String?> parameters, {
+  bool removeFragment = false,
+}) {
   if (parameters.isEmpty) return url;
 
   var uri = Uri.parse(url);
 
-  Map<String, String?> queryParameters;
+  // `Object?`: a `String`, a `List<String>` (a repeated parameter of [url])
+  // or `null` (a parameter without value).
+  Map<String, Object?> queryParameters;
 
   if (uri.query.isEmpty) {
-    queryParameters = Map<String, String?>.from(parameters);
+    queryParameters = parameters;
   } else {
-    queryParameters = uri.queryParameters;
-    queryParameters = Map<String, String?>.from(queryParameters);
-    queryParameters.addAll(parameters);
+    queryParameters = Map<String, Object?>.from(_queryParametersOf(uri))
+      ..addAll(parameters);
   }
 
-  String? fragment = uri.fragment;
-  if (removeFragment || fragment.isEmpty) {
-    fragment = null;
-  }
+  var fragment = uri.fragment;
 
-  return Uri(
-          scheme: uri.scheme,
-          userInfo: uri.userInfo,
-          host: uri.host,
-          port: uri.port,
-          path: Uri.decodeComponent(uri.path),
-          queryParameters: queryParameters,
-          fragment: fragment)
-      .toString();
+  return _uriWith(
+    uri,
+    queryParameters: queryParameters,
+    fragment: removeFragment || fragment.isEmpty ? null : fragment,
+  ).toString();
 }
+
+/// The query parameters of [uri]: a `List<String>` only for a repeated one.
+///
+/// Without a repeated parameter (as many parameters as `&`-separated parts)
+/// it's the (cheaper) [Uri.queryParameters], not [Uri.queryParametersAll].
+Map<String, Object?> _queryParametersOf(Uri uri) {
+  var queryParameters = uri.queryParameters;
+
+  var query = uri.query;
+  var parts = 1;
+  for (var i = 0; i < query.length; ++i) {
+    if (query.codeUnitAt(i) == 0x26 /* & */ ) parts++;
+  }
+  if (parts == queryParameters.length) return queryParameters;
+
+  return {
+    for (var e in uri.queryParametersAll.entries)
+      e.key: e.value.length == 1 ? e.value.first : e.value,
+  };
+}
+
+/// Whether [uri] has a repeated query parameter (`?a=1&a=2`).
+bool _hasRepeatedQueryParameter(Uri uri) =>
+    uri.hasQuery && _queryParametersOf(uri).values.any((v) => v is List);
+
+/// [uri] with [query] or [queryParameters], and [fragment] (one [Uri]
+/// instance, not one per `replace`).
+///
+/// The path as is: decoding it would also decode an escaped `/` (`%2F`).
+/// A default port (`80` for `http`, `443` for `https`) is omitted.
+Uri _uriWith(
+  Uri uri, {
+  String? query,
+  Map<String, Object?>? queryParameters,
+  String? fragment,
+}) => Uri(
+  scheme: uri.scheme,
+  userInfo: uri.userInfo,
+  host: uri.host,
+  port: uri.hasPort ? uri.port : null,
+  path: uri.path,
+  query: query,
+  queryParameters: queryParameters,
+  fragment: fragment,
+);
 
 /// HTTP Method
 enum HttpMethod {
@@ -1302,44 +1392,66 @@ class HttpRequest {
 
   int _retries = 0;
 
-  HttpRequest(this.method, this.url, this.requestURL,
-      {this.queryParameters,
-      this.noQueryString = false,
-      this.authorization,
-      this.withCredentials = false,
-      this.responseType,
-      this.mimeType,
-      Map<String, String>? requestHeaders,
-      Object? sendData})
-      : _requestHeaders = requestHeaders,
-        _sendData = sendData {
+  /// Whether the [queryParameters] were sent as the body (a `POST` form),
+  /// not in the [requestURL].
+  bool _queryParametersAsBody = false;
+
+  HttpRequest(
+    this.method,
+    this.url,
+    this.requestURL, {
+    this.queryParameters,
+    this.noQueryString = false,
+    this.authorization,
+    this.withCredentials = false,
+    this.responseType,
+    this.mimeType,
+    this._requestHeaders,
+    this._sendData,
+  }) {
     updateContentLength();
   }
 
   /// Copies this instance with a different [client] and [authorization] if provided.
   ///
   /// If [authorization] is `null` returns `this`.
-  HttpRequest copyWithAuthorization(HttpClient client,
-      [Authorization? authorization]) {
+  HttpRequest copyWithAuthorization(
+    HttpClient client, [
+    Authorization? authorization,
+  ]) {
     if (authorization == null || authorization == this.authorization) {
       return this;
     }
 
+    // Without the `Authorization` header of the previous credential: the
+    // headers passed are applied last, and it would replace the new one.
+    var headers = this.requestHeaders != null
+        ? Map<String, String>.from(this.requestHeaders!)
+        : null;
+    var authorizationKey = _getMapKeyIgnoreCase(headers, 'Authorization');
+    if (authorizationKey != null) headers!.remove(authorizationKey);
+
     var requestHeaders = client.clientRequester.buildRequestHeaders(
-        client, method, url,
-        headers: this.requestHeaders,
-        authorization: authorization,
-        contentType: headerContentType,
-        accept: headerAccept);
+      client,
+      method,
+      url,
+      headers: headers,
+      authorization: authorization,
+      contentType: headerContentType,
+      accept: headerAccept,
+    );
 
     var queryParameters = this.queryParameters != null
         ? Map<String, String?>.from(this.queryParameters!)
         : null;
 
-    var requestURL = client.clientRequester.buildRequestURL(client, url,
-        authorization: authorization,
-        queryParameters: queryParameters,
-        noQueryString: noQueryString);
+    var requestURL = client.clientRequester.buildRequestURL(
+      client,
+      url,
+      authorization: authorization,
+      queryParameters: _queryParametersAsBody ? null : queryParameters,
+      noQueryString: noQueryString,
+    );
 
     var copy = HttpRequest(
       method,
@@ -1356,6 +1468,7 @@ class HttpRequest {
     );
 
     copy._retries = _retries;
+    copy._queryParametersAsBody = _queryParametersAsBody;
 
     return copy;
   }
@@ -1363,13 +1476,16 @@ class HttpRequest {
   /// Headers of the request.
   Map<String, String>? get requestHeaders => _requestHeaders;
 
+  /// Sets the `Content-Length` header to the [sendDataLength], if not set.
+  /// Not for a `chunked` `Transfer-Encoding`: a request can't have both.
   void updateContentLength() {
     var sendDataLength = _sendDataLength(updateToBytes: true);
     if (sendDataLength != null) {
       var contentLength = headerContentLength;
       var transferEncoding = headerTransferEncoding;
       if (contentLength == null &&
-          (transferEncoding == null || transferEncoding.contains('chunked'))) {
+          (transferEncoding == null ||
+              !transferEncoding.toLowerCase().contains('chunked'))) {
         var requestHeaders = _requestHeaders ??= <String, String>{};
         requestHeaders[HttpRequest._headerKeyContentLength] = '$sendDataLength';
       }
@@ -1388,15 +1504,22 @@ class HttpRequest {
 
     if (sendData is Uint8List) {
       return sendData.length;
+    } else if (sendData is TypedData) {
+      // Sent as its bytes (e.g. 2 per element of an `Int16List`).
+      return sendData.lengthInBytes;
     } else if (sendData is List<int>) {
       return sendData.length;
     } else if (sendData is ByteBuffer) {
       return sendData.lengthInBytes;
     } else if (sendData is HttpBlob) {
       return sendData.size();
+    } else if (isHttpBlob(sendData)) {
+      // A platform blob (a browser `Blob`).
+      return createHttpBlob([sendData], null)?.size();
     } else if (sendData is String) {
       var bytes = sendData.toUint8List(
-          encoding: MimeType.parse(mimeType)?.preferredStringEncoding);
+        encoding: MimeType.parse(mimeType)?.preferredStringEncoding,
+      );
       if (updateToBytes) {
         _sendData = bytes;
       }
@@ -1439,7 +1562,8 @@ class HttpRequest {
       }
     } else {
       var requestHeaders = _requestHeaders ??= <String, String>{};
-      var k = _getMapKeyIgnoreCase(requestHeaders, _headerKeyContentType) ??
+      var k =
+          _getMapKeyIgnoreCase(requestHeaders, _headerKeyContentType) ??
           _headerKeyContentType;
       requestHeaders[k] = contentType.trim();
     }
@@ -1469,8 +1593,9 @@ class HttpRequest {
     }
 
     var rest = contentType!.substring(idx + 1).trim();
-    contentType =
-        rest.isNotEmpty ? '${mimeType.trim()}; $rest' : mimeType.trim();
+    contentType = rest.isNotEmpty
+        ? '${mimeType.trim()}; $rest'
+        : mimeType.trim();
 
     headerContentType = contentType;
   }
@@ -1486,8 +1611,9 @@ class HttpRequest {
     var parts = rest.split(';').map((e) => e.trim().split('='));
     if (parts.isEmpty) return null;
 
-    var charsetPair =
-        parts.firstWhereOrNull((e) => equalsIgnoreAsciiCase(e[0], 'charset'));
+    var charsetPair = parts.firstWhereOrNull(
+      (e) => equalsIgnoreAsciiCase(e[0], 'charset'),
+    );
     if (charsetPair == null) return null;
 
     var charset = charsetPair[1].trim();
@@ -1587,7 +1713,12 @@ class HttpRequest {
 }
 
 typedef ProgressListener = void Function(
-    HttpRequest request, int? loaded, int? total, double? ratio, bool upload);
+  HttpRequest request,
+  int? loaded,
+  int? total,
+  double? ratio,
+  bool upload,
+);
 
 /// Abstract [HttpClient] requester. This should implement the actual
 /// request process.
@@ -1614,84 +1745,109 @@ abstract class HttpClientRequester {
     }
   }
 
-  Future<HttpResponse> request(HttpClient client, HttpMethod method, String url,
-      {Map<String, String>? headers,
-      Authorization? authorization,
-      Map<String, String?>? queryParameters,
-      bool noQueryString = false,
-      Object? body,
-      String? contentType,
-      String? accept,
-      String? responseType,
-      ProgressListener? progressListener}) {
+  Future<HttpResponse> request(
+    HttpClient client,
+    HttpMethod method,
+    String url, {
+    Map<String, String>? headers,
+    Authorization? authorization,
+    Map<String, String?>? queryParameters,
+    bool noQueryString = false,
+    Object? body,
+    String? contentType,
+    String? accept,
+    String? responseType,
+    ProgressListener? progressListener,
+  }) {
     switch (method) {
       case HttpMethod.GET:
-        return requestGET(client, url,
-            headers: headers,
-            authorization: authorization,
-            queryParameters: queryParameters,
-            noQueryString: noQueryString,
-            accept: accept,
-            responseType: responseType,
-            progressListener: progressListener);
+        return requestGET(
+          client,
+          url,
+          headers: headers,
+          authorization: authorization,
+          queryParameters: queryParameters,
+          noQueryString: noQueryString,
+          accept: accept,
+          responseType: responseType,
+          progressListener: progressListener,
+        );
       case HttpMethod.HEAD:
-        return requestHEAD(client, url,
-            headers: headers,
-            authorization: authorization,
-            queryParameters: queryParameters,
-            noQueryString: noQueryString,
-            progressListener: progressListener);
+        return requestHEAD(
+          client,
+          url,
+          headers: headers,
+          authorization: authorization,
+          queryParameters: queryParameters,
+          noQueryString: noQueryString,
+          progressListener: progressListener,
+        );
       case HttpMethod.OPTIONS:
-        return requestOPTIONS(client, url,
-            headers: headers,
-            authorization: authorization,
-            queryParameters: queryParameters,
-            noQueryString: noQueryString,
-            progressListener: progressListener);
+        return requestOPTIONS(
+          client,
+          url,
+          headers: headers,
+          authorization: authorization,
+          queryParameters: queryParameters,
+          noQueryString: noQueryString,
+          progressListener: progressListener,
+        );
       case HttpMethod.POST:
-        return requestPOST(client, url,
-            headers: headers,
-            authorization: authorization,
-            queryParameters: queryParameters,
-            noQueryString: noQueryString,
-            body: body,
-            contentType: contentType,
-            accept: accept,
-            responseType: responseType,
-            progressListener: progressListener);
+        return requestPOST(
+          client,
+          url,
+          headers: headers,
+          authorization: authorization,
+          queryParameters: queryParameters,
+          noQueryString: noQueryString,
+          body: body,
+          contentType: contentType,
+          accept: accept,
+          responseType: responseType,
+          progressListener: progressListener,
+        );
       case HttpMethod.PUT:
-        return requestPUT(client, url,
-            headers: headers,
-            authorization: authorization,
-            queryParameters: queryParameters,
-            noQueryString: noQueryString,
-            body: body,
-            contentType: contentType,
-            accept: accept,
-            responseType: responseType,
-            progressListener: progressListener);
+        return requestPUT(
+          client,
+          url,
+          headers: headers,
+          authorization: authorization,
+          queryParameters: queryParameters,
+          noQueryString: noQueryString,
+          body: body,
+          contentType: contentType,
+          accept: accept,
+          responseType: responseType,
+          progressListener: progressListener,
+        );
       case HttpMethod.PATCH:
-        return requestPATCH(client, url,
-            headers: headers,
-            authorization: authorization,
-            queryParameters: queryParameters,
-            noQueryString: noQueryString,
-            body: body,
-            contentType: contentType,
-            accept: accept,
-            responseType: responseType,
-            progressListener: progressListener);
+        return requestPATCH(
+          client,
+          url,
+          headers: headers,
+          authorization: authorization,
+          queryParameters: queryParameters,
+          noQueryString: noQueryString,
+          body: body,
+          contentType: contentType,
+          accept: accept,
+          responseType: responseType,
+          progressListener: progressListener,
+        );
       case HttpMethod.DELETE:
-        return requestDELETE(client, url,
-            headers: headers,
-            authorization: authorization,
-            queryParameters: queryParameters,
-            noQueryString: noQueryString,
-            body: body,
-            contentType: contentType,
-            accept: accept,
-            responseType: responseType,
-            progressListener: progressListener);
+        return requestDELETE(
+          client,
+          url,
+          headers: headers,
+          authorization: authorization,
+          queryParameters: queryParameters,
+          noQueryString: noQueryString,
+          body: body,
+          contentType: contentType,
+          accept: accept,
+          responseType: responseType,
+          progressListener: progressListener,
+        );
     }
   }
 
@@ -1707,229 +1863,362 @@ abstract class HttpClientRequester {
     }
   }
 
-  Future<HttpResponse> requestGET(HttpClient client, String url,
-      {Map<String, String>? headers,
-      Authorization? authorization,
-      Map<String, String?>? queryParameters,
-      bool noQueryString = false,
-      String? accept,
-      String? responseType,
-      ProgressListener? progressListener}) async {
-    var requestURL = buildRequestURL(client, url,
-        authorization: authorization,
-        queryParameters: queryParameters,
-        noQueryString: noQueryString);
+  Future<HttpResponse> requestGET(
+    HttpClient client,
+    String url, {
+    Map<String, String>? headers,
+    Authorization? authorization,
+    Map<String, String?>? queryParameters,
+    bool noQueryString = false,
+    String? accept,
+    String? responseType,
+    ProgressListener? progressListener,
+  }) async {
+    var requestURL = buildRequestURL(
+      client,
+      url,
+      authorization: authorization,
+      queryParameters: queryParameters,
+      noQueryString: noQueryString,
+    );
 
-    var requestHeaders = buildRequestHeaders(client, HttpMethod.GET, url,
-        headers: headers, authorization: authorization, accept: accept);
+    var requestHeaders = buildRequestHeaders(
+      client,
+      HttpMethod.GET,
+      url,
+      headers: headers,
+      authorization: authorization,
+      accept: accept,
+    );
 
-    requestURL = await client._interceptRequest(
-        HttpMethod.GET, requestURL, requestHeaders);
+    var requestURLOr = client._interceptRequest(
+      HttpMethod.GET,
+      requestURL,
+      requestHeaders,
+    );
 
-    return submitHttpRequest(
-        client,
-        HttpRequest(HttpMethod.GET, url, requestURL,
-            authorization: authorization,
-            queryParameters: queryParameters,
-            withCredentials: _withCredentials(client, authorization),
-            requestHeaders: requestHeaders,
-            responseType: responseType),
-        progressListener,
-        client.logRequests);
-  }
-
-  Future<HttpResponse> requestHEAD(HttpClient client, String url,
-      {Map<String, String>? headers,
-      Authorization? authorization,
-      Map<String, String?>? queryParameters,
-      bool noQueryString = false,
-      ProgressListener? progressListener}) async {
-    var requestURL = buildRequestURL(client, url,
-        authorization: authorization,
-        queryParameters: queryParameters,
-        noQueryString: noQueryString);
-
-    var requestHeaders = buildRequestHeaders(client, HttpMethod.HEAD, url,
-        headers: headers, authorization: authorization);
-
-    requestURL = await client._interceptRequest(
-        HttpMethod.HEAD, requestURL, requestHeaders);
+    // Awaited only with an interceptor (no asynchronous step without it).
+    requestURL = requestURLOr is Future<String>
+        ? await requestURLOr
+        : requestURLOr;
 
     return submitHttpRequest(
-        client,
-        HttpRequest(HttpMethod.HEAD, url, requestURL,
-            authorization: authorization,
-            queryParameters: queryParameters,
-            withCredentials: _withCredentials(client, authorization),
-            requestHeaders: requestHeaders),
-        progressListener,
-        client.logRequests);
-  }
-
-  Future<HttpResponse> requestOPTIONS(HttpClient client, String url,
-      {Map<String, String>? headers,
-      Authorization? authorization,
-      Map<String, String?>? queryParameters,
-      bool noQueryString = false,
-      ProgressListener? progressListener}) async {
-    var requestURL = buildRequestURL(client, url,
+      client,
+      HttpRequest(
+        HttpMethod.GET,
+        url,
+        requestURL,
         authorization: authorization,
         queryParameters: queryParameters,
-        noQueryString: noQueryString);
-
-    var requestHeaders = buildRequestHeaders(client, HttpMethod.OPTIONS, url,
-        headers: headers, authorization: authorization);
-
-    requestURL = await client._interceptRequest(
-        HttpMethod.OPTIONS, requestURL, requestHeaders);
-
-    return submitHttpRequest(
-        client,
-        HttpRequest(
-          HttpMethod.OPTIONS,
-          url,
-          requestURL,
-          authorization: authorization,
-          queryParameters: queryParameters,
-          withCredentials: _withCredentials(client, authorization),
-          requestHeaders: requestHeaders,
-        ),
-        progressListener,
-        client.logRequests);
+        noQueryString: noQueryString,
+        withCredentials: _withCredentials(client, authorization),
+        requestHeaders: requestHeaders,
+        responseType: responseType,
+      ),
+      progressListener,
+      client.logRequests,
+    );
   }
 
-  Future<HttpResponse> requestPOST(HttpClient client, String url,
-      {Map<String, String>? headers,
-      Authorization? authorization,
-      Map<String, String?>? queryParameters,
-      bool noQueryString = false,
-      Object? body,
-      String? contentType,
-      String? accept,
-      String? responseType,
-      ProgressListener? progressListener}) async {
+  Future<HttpResponse> requestHEAD(
+    HttpClient client,
+    String url, {
+    Map<String, String>? headers,
+    Authorization? authorization,
+    Map<String, String?>? queryParameters,
+    bool noQueryString = false,
+    ProgressListener? progressListener,
+  }) async {
+    var requestURL = buildRequestURL(
+      client,
+      url,
+      authorization: authorization,
+      queryParameters: queryParameters,
+      noQueryString: noQueryString,
+    );
+
+    var requestHeaders = buildRequestHeaders(
+      client,
+      HttpMethod.HEAD,
+      url,
+      headers: headers,
+      authorization: authorization,
+    );
+
+    var requestURLOr = client._interceptRequest(
+      HttpMethod.HEAD,
+      requestURL,
+      requestHeaders,
+    );
+
+    // Awaited only with an interceptor (no asynchronous step without it).
+    requestURL = requestURLOr is Future<String>
+        ? await requestURLOr
+        : requestURLOr;
+
+    return submitHttpRequest(
+      client,
+      HttpRequest(
+        HttpMethod.HEAD,
+        url,
+        requestURL,
+        authorization: authorization,
+        queryParameters: queryParameters,
+        noQueryString: noQueryString,
+        withCredentials: _withCredentials(client, authorization),
+        requestHeaders: requestHeaders,
+      ),
+      progressListener,
+      client.logRequests,
+    );
+  }
+
+  Future<HttpResponse> requestOPTIONS(
+    HttpClient client,
+    String url, {
+    Map<String, String>? headers,
+    Authorization? authorization,
+    Map<String, String?>? queryParameters,
+    bool noQueryString = false,
+    ProgressListener? progressListener,
+  }) async {
+    var requestURL = buildRequestURL(
+      client,
+      url,
+      authorization: authorization,
+      queryParameters: queryParameters,
+      noQueryString: noQueryString,
+    );
+
+    var requestHeaders = buildRequestHeaders(
+      client,
+      HttpMethod.OPTIONS,
+      url,
+      headers: headers,
+      authorization: authorization,
+    );
+
+    var requestURLOr = client._interceptRequest(
+      HttpMethod.OPTIONS,
+      requestURL,
+      requestHeaders,
+    );
+
+    // Awaited only with an interceptor (no asynchronous step without it).
+    requestURL = requestURLOr is Future<String>
+        ? await requestURLOr
+        : requestURLOr;
+
+    return submitHttpRequest(
+      client,
+      HttpRequest(
+        HttpMethod.OPTIONS,
+        url,
+        requestURL,
+        authorization: authorization,
+        queryParameters: queryParameters,
+        noQueryString: noQueryString,
+        withCredentials: _withCredentials(client, authorization),
+        requestHeaders: requestHeaders,
+      ),
+      progressListener,
+      client.logRequests,
+    );
+  }
+
+  Future<HttpResponse> requestPOST(
+    HttpClient client,
+    String url, {
+    Map<String, String>? headers,
+    Authorization? authorization,
+    Map<String, String?>? queryParameters,
+    bool noQueryString = false,
+    Object? body,
+    String? contentType,
+    String? accept,
+    String? responseType,
+    ProgressListener? progressListener,
+  }) async {
     var httpBody = HttpRequestBody(body, contentType, queryParameters);
     var requestBody = buildRequestBody(client, httpBody, authorization);
 
     if (queryParameters != null &&
         queryParameters.isNotEmpty &&
         requestBody.isNull) {
-      var requestHeaders = buildRequestHeaders(client, HttpMethod.POST, url,
-          headers: headers,
-          authorization: authorization,
-          contentType: requestBody.contentType,
-          accept: accept);
-
-      var formData = buildPOSTFormData(queryParameters, requestHeaders);
-
-      var requestURL = buildRequestURL(client, url,
-          authorization: authorization, noQueryString: noQueryString);
-
-      requestURL = await client._interceptRequest(
-          HttpMethod.POST, requestURL, requestHeaders);
-
-      return submitHttpRequest(
-          client,
-          HttpRequest(
-            HttpMethod.POST,
-            url,
-            requestURL,
-            authorization: authorization,
-            queryParameters: queryParameters,
-            withCredentials: _withCredentials(client, authorization),
-            requestHeaders: requestHeaders,
-            sendData: formData,
-            responseType: responseType,
-          ),
-          progressListener,
-          client.logRequests);
-    } else {
-      var requestHeaders = buildRequestHeaders(client, HttpMethod.POST, url,
-          headers: headers,
-          authorization: authorization,
-          contentType: requestBody.contentType,
-          accept: accept);
-
-      var requestURL = buildRequestURL(client, url,
-          authorization: authorization,
-          queryParameters: queryParameters,
-          noQueryString: noQueryString);
-
-      requestURL = await client._interceptRequest(
-          HttpMethod.POST, requestURL, requestHeaders);
-
-      return submitHttpRequest(
-          client,
-          HttpRequest(
-            HttpMethod.POST,
-            url,
-            requestURL,
-            authorization: authorization,
-            queryParameters: queryParameters,
-            withCredentials: _withCredentials(client, authorization),
-            requestHeaders: requestHeaders,
-            sendData: requestBody.contentAsSendData,
-            responseType: responseType,
-          ),
-          progressListener,
-          client.logRequests);
-    }
-  }
-
-  Future<HttpResponse> requestPUT(HttpClient client, String url,
-      {Map<String, String>? headers,
-      Authorization? authorization,
-      Map<String, String?>? queryParameters,
-      bool noQueryString = false,
-      Object? body,
-      String? contentType,
-      String? accept,
-      String? responseType,
-      ProgressListener? progressListener}) async {
-    var httpBody = HttpRequestBody(body, contentType, queryParameters);
-    var requestBody = buildRequestBody(client, httpBody, authorization);
-
-    var requestURL = buildRequestURL(client, url,
-        authorization: authorization,
-        queryParameters: queryParameters,
-        noQueryString: noQueryString);
-
-    var requestHeaders = buildRequestHeaders(client, HttpMethod.PUT, url,
+      var requestHeaders = buildRequestHeaders(
+        client,
+        HttpMethod.POST,
+        url,
         headers: headers,
         authorization: authorization,
         contentType: requestBody.contentType,
-        accept: accept);
+        accept: accept,
+      );
 
-    requestURL = await client._interceptRequest(
-        HttpMethod.PUT, requestURL, requestHeaders);
+      var formData = buildPOSTFormData(queryParameters, requestHeaders);
 
-    return submitHttpRequest(
+      var requestURL = buildRequestURL(
+        client,
+        url,
+        authorization: authorization,
+        noQueryString: noQueryString,
+      );
+
+      var requestURLOr = client._interceptRequest(
+        HttpMethod.POST,
+        requestURL,
+        requestHeaders,
+      );
+
+      // Awaited only with an interceptor (no asynchronous step without it).
+      requestURL = requestURLOr is Future<String>
+          ? await requestURLOr
+          : requestURLOr;
+
+      return submitHttpRequest(
         client,
         HttpRequest(
-          HttpMethod.PUT,
+          HttpMethod.POST,
           url,
           requestURL,
           authorization: authorization,
           queryParameters: queryParameters,
+          noQueryString: noQueryString,
+          withCredentials: _withCredentials(client, authorization),
+          requestHeaders: requestHeaders,
+          sendData: formData,
+          responseType: responseType,
+        ).._queryParametersAsBody = true,
+        progressListener,
+        client.logRequests,
+      );
+    } else {
+      var requestHeaders = buildRequestHeaders(
+        client,
+        HttpMethod.POST,
+        url,
+        headers: headers,
+        authorization: authorization,
+        contentType: requestBody.contentType,
+        accept: accept,
+      );
+
+      var requestURL = buildRequestURL(
+        client,
+        url,
+        authorization: authorization,
+        queryParameters: queryParameters,
+        noQueryString: noQueryString,
+      );
+
+      var requestURLOr = client._interceptRequest(
+        HttpMethod.POST,
+        requestURL,
+        requestHeaders,
+      );
+
+      // Awaited only with an interceptor (no asynchronous step without it).
+      requestURL = requestURLOr is Future<String>
+          ? await requestURLOr
+          : requestURLOr;
+
+      return submitHttpRequest(
+        client,
+        HttpRequest(
+          HttpMethod.POST,
+          url,
+          requestURL,
+          authorization: authorization,
+          queryParameters: queryParameters,
+          noQueryString: noQueryString,
           withCredentials: _withCredentials(client, authorization),
           requestHeaders: requestHeaders,
           sendData: requestBody.contentAsSendData,
           responseType: responseType,
         ),
         progressListener,
-        client.logRequests);
+        client.logRequests,
+      );
+    }
   }
 
-  Future<HttpResponse> requestPATCH(HttpClient client, String url,
-      {Map<String, String>? headers,
-      Authorization? authorization,
-      Map<String, String?>? queryParameters,
-      bool noQueryString = false,
-      Object? body,
-      String? contentType,
-      String? accept,
-      String? responseType,
-      ProgressListener? progressListener}) async {
+  Future<HttpResponse> requestPUT(
+    HttpClient client,
+    String url, {
+    Map<String, String>? headers,
+    Authorization? authorization,
+    Map<String, String?>? queryParameters,
+    bool noQueryString = false,
+    Object? body,
+    String? contentType,
+    String? accept,
+    String? responseType,
+    ProgressListener? progressListener,
+  }) async {
+    var httpBody = HttpRequestBody(body, contentType, queryParameters);
+    var requestBody = buildRequestBody(client, httpBody, authorization);
+
+    var requestURL = buildRequestURL(
+      client,
+      url,
+      authorization: authorization,
+      queryParameters: queryParameters,
+      noQueryString: noQueryString,
+    );
+
+    var requestHeaders = buildRequestHeaders(
+      client,
+      HttpMethod.PUT,
+      url,
+      headers: headers,
+      authorization: authorization,
+      contentType: requestBody.contentType,
+      accept: accept,
+    );
+
+    var requestURLOr = client._interceptRequest(
+      HttpMethod.PUT,
+      requestURL,
+      requestHeaders,
+    );
+
+    // Awaited only with an interceptor (no asynchronous step without it).
+    requestURL = requestURLOr is Future<String>
+        ? await requestURLOr
+        : requestURLOr;
+
+    return submitHttpRequest(
+      client,
+      HttpRequest(
+        HttpMethod.PUT,
+        url,
+        requestURL,
+        authorization: authorization,
+        queryParameters: queryParameters,
+        noQueryString: noQueryString,
+        withCredentials: _withCredentials(client, authorization),
+        requestHeaders: requestHeaders,
+        sendData: requestBody.contentAsSendData,
+        responseType: responseType,
+      ),
+      progressListener,
+      client.logRequests,
+    );
+  }
+
+  Future<HttpResponse> requestPATCH(
+    HttpClient client,
+    String url, {
+    Map<String, String>? headers,
+    Authorization? authorization,
+    Map<String, String?>? queryParameters,
+    bool noQueryString = false,
+    Object? body,
+    String? contentType,
+    String? accept,
+    String? responseType,
+    ProgressListener? progressListener,
+  }) async {
     var httpBody = HttpRequestBody(body, contentType, queryParameters);
     var requestBody = buildRequestBody(client, httpBody, authorization);
 
@@ -1938,108 +2227,168 @@ abstract class HttpClientRequester {
         requestBody.isNull) {
       var mimeType = MimeType.parse(MimeType.applicationJson);
       var body = HttpBody.from(queryParameters, mimeType);
-      httpBody = HttpRequestBody(body, contentType, queryParameters);
+      httpBody = HttpRequestBody(
+        body,
+        contentType ?? MimeType.applicationJson,
+        queryParameters,
+      );
       requestBody = buildRequestBody(client, httpBody, authorization);
     }
 
-    var requestURL = buildRequestURL(client, url,
-        authorization: authorization,
-        queryParameters: queryParameters,
-        noQueryString: noQueryString);
+    var requestURL = buildRequestURL(
+      client,
+      url,
+      authorization: authorization,
+      queryParameters: queryParameters,
+      noQueryString: noQueryString,
+    );
 
-    var requestHeaders = buildRequestHeaders(client, HttpMethod.PATCH, url,
-        headers: headers,
-        authorization: authorization,
-        contentType: requestBody.contentType,
-        accept: accept);
+    var requestHeaders = buildRequestHeaders(
+      client,
+      HttpMethod.PATCH,
+      url,
+      headers: headers,
+      authorization: authorization,
+      contentType: requestBody.contentType,
+      accept: accept,
+    );
 
-    requestURL = await client._interceptRequest(
-        HttpMethod.PATCH, requestURL, requestHeaders);
+    var requestURLOr = client._interceptRequest(
+      HttpMethod.PATCH,
+      requestURL,
+      requestHeaders,
+    );
+
+    // Awaited only with an interceptor (no asynchronous step without it).
+    requestURL = requestURLOr is Future<String>
+        ? await requestURLOr
+        : requestURLOr;
 
     return submitHttpRequest(
-        client,
-        HttpRequest(
-          HttpMethod.PATCH,
-          url,
-          requestURL,
-          authorization: authorization,
-          queryParameters: queryParameters,
-          withCredentials: _withCredentials(client, authorization),
-          requestHeaders: requestHeaders,
-          sendData: requestBody.contentAsSendData,
-          responseType: responseType,
-        ),
-        progressListener,
-        client.logRequests);
+      client,
+      HttpRequest(
+        HttpMethod.PATCH,
+        url,
+        requestURL,
+        authorization: authorization,
+        queryParameters: queryParameters,
+        noQueryString: noQueryString,
+        withCredentials: _withCredentials(client, authorization),
+        requestHeaders: requestHeaders,
+        sendData: requestBody.contentAsSendData,
+        responseType: responseType,
+      ),
+      progressListener,
+      client.logRequests,
+    );
   }
 
-  Future<HttpResponse> requestDELETE(HttpClient client, String url,
-      {Map<String, String>? headers,
-      Authorization? authorization,
-      Map<String, String?>? queryParameters,
-      bool noQueryString = false,
-      Object? body,
-      String? contentType,
-      String? accept,
-      String? responseType,
-      ProgressListener? progressListener}) async {
+  Future<HttpResponse> requestDELETE(
+    HttpClient client,
+    String url, {
+    Map<String, String>? headers,
+    Authorization? authorization,
+    Map<String, String?>? queryParameters,
+    bool noQueryString = false,
+    Object? body,
+    String? contentType,
+    String? accept,
+    String? responseType,
+    ProgressListener? progressListener,
+  }) async {
     var httpBody = HttpRequestBody(body, contentType, queryParameters);
     var requestBody = buildRequestBody(client, httpBody, authorization);
 
-    var requestURL = buildRequestURL(client, url,
-        authorization: authorization,
-        queryParameters: queryParameters,
-        noQueryString: noQueryString);
+    var requestURL = buildRequestURL(
+      client,
+      url,
+      authorization: authorization,
+      queryParameters: queryParameters,
+      noQueryString: noQueryString,
+    );
 
-    var requestHeaders = buildRequestHeaders(client, HttpMethod.DELETE, url,
-        headers: headers,
-        authorization: authorization,
-        contentType: requestBody.contentType,
-        accept: accept);
+    var requestHeaders = buildRequestHeaders(
+      client,
+      HttpMethod.DELETE,
+      url,
+      headers: headers,
+      authorization: authorization,
+      contentType: requestBody.contentType,
+      accept: accept,
+    );
 
-    requestURL = await client._interceptRequest(
-        HttpMethod.DELETE, requestURL, requestHeaders);
+    var requestURLOr = client._interceptRequest(
+      HttpMethod.DELETE,
+      requestURL,
+      requestHeaders,
+    );
+
+    // Awaited only with an interceptor (no asynchronous step without it).
+    requestURL = requestURLOr is Future<String>
+        ? await requestURLOr
+        : requestURLOr;
 
     return submitHttpRequest(
-        client,
-        HttpRequest(
-          HttpMethod.DELETE,
-          url,
-          requestURL,
-          authorization: authorization,
-          queryParameters: queryParameters,
-          withCredentials: _withCredentials(client, authorization),
-          requestHeaders: requestHeaders,
-          sendData: requestBody.contentAsSendData,
-          responseType: responseType,
-        ),
-        progressListener,
-        client.logRequests);
+      client,
+      HttpRequest(
+        HttpMethod.DELETE,
+        url,
+        requestURL,
+        authorization: authorization,
+        queryParameters: queryParameters,
+        noQueryString: noQueryString,
+        withCredentials: _withCredentials(client, authorization),
+        requestHeaders: requestHeaders,
+        sendData: requestBody.contentAsSendData,
+        responseType: responseType,
+      ),
+      progressListener,
+      client.logRequests,
+    );
   }
 
-  Future<HttpResponse> submitHttpRequest(HttpClient client, HttpRequest request,
-      ProgressListener? progressListener, bool log) {
+  Future<HttpResponse> submitHttpRequest(
+    HttpClient client,
+    HttpRequest request,
+    ProgressListener? progressListener,
+    bool log,
+  ) {
     setupUserAgent(client.userAgent);
 
     if (!client.hasInterceptor) {
       return doHttpRequest(client, request, progressListener, log);
     }
 
-    return doHttpRequest(client, request, progressListener, log)
-        .then((response) => client._interceptResponse(response));
+    return doHttpRequest(
+      client,
+      request,
+      progressListener,
+      log,
+    ).then((response) => client._interceptResponse(response));
   }
 
   /// Implements teh actual HTTP request for imported platform.
-  Future<HttpResponse> doHttpRequest(HttpClient client, HttpRequest request,
-      ProgressListener? progressListener, bool log);
+  Future<HttpResponse> doHttpRequest(
+    HttpClient client,
+    HttpRequest request,
+    ProgressListener? progressListener,
+    bool log,
+  );
 
-  String buildPOSTFormData(Map<String, String?> data,
-      [Map<String, String>? requestHeaders]) {
+  String buildPOSTFormData(
+    Map<String, String?> data, [
+    Map<String, String>? requestHeaders,
+  ]) {
     var formData = buildQueryString(data);
 
-    if (requestHeaders != null) {
-      requestHeaders.putIfAbsent(HttpRequest._headerKeyContentType,
-          () => 'application/x-www-form-urlencoded; charset=UTF-8');
+    if (requestHeaders != null &&
+        _getMapKeyIgnoreCase(
+              requestHeaders,
+              HttpRequest._headerKeyContentType,
+            ) ==
+            null) {
+      requestHeaders[HttpRequest._headerKeyContentType] =
+          'application/x-www-form-urlencoded; charset=UTF-8';
     }
 
     return formData;
@@ -2101,13 +2450,19 @@ abstract class HttpClientRequester {
   }
 
   /// Helper to build the request URL.
-  String buildRequestURL(HttpClient client, String url,
-      {Authorization? authorization,
-      Map<String, String?>? queryParameters,
-      bool noQueryString = false}) {
+  String buildRequestURL(
+    HttpClient client,
+    String url, {
+    Authorization? authorization,
+    Map<String, String?>? queryParameters,
+    bool noQueryString = false,
+  }) {
     if (queryParameters != null && queryParameters.isNotEmpty) {
-      url = buildURLWithQueryParameters(url, queryParameters,
-          removeFragment: true);
+      url = buildURLWithQueryParameters(
+        url,
+        queryParameters,
+        removeFragment: true,
+      );
     }
 
     if (authorization != null && authorization.isCredentialResolved) {
@@ -2123,8 +2478,11 @@ abstract class HttpClientRequester {
   }
 
   /// Helper to build the request body.
-  HttpRequestBody buildRequestBody(HttpClient client, HttpRequestBody httpBody,
-      Authorization? authorization) {
+  HttpRequestBody buildRequestBody(
+    HttpClient client,
+    HttpRequestBody httpBody,
+    Authorization? authorization,
+  ) {
     if (authorization != null && authorization.isCredentialResolved) {
       var jsonBody = authorization.resolvedCredential!.buildBody(httpBody);
       if (jsonBody != null) return jsonBody;
@@ -2138,7 +2496,9 @@ abstract class HttpClientRequester {
 }
 
 typedef HttpClientURLFilter = String Function(
-    String url, Map<String, String?>? queryParameters);
+  String url,
+  Map<String, String?>? queryParameters,
+);
 
 typedef AuthorizationInterceptor = void Function(Authorization? authorization);
 
@@ -2151,19 +2511,22 @@ class HttpCall<R> {
   final Object? body;
   final int maxRetries;
 
-  HttpCall(
-      {String? baseURL,
-      HttpClient? client,
-      this.method = HttpMethod.GET,
-      this.path = '',
-      this.fullPath = false,
-      this.body,
-      this.maxRetries = 0})
-      : client = client ?? HttpClient(baseURL ?? getUriBase().toString());
+  HttpCall({
+    String? baseURL,
+    HttpClient? client,
+    this.method = HttpMethod.GET,
+    this.path = '',
+    this.fullPath = false,
+    this.body,
+    this.maxRetries = 0,
+  }) : client = client ?? HttpClient(baseURL ?? getUriBase().toString());
 
   /// Performs a call, making the HTTP request.
-  Future<HttpResponse?> call(Map<String, dynamic>? parameters,
-      {Object? body, int? maxRetries}) async {
+  Future<HttpResponse?> call(
+    Map<String, dynamic>? parameters, {
+    Object? body,
+    int? maxRetries,
+  }) async {
     maxRetries ??= this.maxRetries;
 
     var limit = Math.max(1, 1 + maxRetries);
@@ -2181,14 +2544,19 @@ class HttpCall<R> {
   }
 
   /// Performs a call, making the HTTP request, than resolves the response.
-  Future<R?> callAndResolve(Map<String, dynamic>? parameters,
-      {Object? body, int? maxRetries}) async {
+  Future<R?> callAndResolve(
+    Map<String, dynamic>? parameters, {
+    Object? body,
+    int? maxRetries,
+  }) async {
     var response = (await call(parameters, body: body, maxRetries: maxRetries));
     return resolveResponse(response);
   }
 
   Future<HttpResponse> _doRequestImp(
-      Map<String, dynamic>? parameters, Object? body) async {
+    Map<String, dynamic>? parameters,
+    Object? body,
+  ) async {
     if (canHttpMethodHaveBody(method)) {
       body ??= this.body;
     } else {
@@ -2196,7 +2564,13 @@ class HttpCall<R> {
     }
 
     var response = await requestHttpClient(
-        client, method, path, fullPath, parameters, body);
+      client,
+      method,
+      path,
+      fullPath,
+      parameters,
+      body,
+    );
     return response;
   }
 
@@ -2207,8 +2581,9 @@ class HttpCall<R> {
       return parameters;
     }
 
-    var queryParameters = parameters
-        .map((key, value) => MapEntry('$key', toQueryParameterValue(value)));
+    var queryParameters = parameters.map(
+      (key, value) => MapEntry('$key', toQueryParameterValue(value)),
+    );
     return queryParameters;
   }
 
@@ -2224,11 +2599,22 @@ class HttpCall<R> {
   /// Method responsible to request the [HttpClient].
   ///
   /// Can be overwritten by other implementations.
-  Future<HttpResponse> requestHttpClient(HttpClient client, HttpMethod method,
-      String path, bool fullPath, Map? parameters, Object? body) {
+  Future<HttpResponse> requestHttpClient(
+    HttpClient client,
+    HttpMethod method,
+    String path,
+    bool fullPath,
+    Map? parameters,
+    Object? body,
+  ) {
     var queryParameters = toQueryParameters(parameters);
-    return client.request(method, path,
-        fullPath: fullPath, parameters: queryParameters, body: body);
+    return client.request(
+      method,
+      path,
+      fullPath: fullPath,
+      parameters: queryParameters,
+      body: body,
+    );
   }
 
   /// Method responsible to resolve the [response] to a [R] value.
@@ -2239,7 +2625,8 @@ class HttpCall<R> {
       return null;
     } else if (!response.isOK) {
       throw StateError(
-          "Can't perform request. Response{ status: ${response.status} ; body: ${response.bodyAsString}} > $this");
+        "Can't perform request. Response{ status: ${response.status} ; body: ${response.bodyAsString}} > $this",
+      );
     } else if (response.isBodyTypeJSON) {
       return response.json as R?;
     } else {
@@ -2346,75 +2733,92 @@ class HttpClient {
   }
 
   /// Requests using [method] and [path] and returns a decoded JSON.
-  Future<dynamic> requestJSON(HttpMethod method, String path,
-      {Map<String, String>? headers,
-      Credential? authorization,
-      Map<String, Object?>? queryParameters,
-      Object? body,
-      String? contentType,
-      String? accept}) async {
-    return request(method, path,
-            headers: headers,
-            authorization: authorization,
-            parameters: queryParameters,
-            body: body,
-            contentType: contentType,
-            accept: accept)
-        .then((r) => _jsonDecodeResponse(r));
+  Future<dynamic> requestJSON(
+    HttpMethod method,
+    String path, {
+    Map<String, String>? headers,
+    Credential? authorization,
+    Map<String, Object?>? queryParameters,
+    Object? body,
+    String? contentType,
+    String? accept,
+  }) async {
+    return request(
+      method,
+      path,
+      headers: headers,
+      authorization: authorization,
+      parameters: queryParameters,
+      body: body,
+      contentType: contentType,
+      accept: accept,
+    ).then((r) => _jsonDecodeResponse(r));
   }
 
   /// Does a GET request and returns a decoded JSON.
-  Future<dynamic> getJSON(String path,
-      {Map<String, String>? headers,
-      Credential? authorization,
-      Map<String, Object?>? parameters}) async {
-    return get(path,
-            headers: headers,
-            authorization: authorization,
-            parameters: parameters)
-        .then((r) => _jsonDecodeResponse(r));
+  Future<dynamic> getJSON(
+    String path, {
+    Map<String, String>? headers,
+    Credential? authorization,
+    Map<String, Object?>? parameters,
+  }) async {
+    return get(
+      path,
+      headers: headers,
+      authorization: authorization,
+      parameters: parameters,
+    ).then((r) => _jsonDecodeResponse(r));
   }
 
   /// Does an OPTION request and returns a decoded JSON.
-  Future<dynamic> optionsJSON(String path,
-      {Map<String, String>? headers,
-      Credential? authorization,
-      Map<String, Object?>? parameters}) async {
-    return options(path,
-            headers: headers,
-            authorization: authorization,
-            parameters: parameters)
-        .then((r) => _jsonDecodeResponse(r));
+  Future<dynamic> optionsJSON(
+    String path, {
+    Map<String, String>? headers,
+    Credential? authorization,
+    Map<String, Object?>? parameters,
+  }) async {
+    return options(
+      path,
+      headers: headers,
+      authorization: authorization,
+      parameters: parameters,
+    ).then((r) => _jsonDecodeResponse(r));
   }
 
   /// Does a POST request and returns a decoded JSON.
-  Future<dynamic> postJSON(String path,
-      {Map<String, String>? headers,
-      Credential? authorization,
-      Map<String, Object?>? parameters,
-      Object? body,
-      String? contentType}) async {
-    return post(path,
-            headers: headers,
-            authorization: authorization,
-            parameters: parameters,
-            body: body,
-            contentType: contentType)
-        .then((r) => _jsonDecodeResponse(r));
+  Future<dynamic> postJSON(
+    String path, {
+    Map<String, String>? headers,
+    Credential? authorization,
+    Map<String, Object?>? parameters,
+    Object? body,
+    String? contentType,
+  }) async {
+    return post(
+      path,
+      headers: headers,
+      authorization: authorization,
+      parameters: parameters,
+      body: body,
+      contentType: contentType,
+    ).then((r) => _jsonDecodeResponse(r));
   }
 
   /// Does a PUT request and returns a decoded JSON.
-  Future<dynamic> putJSON(String path,
-      {Map<String, String>? headers,
-      Credential? authorization,
-      Object? body,
-      String? contentType}) async {
-    return put(path,
-            headers: headers,
-            authorization: authorization,
-            body: body,
-            contentType: contentType)
-        .then((r) => _jsonDecodeResponse(r));
+  Future<dynamic> putJSON(
+    String path, {
+    Map<String, String>? headers,
+    Credential? authorization,
+    Object? body,
+    String? contentType,
+  }) async {
+    return put(
+      path,
+      headers: headers,
+      authorization: authorization,
+      body: body,
+      contentType: contentType,
+    ).then((r) => _jsonDecodeResponse(r));
   }
 
   /// If set to true, sends credential to cross sites.
@@ -2453,7 +2857,8 @@ class HttpClient {
   /// If set, will automatically use a token in the
   /// header [responseHeaderWithToken], when found in any request.
   HttpClient autoChangeAuthorizationToBearerToken(
-      String responseHeaderWithToken) {
+    String responseHeaderWithToken,
+  ) {
     _responseHeaderWithToken = responseHeaderWithToken;
     return this;
   }
@@ -2473,8 +2878,13 @@ class HttpClient {
       var errorMessage =
           "Can't parse JSON from an HTTP $status error response.";
 
-      var httpError =
-          HttpError(r.url, r.url, status, errorMessage, errorMessage);
+      var httpError = HttpError(
+        r.url,
+        r.requestedURL,
+        status,
+        errorMessage,
+        errorMessage,
+      );
       throw httpError;
     }
 
@@ -2493,11 +2903,13 @@ class HttpClient {
       }
 
       Error.throwWithStackTrace(
-          FormatException(
-              "JSON parsing error:\n-- Request: $r\n-- Cause: $e\n$body",
-              source,
-              offset),
-          s);
+        FormatException(
+          "JSON parsing error:\n-- Request: $r\n-- Cause: $e\n$body",
+          source,
+          offset,
+        ),
+        s,
+      );
     }
   }
 
@@ -2520,10 +2932,21 @@ class HttpClient {
     print('$now> HttpClient> $json');
   }
 
-  Future<Authorization?> _buildRequestAuthorization(
-      Credential? credential) async {
+  /// The [Authorization] of a request: synchronous (not a [Future]) when
+  /// there's nothing to resolve, avoiding an asynchronous step per request.
+  FutureOr<Authorization?> _buildRequestAuthorization(Credential? credential) {
     if (credential != null) {
       return Authorization.fromCredential(credential);
+    }
+
+    var authorization = _authorization;
+    if (authorization == null) return null;
+
+    // Already resolved: `resolveCredential` would return it.
+    if (authorization.isCredentialResolved &&
+        !authorization.isResolvingCredential) {
+      _notifyResolvedAuthorization();
+      return authorization;
     }
 
     return _resolveAuthorization();
@@ -2541,9 +2964,11 @@ class HttpClient {
     if (_authorization == null) return Future.value(null);
 
     if (_authorization!.isResolvingCredential) {
-      print('WARNING: '
-          'Authorization[${_authorization.runtimeType}] is already resolving a credential! '
-          '(NOTE: Do not use this client instance for network resolution while resolving a Credential)');
+      print(
+        'WARNING: '
+        'Authorization[${_authorization.runtimeType}] is already resolving a credential! '
+        '(NOTE: Do not use this client instance for network resolution while resolving a Credential)',
+      );
     }
 
     await _authorization!.resolveCredential(this, null);
@@ -2552,278 +2977,354 @@ class HttpClient {
   }
 
   /// Does a request using [method].
-  Future<HttpResponse> request(HttpMethod method, String path,
-      {bool fullPath = false,
-      Map<String, String>? headers,
-      Credential? authorization,
-      Map<String, Object?>? parameters,
-      String? queryString,
-      Object? body,
-      String? contentType,
-      String? accept,
-      bool noQueryString = false,
-      ProgressListener? progressListener}) async {
+  Future<HttpResponse> request(
+    HttpMethod method,
+    String path, {
+    bool fullPath = false,
+    Map<String, String>? headers,
+    Credential? authorization,
+    Map<String, Object?>? parameters,
+    String? queryString,
+    Object? body,
+    String? contentType,
+    String? accept,
+    bool noQueryString = false,
+    ProgressListener? progressListener,
+  }) async {
     var parametersMapStr = _toParametersMapOfString(parameters);
     var url = buildMethodRequestURL(method, path, fullPath, parametersMapStr);
 
-    var retUrlParameters =
-        _buildURLAndParameters(url, parametersMapStr, queryString);
+    var retUrlParameters = _buildURLAndParameters(
+      url,
+      parametersMapStr,
+      queryString,
+    );
     url = retUrlParameters.key;
     parametersMapStr = retUrlParameters.value;
 
-    return requestURL(method, url,
-        headers: headers,
-        authorization: authorization,
-        queryParameters: parametersMapStr,
-        body: body,
-        contentType: contentType,
-        accept: accept,
-        noQueryString: noQueryString,
-        progressListener: progressListener);
+    return requestURL(
+      method,
+      url,
+      headers: headers,
+      authorization: authorization,
+      queryParameters: parametersMapStr,
+      body: body,
+      contentType: contentType,
+      accept: accept,
+      noQueryString: noQueryString,
+      progressListener: progressListener,
+    );
   }
 
   /// Builds the URL for [method] using [path] or [fullPath].
-  String buildMethodRequestURL(HttpMethod method, String? path, bool fullPath,
-          Map<String, String?>? parameters) =>
-      _buildURL(path, fullPath, parameters, methodAcceptsQueryString(method));
+  String buildMethodRequestURL(
+    HttpMethod method,
+    String? path,
+    bool fullPath,
+    Map<String, String?>? parameters,
+  ) => _buildURL(path, fullPath, parameters, methodAcceptsQueryString(method));
 
-  Future<HttpResponse> requestURL(HttpMethod method, String url,
-      {Map<String, String>? headers,
-      Credential? authorization,
-      Map<String, Object?>? queryParameters,
-      noQueryString = false,
-      Object? body,
-      String? contentType,
-      String? accept,
-      ProgressListener? progressListener}) async {
-    var requestAuthorization = await _buildRequestAuthorization(authorization);
-    return _clientRequester.request(this, method, url,
-        headers: headers,
-        authorization: requestAuthorization,
-        queryParameters: _toParametersMapOfString(queryParameters),
-        noQueryString: noQueryString,
-        body: body,
-        contentType: contentType,
-        accept: accept,
-        progressListener: progressListener);
+  Future<HttpResponse> requestURL(
+    HttpMethod method,
+    String url, {
+    Map<String, String>? headers,
+    Credential? authorization,
+    Map<String, Object?>? queryParameters,
+    bool noQueryString = false,
+    Object? body,
+    String? contentType,
+    String? accept,
+    ProgressListener? progressListener,
+  }) async {
+    var authorizationOr = _buildRequestAuthorization(authorization);
+    var requestAuthorization = authorizationOr is Future<Authorization?>
+        ? await authorizationOr
+        : authorizationOr;
+    return _clientRequester.request(
+      this,
+      method,
+      url,
+      headers: headers,
+      authorization: requestAuthorization,
+      queryParameters: _toParametersMapOfString(queryParameters),
+      noQueryString: noQueryString,
+      body: body,
+      contentType: contentType,
+      accept: accept,
+      progressListener: progressListener,
+    );
   }
 
   //////////////
 
   /// Does a GET request.
-  Future<HttpResponse> get(String path,
-      {Map<String, String>? headers,
-      bool fullPath = false,
-      Credential? authorization,
-      Map<String, Object?>? parameters,
-      String? accept,
-      String? responseType,
-      ProgressListener? progressListener}) async {
+  Future<HttpResponse> get(
+    String path, {
+    Map<String, String>? headers,
+    bool fullPath = false,
+    Credential? authorization,
+    Map<String, Object?>? parameters,
+    String? accept,
+    String? responseType,
+    ProgressListener? progressListener,
+  }) async {
     var parametersMapStr = _toParametersMapOfString(parameters);
     var url = _buildURL(path, fullPath, parametersMapStr, true);
-    var requestAuthorization = await _buildRequestAuthorization(authorization);
-    return _clientRequester.requestGET(this, url,
-        headers: headers,
-        authorization: requestAuthorization,
-        accept: accept,
-        responseType: responseType,
-        progressListener: progressListener);
+    var authorizationOr = _buildRequestAuthorization(authorization);
+    var requestAuthorization = authorizationOr is Future<Authorization?>
+        ? await authorizationOr
+        : authorizationOr;
+    return _clientRequester.requestGET(
+      this,
+      url,
+      headers: headers,
+      authorization: requestAuthorization,
+      accept: accept,
+      responseType: responseType,
+      progressListener: progressListener,
+    );
   }
 
   /// Does a HEAD request.
-  Future<HttpResponse> head(String path,
-      {Map<String, String>? headers,
-      bool fullPath = false,
-      Credential? authorization,
-      Map<String, Object?>? parameters,
-      ProgressListener? progressListener}) async {
+  Future<HttpResponse> head(
+    String path, {
+    Map<String, String>? headers,
+    bool fullPath = false,
+    Credential? authorization,
+    Map<String, Object?>? parameters,
+    ProgressListener? progressListener,
+  }) async {
     var parametersMapStr = _toParametersMapOfString(parameters);
     var url = _buildURL(path, fullPath, parametersMapStr, true);
-    var requestAuthorization = await _buildRequestAuthorization(authorization);
-    return _clientRequester.requestHEAD(this, url,
-        headers: headers,
-        authorization: requestAuthorization,
-        progressListener: progressListener);
+    var authorizationOr = _buildRequestAuthorization(authorization);
+    var requestAuthorization = authorizationOr is Future<Authorization?>
+        ? await authorizationOr
+        : authorizationOr;
+    return _clientRequester.requestHEAD(
+      this,
+      url,
+      headers: headers,
+      authorization: requestAuthorization,
+      progressListener: progressListener,
+    );
   }
 
   /// Does an OPTIONS request.
-  Future<HttpResponse> options(String path,
-      {Map<String, String>? headers,
-      bool fullPath = false,
-      Credential? authorization,
-      Map<String, Object?>? parameters,
-      ProgressListener? progressListener}) async {
+  Future<HttpResponse> options(
+    String path, {
+    Map<String, String>? headers,
+    bool fullPath = false,
+    Credential? authorization,
+    Map<String, Object?>? parameters,
+    ProgressListener? progressListener,
+  }) async {
     var parametersMapStr = _toParametersMapOfString(parameters);
     var url = _buildURL(path, fullPath, parametersMapStr, true);
-    var requestAuthorization = await _buildRequestAuthorization(authorization);
-    return _clientRequester.requestOPTIONS(this, url,
-        headers: headers,
-        authorization: requestAuthorization,
-        progressListener: progressListener);
+    var authorizationOr = _buildRequestAuthorization(authorization);
+    var requestAuthorization = authorizationOr is Future<Authorization?>
+        ? await authorizationOr
+        : authorizationOr;
+    return _clientRequester.requestOPTIONS(
+      this,
+      url,
+      headers: headers,
+      authorization: requestAuthorization,
+      progressListener: progressListener,
+    );
   }
 
   /// Does a POST request.
-  Future<HttpResponse> post(String path,
-      {Map<String, String>? headers,
-      bool fullPath = false,
-      Credential? authorization,
-      Map<String, Object?>? parameters,
-      String? queryString,
-      Object? body,
-      String? contentType,
-      String? accept,
-      String? responseType,
-      ProgressListener? progressListener}) async {
+  Future<HttpResponse> post(
+    String path, {
+    Map<String, String>? headers,
+    bool fullPath = false,
+    Credential? authorization,
+    Map<String, Object?>? parameters,
+    String? queryString,
+    Object? body,
+    String? contentType,
+    String? accept,
+    String? responseType,
+    ProgressListener? progressListener,
+  }) async {
     var parametersMapStr = _toParametersMapOfString(parameters);
     var url = _buildURL(path, fullPath, parametersMapStr);
 
-    var retUrlParameters =
-        _buildURLAndParameters(url, parametersMapStr, queryString);
+    var retUrlParameters = _buildURLAndParameters(
+      url,
+      parametersMapStr,
+      queryString,
+    );
     url = retUrlParameters.key;
     parametersMapStr = retUrlParameters.value;
 
-    var requestAuthorization = await _buildRequestAuthorization(authorization);
-    return _clientRequester.requestPOST(this, url,
-        headers: headers,
-        authorization: requestAuthorization,
-        queryParameters: parametersMapStr,
-        body: body,
-        contentType: contentType,
-        accept: accept,
-        responseType: responseType,
-        progressListener: progressListener);
+    var authorizationOr = _buildRequestAuthorization(authorization);
+    var requestAuthorization = authorizationOr is Future<Authorization?>
+        ? await authorizationOr
+        : authorizationOr;
+    return _clientRequester.requestPOST(
+      this,
+      url,
+      headers: headers,
+      authorization: requestAuthorization,
+      queryParameters: parametersMapStr,
+      body: body,
+      contentType: contentType,
+      accept: accept,
+      responseType: responseType,
+      progressListener: progressListener,
+    );
   }
 
   /// Does a PUT request.
-  Future<HttpResponse> put(String path,
-      {Map<String, String>? headers,
-      bool fullPath = false,
-      Credential? authorization,
-      Map<String, Object?>? parameters,
-      String? queryString,
-      Object? body,
-      String? contentType,
-      String? accept,
-      String? responseType,
-      ProgressListener? progressListener}) async {
+  Future<HttpResponse> put(
+    String path, {
+    Map<String, String>? headers,
+    bool fullPath = false,
+    Credential? authorization,
+    Map<String, Object?>? parameters,
+    String? queryString,
+    Object? body,
+    String? contentType,
+    String? accept,
+    String? responseType,
+    ProgressListener? progressListener,
+  }) async {
     var parametersMapStr = _toParametersMapOfString(parameters);
     var url = _buildURL(path, fullPath, parametersMapStr);
 
-    var retUrlParameters =
-        _buildURLAndParameters(url, parametersMapStr, queryString);
+    var retUrlParameters = _buildURLAndParameters(
+      url,
+      parametersMapStr,
+      queryString,
+    );
     url = retUrlParameters.key;
     parametersMapStr = retUrlParameters.value;
 
-    var requestAuthorization = await _buildRequestAuthorization(authorization);
-    return _clientRequester.requestPUT(this, url,
-        headers: headers,
-        authorization: requestAuthorization,
-        queryParameters: parametersMapStr,
-        body: body,
-        contentType: contentType,
-        accept: accept,
-        responseType: responseType,
-        progressListener: progressListener);
+    var authorizationOr = _buildRequestAuthorization(authorization);
+    var requestAuthorization = authorizationOr is Future<Authorization?>
+        ? await authorizationOr
+        : authorizationOr;
+    return _clientRequester.requestPUT(
+      this,
+      url,
+      headers: headers,
+      authorization: requestAuthorization,
+      queryParameters: parametersMapStr,
+      body: body,
+      contentType: contentType,
+      accept: accept,
+      responseType: responseType,
+      progressListener: progressListener,
+    );
   }
 
   /// Does a PATCH request.
-  Future<HttpResponse> patch(String path,
-      {Map<String, String>? headers,
-      bool fullPath = false,
-      Credential? authorization,
-      Map<String, Object?>? parameters,
-      String? queryString,
-      Object? body,
-      String? contentType,
-      String? accept,
-      String? responseType,
-      ProgressListener? progressListener}) async {
+  Future<HttpResponse> patch(
+    String path, {
+    Map<String, String>? headers,
+    bool fullPath = false,
+    Credential? authorization,
+    Map<String, Object?>? parameters,
+    String? queryString,
+    Object? body,
+    String? contentType,
+    String? accept,
+    String? responseType,
+    ProgressListener? progressListener,
+  }) async {
     var parametersMapStr = _toParametersMapOfString(parameters);
     var url = _buildURL(path, fullPath, parametersMapStr);
 
-    var retUrlParameters =
-        _buildURLAndParameters(url, parametersMapStr, queryString);
+    var retUrlParameters = _buildURLAndParameters(
+      url,
+      parametersMapStr,
+      queryString,
+    );
     url = retUrlParameters.key;
     parametersMapStr = retUrlParameters.value;
 
-    var requestAuthorization = await _buildRequestAuthorization(authorization);
-    return _clientRequester.requestPATCH(this, url,
-        headers: headers,
-        authorization: requestAuthorization,
-        queryParameters: parametersMapStr,
-        body: body,
-        contentType: contentType,
-        accept: accept,
-        responseType: responseType,
-        progressListener: progressListener);
+    var authorizationOr = _buildRequestAuthorization(authorization);
+    var requestAuthorization = authorizationOr is Future<Authorization?>
+        ? await authorizationOr
+        : authorizationOr;
+    return _clientRequester.requestPATCH(
+      this,
+      url,
+      headers: headers,
+      authorization: requestAuthorization,
+      queryParameters: parametersMapStr,
+      body: body,
+      contentType: contentType,
+      accept: accept,
+      responseType: responseType,
+      progressListener: progressListener,
+    );
   }
 
   /// Does a DELETE request.
-  Future<HttpResponse> delete(String path,
-      {Map<String, String>? headers,
-      bool fullPath = false,
-      Credential? authorization,
-      Map<String, String?>? parameters,
-      String? queryString,
-      Object? body,
-      String? contentType,
-      String? accept,
-      String? responseType,
-      ProgressListener? progressListener}) async {
+  Future<HttpResponse> delete(
+    String path, {
+    Map<String, String>? headers,
+    bool fullPath = false,
+    Credential? authorization,
+    Map<String, String?>? parameters,
+    String? queryString,
+    Object? body,
+    String? contentType,
+    String? accept,
+    String? responseType,
+    ProgressListener? progressListener,
+  }) async {
     var url = _buildURL(path, fullPath, parameters);
 
     var retUrlParameters = _buildURLAndParameters(url, parameters, queryString);
     url = retUrlParameters.key;
     parameters = retUrlParameters.value;
 
-    var requestAuthorization = await _buildRequestAuthorization(authorization);
-    return _clientRequester.requestDELETE(this, url,
-        headers: headers,
-        authorization: requestAuthorization,
-        queryParameters: parameters,
-        body: body,
-        contentType: contentType,
-        accept: accept,
-        responseType: responseType,
-        progressListener: progressListener);
+    var authorizationOr = _buildRequestAuthorization(authorization);
+    var requestAuthorization = authorizationOr is Future<Authorization?>
+        ? await authorizationOr
+        : authorizationOr;
+    return _clientRequester.requestDELETE(
+      this,
+      url,
+      headers: headers,
+      authorization: requestAuthorization,
+      queryParameters: parameters,
+      body: body,
+      contentType: contentType,
+      accept: accept,
+      responseType: responseType,
+      progressListener: progressListener,
+    );
   }
 
   //////////////
 
-  Uri _removeURIQueryParameters(Uri uri) {
-    if (uri.scheme.toLowerCase() == 'https') {
-      return Uri.https(uri.authority, Uri.decodeComponent(uri.path));
-    } else {
-      return Uri.http(uri.authority, Uri.decodeComponent(uri.path));
-    }
-  }
+  Uri _removeURIQueryParameters(Uri uri) => _uriWith(uri);
 
-  Uri _setURIQueryString(Uri uri, String? queryString) {
-    int? port = uri.port;
-
-    if (uri.scheme == 'https' && uri.port == 443) {
-      port = null;
-    } else if (uri.scheme == 'http' && uri.port == 80) {
-      port = null;
-    }
-
-    return Uri(
-        scheme: uri.scheme,
-        userInfo: uri.userInfo,
-        host: uri.host,
-        port: port,
-        path: Uri.decodeComponent(uri.path),
-        query: queryString);
-  }
+  Uri _setURIQueryString(Uri uri, String? queryString) =>
+      _uriWith(uri, query: queryString);
 
   MapEntry<String, Map<String, String?>?> _buildURLAndParameters(
-      String url, Map<String, String?>? parameters, String? queryString) {
+    String url,
+    Map<String, String?>? parameters,
+    String? queryString,
+  ) {
     var uri = Uri.parse(url);
 
-    if (uri.queryParameters.isNotEmpty) {
+    // A parameter repeated in the URL (`?a=1&a=2`) can't be in a
+    // `Map<String, String?>`: the URL query is kept as is.
+    var repeatedParameter = _hasRepeatedQueryParameter(uri);
+
+    if (uri.queryParameters.isNotEmpty && !repeatedParameter) {
       if (parameters != null && parameters.isNotEmpty) {
-        uri.queryParameters
-            .forEach((k, v) => parameters!.putIfAbsent(k, () => v));
+        // A copy: the caller's map (maybe unmodifiable) is not changed.
+        parameters = Map<String, String?>.from(parameters);
+        uri.queryParameters.forEach(
+          (k, v) => parameters!.putIfAbsent(k, () => v),
+        );
       } else {
         parameters = uri.queryParameters;
       }
@@ -2847,36 +3348,51 @@ class HttpClient {
   }
 
   /// Builds a Request URL, with the same rules of [requestURL].
-  String buildRequestURL(HttpMethod method, String path,
-      {bool fullPath = false,
-      Authorization? authorization,
-      Map<String, Object?>? parameters,
-      String? queryString,
-      bool noQueryString = false}) {
+  String buildRequestURL(
+    HttpMethod method,
+    String path, {
+    bool fullPath = false,
+    Authorization? authorization,
+    Map<String, Object?>? parameters,
+    String? queryString,
+    bool noQueryString = false,
+  }) {
     var parametersMapStr = _toParametersMapOfString(parameters);
     var url = buildMethodRequestURL(method, path, fullPath, parametersMapStr);
 
-    var retUrlParameters =
-        _buildURLAndParameters(url, parametersMapStr, queryString);
+    var retUrlParameters = _buildURLAndParameters(
+      url,
+      parametersMapStr,
+      queryString,
+    );
     url = retUrlParameters.key;
     parametersMapStr = retUrlParameters.value;
 
-    return _clientRequester.buildRequestURL(this, url,
-        authorization: authorization,
-        queryParameters: parametersMapStr,
-        noQueryString: noQueryString);
+    return _clientRequester.buildRequestURL(
+      this,
+      url,
+      authorization: authorization,
+      queryParameters: parametersMapStr,
+      noQueryString: noQueryString,
+    );
   }
 
   /// Builds a URL, using [baseURL] with [path] or [fullPath].
-  String buildURL(String path, bool fullPath,
-      [Map<String, String?>? queryParameters,
-      bool allowURLQueryString = true]) {
+  String buildURL(
+    String path,
+    bool fullPath, [
+    Map<String, String?>? queryParameters,
+    bool allowURLQueryString = true,
+  ]) {
     return _buildURL(path, fullPath, queryParameters, allowURLQueryString);
   }
 
   String _buildURL(
-      String? path, bool fullPath, Map<String, String?>? parameters,
-      [bool allowURLQueryString = false]) {
+    String? path,
+    bool fullPath,
+    Map<String, String?>? parameters, [
+    bool allowURLQueryString = false,
+  ]) {
     var queryParameters = allowURLQueryString ? parameters : null;
 
     if (path == null) {
@@ -2921,38 +3437,28 @@ class HttpClient {
   }
 
   String _buildURLWithParameters(
-      String url, Map<String, String?>? queryParameters) {
+    String url,
+    Map<String, String?>? queryParameters,
+  ) {
     var uri = Uri.parse(url);
 
-    var uriParameters = uri.queryParameters;
+    // `Object?`: a `String`, a `List<String>` (a repeated parameter of [url])
+    // or `null`. The [queryParameters] first, and over the [url] ones.
+    Map<String, Object?>? allParameters = queryParameters;
 
-    if (uriParameters.isNotEmpty) {
-      if (queryParameters == null || queryParameters.isEmpty) {
-        queryParameters = uriParameters;
-      } else {
-        for (var e in uriParameters.entries) {
-          queryParameters.putIfAbsent(e.key, () => e.value);
-        }
+    if (uri.hasQuery && uri.query.isNotEmpty) {
+      // A copy: the caller's map (maybe unmodifiable) is not changed.
+      allParameters = <String, Object?>{...?queryParameters};
+      for (var e in _queryParametersOf(uri).entries) {
+        allParameters.putIfAbsent(e.key, () => e.value);
       }
     }
 
-    if (queryParameters != null && queryParameters.isEmpty) {
-      queryParameters = null;
+    if (allParameters != null && allParameters.isEmpty) {
+      allParameters = null;
     }
 
-    Uri uri2;
-
-    if (uri.scheme.toLowerCase() == 'https') {
-      uri2 = Uri.https(
-          uri.authority, Uri.decodeComponent(uri.path), queryParameters);
-    } else {
-      uri2 = Uri.http(
-          uri.authority, Uri.decodeComponent(uri.path), queryParameters);
-    }
-
-    var url2 = uri2.toString();
-
-    return url2;
+    return _uriWith(uri, queryParameters: allParameters).toString();
   }
 
   /// Function that processes any request response.
@@ -2974,7 +3480,10 @@ class HttpClient {
   bool get hasInterceptor => interceptor != null;
 
   FutureOr<String> _interceptRequest(
-      HttpMethod method, String url, Map<String, String> headers) {
+    HttpMethod method,
+    String url,
+    Map<String, String> headers,
+  ) {
     var interceptor = this.interceptor;
     if (interceptor != null) {
       var ret = interceptor.filterRequest(this, method, url, headers);
@@ -3013,20 +3522,26 @@ abstract class HttpClientInterceptor {
   /// - [url] the request URL.
   /// - [headers] the headers of the request that can be modified.
   /// - Return: should return the URL. If `null` or empty is returned the original [url] will be used.
-  FutureOr<String?> filterRequest(HttpClient client, HttpMethod method,
-          String url, Map<String, String>? headers) =>
-      null;
+  FutureOr<String?> filterRequest(
+    HttpClient client,
+    HttpMethod method,
+    String url,
+    Map<String, String>? headers,
+  ) => null;
 
   /// Filters the [response] before is returned by the [client].
   ///
   /// - Return: should return a filtered [HttpResponse] or `null` if no filter is performed.
   FutureOr<HttpResponse?> filterResponse(
-          HttpClient client, HttpResponse response) =>
-      null;
+    HttpClient client,
+    HttpResponse response,
+  ) => null;
 }
 
 typedef SimulateResponse = dynamic Function(
-    String url, Map<String, String?>? queryParameters);
+  String url,
+  Map<String, String?>? queryParameters,
+);
 
 /// A Simulated [HttpClientRequester]. Useful for tests and mocks.
 class HttpClientRequesterSimulation extends HttpClientRequester {
@@ -3097,7 +3612,8 @@ class HttpClientRequesterSimulation extends HttpClientRequester {
 
   /// Returns for parameter [method] a [Map] with [RegExp] patterns as key and [SimulateResponse] as value.
   Map<RegExp, SimulateResponse> getSimulationPatternsByMethod(
-      HttpMethod method) {
+    HttpMethod method,
+  ) {
     switch (method) {
       case HttpMethod.GET:
         return _getPatterns;
@@ -3113,7 +3629,9 @@ class HttpClientRequesterSimulation extends HttpClientRequester {
   }
 
   SimulateResponse? _findResponse(
-      String url, Map<RegExp, SimulateResponse> patterns) {
+    String url,
+    Map<RegExp, SimulateResponse> patterns,
+  ) {
     if (patterns.isEmpty) return null;
 
     for (var p in patterns.keys) {
@@ -3126,19 +3644,29 @@ class HttpClientRequesterSimulation extends HttpClientRequester {
 
   /// Implementation for simulated requests.
   @override
-  Future<HttpResponse> doHttpRequest(HttpClient client, HttpRequest request,
-      ProgressListener? progressListener, bool log) {
+  Future<HttpResponse> doHttpRequest(
+    HttpClient client,
+    HttpRequest request,
+    ProgressListener? progressListener,
+    bool log,
+  ) {
     var methodPatterns = getSimulationPatternsByMethod(request.method);
-    return _requestSimulated(client, request.method, request.requestURL,
-        methodPatterns, request.queryParameters);
+    return _requestSimulated(
+      client,
+      request.method,
+      request.requestURL,
+      methodPatterns,
+      request.queryParameters,
+    );
   }
 
   Future<HttpResponse> _requestSimulated(
-      HttpClient client,
-      HttpMethod method,
-      String url,
-      Map<RegExp, SimulateResponse> methodPatterns,
-      Map<String, String?>? queryParameters) {
+    HttpClient client,
+    HttpMethod method,
+    String url,
+    Map<RegExp, SimulateResponse> methodPatterns,
+    Map<String, String?>? queryParameters,
+  ) {
     var resp =
         _findResponse(url, methodPatterns) ?? _findResponse(url, _anyPatterns);
 
@@ -3149,8 +3677,13 @@ class HttpClientRequesterSimulation extends HttpClientRequester {
     var respVal = resp(url, queryParameters);
 
     var restResponse = HttpResponse(
-        method, url, url, 200, HttpBody.from(respVal),
-        jsonDecoder: client.jsonDecoder);
+      method,
+      url,
+      url,
+      200,
+      HttpBody.from(respVal),
+      jsonDecoder: client.jsonDecoder,
+    );
 
     return Future.value(restResponse);
   }
@@ -3178,11 +3711,13 @@ Uri getHttpClientRuntimeUri() {
 }
 
 Map<String, String?>? _toParametersMapOfString(
-    Map<String, Object?>? parameters) {
+  Map<String, Object?>? parameters,
+) {
   if (parameters == null) return null;
   if (parameters is Map<String, String?>) return parameters;
   return Map<String, String?>.fromEntries(
-      parameters.entries.map((e) => MapEntry(e.key, e.value?.toString())));
+    parameters.entries.map((e) => MapEntry(e.key, e.value?.toString())),
+  );
 }
 
 V? _getMapValueKeyIgnoreCase<V>(Map<String, V>? map, String key) {

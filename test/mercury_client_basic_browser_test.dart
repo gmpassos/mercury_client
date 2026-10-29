@@ -109,28 +109,32 @@ void main() {
       await testServerChannel.close();
     });
 
-    test('401 with an authorization provider: a new credential per retry',
-        () async {
-      await testServerChannel.waitOpen();
+    test(
+      '401 with an authorization provider: a new credential per retry',
+      () async {
+        await testServerChannel.waitOpen();
 
-      var lastErrorsStatus = <int?>[];
+        var lastErrorsStatus = <int?>[];
 
-      var client =
-          HttpClient('http://localhost:${testServerChannel.serverPort}/tests')
-            ..authorization =
-                Authorization.fromProvider((client, lastError) async {
-              lastErrorsStatus.add(lastError?.status);
-              return BearerCredential('token-${lastErrorsStatus.length}');
-            });
+        var client =
+            HttpClient('http://localhost:${testServerChannel.serverPort}/tests')
+              ..authorization = Authorization.fromProvider((
+                client,
+                lastError,
+              ) async {
+                lastErrorsStatus.add(lastError?.status);
+                return BearerCredential('token-${lastErrorsStatus.length}');
+              });
 
-      var response = await client.get('foo/401');
-      expect(response.status, equals(401));
+        var response = await client.get('foo/401');
+        expect(response.status, equals(401));
 
-      // Resolved for the request, then again (with the `401`) for its retry:
-      // a new credential, not the rejected one. The retried request has a
-      // static copy of it, so a `401` again isn't retried.
-      expect(lastErrorsStatus, equals([null, 401]));
-    });
+        // Resolved for the request, then again (with the `401`) for its retry:
+        // a new credential, not the rejected one. The retried request has a
+        // static copy of it, so a `401` again isn't retried.
+        expect(lastErrorsStatus, equals([null, 401]));
+      },
+    );
 
     test('401 of concurrent requests: resolved again only once', () async {
       await testServerChannel.waitOpen();
@@ -139,8 +143,10 @@ void main() {
 
       var client =
           HttpClient('http://localhost:${testServerChannel.serverPort}/tests')
-            ..authorization =
-                Authorization.fromProvider((client, lastError) async {
+            ..authorization = Authorization.fromProvider((
+              client,
+              lastError,
+            ) async {
               lastErrorsStatus.add(lastError?.status);
               await Future.delayed(Duration(milliseconds: 50));
               return BearerCredential('token-${lastErrorsStatus.length}');
@@ -166,15 +172,20 @@ void main() {
     test('504: retried (any method)', () async {
       await testServerChannel.waitOpen();
 
-      var client =
-          HttpClient('http://localhost:${testServerChannel.serverPort}/tests');
+      var client = HttpClient(
+        'http://localhost:${testServerChannel.serverPort}/tests',
+      );
 
       // A `504` the first time, then OK: the retry gets the OK.
       var get = await client.get('504-once', parameters: {'id': 'get'});
       expect(get.status, equals(200));
 
-      var post = await client.post('504-once',
-          parameters: {'id': 'post'}, body: 'x', contentType: 'text/plain');
+      var post = await client.post(
+        '504-once',
+        parameters: {'id': 'post'},
+        body: 'x',
+        contentType: 'text/plain',
+      );
       expect(post.status, equals(200));
     });
 

@@ -1,3 +1,87 @@
+## 2.4.0
+
+- SDK: `>=3.13.0 <4.0.0`.
+  - `dart format` (tall style).
+  - Private named parameters as initializing formals (`this._error`):
+    `prefer_initializing_formals` and `strict_top_level_inference` fixes.
+- Dependencies:
+  - `swiss_knife: ^3.3.14`, `collection: ^1.19.1`, `web: ^1.1.2`,
+    `js_interop_utils: ^1.1.1`.
+  - Dev: `lints: ^6.1.0`, `test: ^1.33.0`, `async: ^2.13.1`,
+    `dependency_validator: ^5.1.0`, `coverage: ^1.16.0`.
+- Fixes:
+  - Browser client: a `401` retried with a new credential (from an
+    `Authorization.fromProvider`) sent the rejected credential again:
+    `HttpRequest.copyWithAuthorization` kept the previous `Authorization`
+    header, applied after the new one.
+    - A `POST` form retried: its parameters stay in the body (not also added
+      to the URL), and `noQueryString` is kept.
+  - VM client: an `OPTIONS` request threw `UnsupportedError`.
+  - `BasicCredential`: the `Authorization` header uses the standard Base64
+    alphabet (it used the URL-safe one: `-` and `_` instead of `+` and `/`),
+    and UTF-8 (a character above `0xFF` threw an `ArgumentError`).
+  - `HttpCache`:
+    - An expired entry was never valid again (the stored request kept its
+      old access time): every later request was sent again.
+    - A response is cached per credential (`authorization`: its header, URL
+      parameters or JSON body field): a response for one credential was
+      returned for another.
+    - A network error (status `0`) or a server error (`5xx`) is not cached.
+    - The `queryParameters` and a `Map`/`List` `body` are copied: changed by
+      the caller, the entry was lost.
+    - `getCachedRequest`/`getCachedRequestURL`: not an expired entry.
+    - A `body` without `length` (e.g. an `int`) threw computing the memory
+      size.
+    - `getURL` ignored the `authorization`.
+  - `HttpRequester`: the `body` was lower-cased.
+  - `HttpBody` and `List<int>.toByteBuffer`: a byte view
+    (`Uint8List.sublistView`) returned its whole buffer.
+  - A `TypedData` list is its bytes: `HttpBody` (`size`, `asByteArray`),
+    `toUint8List`, and the `Content-Length` of a request (an `Int16List` has
+    2 bytes per element; its elements were truncated, or counted as bytes).
+  - `HttpBody.asBlob` threw (VM) or built a wrong `Blob` (browser) for a
+    `ByteBuffer`, bytes or `String` body; `createHttpBlob` accepts a list of
+    parts (`String`, `ByteBuffer`, `TypedData`, bytes or blobs), and a list
+    of `int`s is bytes (VM and browser). A browser blob's `mimeType` is its
+    `Blob` type.
+  - A `ByteBuffer` or blob request body was sent as its `toString()`.
+  - `HttpRequest`: no `Content-Length` with a `chunked`
+    `Transfer-Encoding` (it was only set with one).
+  - `PATCH` with parameters and no body: the JSON body has a `Content-Type`.
+  - The `parameters` map passed to a request is no longer changed (an
+    unmodifiable map threw).
+  - Request URLs (and `buildURLWithQueryParameters`) keep an escaped path
+    (`%2F` was sent as `/`) and repeated query parameters (`?a=1&a=2` was
+    sent as `?a=2`).
+  - VM client: a response header with many values is joined with `, ` (as
+    in a browser), instead of only its first value (except `Set-Cookie`:
+    still its first value, since an `Expires` date has a `, `).
+  - Progress listeners: the `ratio` is `null` when the total is unknown (it
+    was negative or `NaN`), and the VM counts bytes (not characters) of a
+    text body.
+  - Browser client: a `3xx` response without body could throw.
+  - The `HttpError` of a JSON request has the requested URL.
+- Performance (see `benchmark/HISTORY.md`):
+  - VM: the response body is read in chunks (`BytesBuilder`), not one byte at
+    a time: a 1MB download 4.4x faster, a 256KB upload (echoed) 3.6x.
+  - `HttpCache`: entries ordered by size (`SplayTreeSet`) and a running total
+    of the used memory (no sort of all entries per stored response); one map
+    access per lookup; timed out entries checked at most once per second
+    when over the memory limit: a miss with a memory limit 105x (JS) to 265x
+    (Wasm) faster.
+  - Requests: no asynchronous step for an already resolved authorization or
+    without an interceptor: 30% (VM), 35% (JS) and 41% (Wasm) faster.
+  - `HttpStatus` checks without allocating lists.
+  - Browser: forbidden request headers looked up in a set; the request body
+    converted with `toJS` (not `jsify`): a 256KB upload ~18% faster on Wasm.
+  - URLs: `Uri.queryParameters` (not `queryParametersAll`) unless a parameter
+    is repeated.
+- Benchmarks: `benchmark/` (VM, Chrome JS and Chrome Wasm), with the results
+  history in `benchmark/HISTORY.md`.
+- Tests: regression tests, and integration tests (`OPTIONS`, the `401`
+  retry, binary bodies, progress, many-valued headers). Coverage (VM):
+  76.6% -> 92.1%.
+
 ## 2.3.3
 
 - CI (GitHub Actions):

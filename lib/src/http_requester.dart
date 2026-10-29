@@ -45,19 +45,27 @@ class HttpRequester {
     return def ?? MapProperties();
   }
 
-  HttpRequester(Map<String, Object?> config,
-      [Map<String, Object?>? properties, this.httpCache])
-      : config = _asMapProperties(config),
-        properties = _asMapProperties(properties) {
+  HttpRequester(
+    Map<String, Object?> config, [
+    Map<String, Object?>? properties,
+    this.httpCache,
+  ]) : config = _asMapProperties(config),
+       properties = _asMapProperties(properties) {
     var config = this.config;
 
-    var schemeType = config
-        .findPropertyAsStringTrimLC(['scheme', 'protocol', 'type'], 'http')!;
+    var schemeType = config.findPropertyAsStringTrimLC([
+      'scheme',
+      'protocol',
+      'type',
+    ], 'http')!;
     var secure = config.findPropertyAsBool(['secure', 'ssl', 'https'], false)!;
 
     var host = config.getPropertyAsStringTrimLC('host');
-    var method = config
-        .findPropertyAsStringTrimLC(['method', 'http_method', 'httpMethod']);
+    var method = config.findPropertyAsStringTrimLC([
+      'method',
+      'http_method',
+      'httpMethod',
+    ]);
 
     var path = config.getPropertyAsString('path', '/');
 
@@ -68,13 +76,16 @@ class HttpRequester {
       'bodyType',
       'content_type',
       'content-type',
-      'contentType'
+      'contentType',
     ]);
 
-    var body = config.getPropertyAsStringTrimLC('body');
+    // Not lower-cased (as the other properties): the body content as is.
+    var body = config.getPropertyAsStringTrim('body');
 
-    var responseType =
-        config.findPropertyAsStringTrimLC(['response_type', 'responseType']);
+    var responseType = config.findPropertyAsStringTrimLC([
+      'response_type',
+      'responseType',
+    ]);
 
     if (responseType != null) responseType = responseType.toLowerCase();
 
@@ -103,7 +114,7 @@ class HttpRequester {
     if (path != null) {
       pathBuilt = path.contains('{{')
           ? buildStringPattern(path, this.properties.toStringProperties()) ??
-              path
+                path
           : path;
     }
 
@@ -160,11 +171,22 @@ class HttpRequester {
   Future<dynamic> doRequestWithClient(HttpClient httpClient) async {
     HttpResponse httpResponse;
     if (httpCache != null) {
-      httpResponse = await httpCache!.request(httpClient, httpMethod, path,
-          queryParameters: _parameters, body: _body, contentType: bodyType);
+      httpResponse = await httpCache!.request(
+        httpClient,
+        httpMethod,
+        path,
+        queryParameters: _parameters,
+        body: _body,
+        contentType: bodyType,
+      );
     } else {
-      httpResponse = await httpClient.request(httpMethod, path,
-          parameters: _parameters, body: _body, contentType: bodyType);
+      httpResponse = await httpClient.request(
+        httpMethod,
+        path,
+        parameters: _parameters,
+        body: _body,
+        contentType: bodyType,
+      );
     }
 
     return _processResponse(httpResponse, httpClient);
@@ -198,8 +220,11 @@ class HttpRequester {
       var url = paging.pagingRequestURL(httpResponse.requestedURL, page);
 
       if (httpCache != null) {
-        var httpResponse2 =
-            await httpCache!.requestURL(client, method, url.toString());
+        var httpResponse2 = await httpCache!.requestURL(
+          client,
+          method,
+          url.toString(),
+        );
         return _asJSONPaging(client, httpResponse2);
       } else {
         var httpResponse2 = await client.requestURL(method, url.toString());
