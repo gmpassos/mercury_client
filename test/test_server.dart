@@ -126,7 +126,8 @@ class TestServer {
       'application/json',
       preserveHeaderCase: true,
     );
-    request.response.write(response);
+    // JSON is UTF-8 (`write` would encode it as LATIN-1).
+    request.response.add(utf8.encode(response));
     await request.response.close();
   }
 
@@ -147,7 +148,8 @@ class TestServer {
   }
 
   /// Answers with the request body bytes (`application/octet-stream`), and
-  /// `?size=n`: `n` bytes (`i % 256`).
+  /// `?size=n`: `n` bytes (`i % 256`), and `?type=t`: with the `Content-Type`
+  /// `t`.
   Future _processTestRequestBytes(io.HttpRequest request) async {
     var bytes = <int>[];
     await for (var chunk in request) {
@@ -161,7 +163,10 @@ class TestServer {
 
     request.response.statusCode = 200;
     _setResponseCORS(request);
-    request.response.headers.contentType = io.ContentType.binary;
+    var type = request.uri.queryParameters['type'];
+    request.response.headers.contentType = type != null
+        ? io.ContentType.parse(type)
+        : io.ContentType.binary;
     request.response.contentLength = bytes.length;
     request.response.add(bytes);
     await request.response.close();
