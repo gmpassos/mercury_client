@@ -9,6 +9,8 @@
 - Fixes:
   - A `String` body is encoded with the charset of the request `Content-Type`
     (it was always UTF-8: a `charset=ISO-8859-1` body was sent as UTF-8).
+  - `HttpRequest.headerContentTypeCharset`: a `charset` without a value is
+    ignored (it threw a `RangeError`).
   - VM client: a response of an image (other than SVG), audio, video or font
     with a `charset` (e.g. `image/jpeg; charset=utf-8`) is kept as bytes (it
     was decoded as a `String`, corrupting the bytes).

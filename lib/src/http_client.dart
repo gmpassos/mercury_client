@@ -1616,7 +1616,8 @@ class HttpRequest {
     if (parts.isEmpty) return null;
 
     var charsetPair = parts.firstWhereOrNull(
-      (e) => equalsIgnoreAsciiCase(e[0], 'charset'),
+      // (A `charset` without a value is ignored.)
+      (e) => e.length > 1 && equalsIgnoreAsciiCase(e[0], 'charset'),
     );
     if (charsetPair == null) return null;
 

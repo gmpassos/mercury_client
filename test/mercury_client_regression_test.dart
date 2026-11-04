@@ -132,6 +132,35 @@ void main() {
       expect(plain.headerContentLength, equals('3'));
     });
 
+    test('a String body: encoded with the Content-Type charset', () {
+      HttpRequest request(String? contentType) => HttpRequest(
+        HttpMethod.POST,
+        'http://foo.com/',
+        'http://foo.com/',
+        requestHeaders: {'Content-Type': ?contentType},
+        sendData: 'açaí',
+      );
+
+      expect(request(null).sendData, equals(utf8.encode('açaí')));
+      expect(
+        request('text/plain; charset=UTF-8').sendData,
+        equals(utf8.encode('açaí')),
+      );
+
+      var latin1Request = request('text/plain; charset=ISO-8859-1');
+      expect(latin1Request.sendData, equals(latin1.encode('açaí')));
+      expect(latin1Request.headerContentLength, equals('4'));
+
+      // An unknown charset, or one without a value: UTF-8.
+      expect(
+        request('text/plain; charset=x-unknown').sendData,
+        equals(utf8.encode('açaí')),
+      );
+      var noValue = request('text/plain; charset');
+      expect(noValue.headerContentTypeCharset, isNull);
+      expect(noValue.sendData, equals(utf8.encode('açaí')));
+    });
+
     test('Content-Type mime-type and charset', () {
       var request = HttpRequest(
         HttpMethod.POST,
