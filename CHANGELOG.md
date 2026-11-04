@@ -1,3 +1,20 @@
+## 2.4.1
+
+- SDK: `^3.13.0`.
+- Dependencies:
+  - `swiss_knife: ^3.4.2`: `MimeType.parse` keeps the charset of the
+    `text`/`txt` and `jpeg`/`jpg` aliases (a `contentType: 'text; charset=...'`
+    now sends its charset), returns `audio/mpeg` for `mp3` and
+    `application/xhtml+xml` for `xhtml`, and rejects `'/foo'`.
+- Fixes:
+  - A `String` body is encoded with the charset of the request `Content-Type`
+    (it was always UTF-8: a `charset=ISO-8859-1` body was sent as UTF-8).
+  - VM client: a response of an image (other than SVG), audio, video or font
+    with a `charset` (e.g. `image/jpeg; charset=utf-8`) is kept as bytes (it
+    was decoded as a `String`, corrupting the bytes).
+- Tests:
+  - Test server: the `echo` JSON is UTF-8, and `bytes` accepts `?type=`.
+
 ## 2.4.0
 
 - SDK: `>=3.13.0 <4.0.0`.

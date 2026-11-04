@@ -1,14 +1,14 @@
 name: mercury_client
 description: Portable HTTP client (Browser and Native support) with memory cache and support for methods GET, HEAD, POST, PUT, DELETE, PATCH and OPTIONS.
 
-version: 2.4.0
+version: 2.4.1
 homepage: https://github.com/gmpassos/mercury_client
 
 environment:
-  sdk: '>=3.13.0 <4.0.0'
+  sdk: ^3.13.0
 
 dependencies:
-  swiss_knife: ^3.3.14
+  swiss_knife: ^3.4.2
   collection: ^1.19.1
   charset: ^2.0.1
   web: ^1.1.2

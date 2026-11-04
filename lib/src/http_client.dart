@@ -1517,9 +1517,13 @@ class HttpRequest {
       // A platform blob (a browser `Blob`).
       return createHttpBlob([sendData], null)?.size();
     } else if (sendData is String) {
-      var bytes = sendData.toUint8List(
-        encoding: MimeType.parse(mimeType)?.preferredStringEncoding,
-      );
+      // Encoded with the charset of the `Content-Type` sent (it was always
+      // UTF-8: a `charset=ISO-8859-1` body was sent as UTF-8).
+      var charset = headerContentTypeCharset;
+      var encoding =
+          (charset != null ? Encoding.getByName(charset) : null) ??
+          MimeType.parse(mimeType)?.preferredStringEncoding;
+      var bytes = sendData.toUint8List(encoding: encoding);
       if (updateToBytes) {
         _sendData = bytes;
       }

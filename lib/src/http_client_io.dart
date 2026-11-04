@@ -150,8 +150,7 @@ class HttpClientRequesterIO extends HttpClientRequester {
 
     var irrelevantContent = (statusCode >= 300 && statusCode < 600);
 
-    if (mimeType != null &&
-        (mimeType.isStringType || mimeType.charset != null)) {
+    if (mimeType != null && _isTextBody(mimeType)) {
       String? s = await _decodeBodyAsString(
         request,
         response,
@@ -432,6 +431,20 @@ class HttpBlobIO extends HttpBlob<TypedData> {
       blob.buffer.asUint8List(blob.offsetInBytes, blob.lengthInBytes),
     ).buffer;
   }
+}
+
+/// Whether a response body of [mimeType] is decoded as a [String]: a text
+/// type, or another type with a `charset` (e.g. `application/x-custom;
+/// charset=utf-8`). A `charset` doesn't make an image (other than SVG), an
+/// audio, a video or a font a text: it's kept as bytes.
+bool _isTextBody(MimeType mimeType) {
+  if (mimeType.isStringType) return true;
+  // (SVG is a string type.)
+  if (mimeType.charset == null) return false;
+  return !(mimeType.isImage ||
+      mimeType.isAudio ||
+      mimeType.isVideo ||
+      mimeType.isFont);
 }
 
 /// Creates a [HttpBlobIO] from [content]: a [TypedData], or a [List] of

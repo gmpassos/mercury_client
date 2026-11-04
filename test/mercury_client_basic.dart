@@ -1054,6 +1054,59 @@ void doBasicTests(TestServerChannel testServerChannel) {
       }
       expect(progress.last.$1, equals(100000));
     });
+
+    test('a `text` alias with a charset: the charset is sent', () async {
+      var client = await newClient();
+
+      for (var charset in ['utf-8', 'iso-8859-1']) {
+        var response = await client.post(
+          'echo',
+          body: 'açaí',
+          contentType: 'text; charset=$charset',
+        );
+        expect(response.json['contentType'], equals('text/plain'));
+        // The server decodes it with the sent charset (LATIN-1 without one).
+        expect(response.json['body'], equals('açaí'), reason: charset);
+      }
+    });
+
+    test(
+      'a binary type with a charset: kept as bytes',
+      () async {
+        var client = await newClient();
+
+        // Not valid UTF-8 (`0x80`-`0xFF` alone).
+        var expected = List<int>.generate(256, (i) => i);
+
+        for (var type in [
+          'image/jpeg; charset=utf-8',
+          'image/png; charset=utf-8',
+          'audio/mpeg; charset=utf-8',
+          'video/mp4; charset=utf-8',
+          'font/woff2; charset=utf-8',
+        ]) {
+          var response = await client.get(
+            'bytes',
+            parameters: {'size': '256', 'type': type},
+          );
+          expect(response.body!.isBytesArray, isTrue, reason: type);
+          expect(response.body!.asByteArray, equals(expected), reason: type);
+        }
+
+        // A non-binary type with a charset: a text.
+        var response = await client.get(
+          'bytes',
+          parameters: {
+            'size': '3',
+            'type': 'application/x-custom; charset=utf-8',
+          },
+        );
+        expect(response.body!.isString, isTrue);
+        expect(response.bodyAsString, equals('\x00\x01\x02'));
+      },
+      // A browser decodes a text `responseType` itself.
+      testOn: 'vm',
+    );
   });
 }
 
